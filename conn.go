@@ -90,6 +90,8 @@ func (c *Conn) reconnect() {
 
 			c.conn = conn
 			c.closeCh = closeCh
+
+			c.debug("connection established")
 		}
 
 		closeCh := make(chan *amqp.Error)
