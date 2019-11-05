@@ -136,13 +136,9 @@ func (c *Conn) reconnect() {
 }
 
 func (c *Conn) logDebug(msg string) {
-	if c.logDebugFunc != nil {
-		c.logDebugFunc(msg)
-	}
+	c.logDebugFunc(msg)
 }
 
 func (c *Conn) logError(err error, msg string) {
-	if c.logErrFunc != nil {
-		c.logErrFunc("%s: %s", msg, err)
-	}
+	c.logErrFunc("%s: %s", msg, err)
 }
