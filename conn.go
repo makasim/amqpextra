@@ -9,8 +9,8 @@ import (
 
 type Conn struct {
 	dial     func() (*amqp.Connection, error)
-	logErr   func(err error, msg string)
-	logDebug func(msg string)
+	logErr   func(format string, v ...interface{})
+	logDebug func(format string, v ...interface{})
 	ctx      context.Context
 
 	getCh chan struct{
@@ -23,8 +23,8 @@ type Conn struct {
 
 func New(
 	dial func() (*amqp.Connection, error),
-	logErr func(err error, msg string),
-	logDebug func(msg string),
+	logErr func(format string, v ...interface{}),
+	logDebug func(format string, v ...interface{}),
 	ctx context.Context,
 ) *Conn {
 	c := &Conn{
@@ -134,6 +134,6 @@ func (c *Conn) debug(msg string) {
 
 func (c *Conn) error(err error, msg string) {
 	if c.logErr != nil {
-		c.logErr(err, msg)
+		c.logErr("%s: %s", msg, err)
 	}
 }
