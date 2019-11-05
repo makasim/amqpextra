@@ -12,10 +12,10 @@ type Conn struct {
 	logErrFunc   func(format string, v ...interface{})
 	logDebugFunc func(format string, v ...interface{})
 
-	ctx      context.Context
-	cancel	 context.CancelFunc
-	getCh chan struct{
-		conn *amqp.Connection
+	ctx    context.Context
+	cancel context.CancelFunc
+	getCh  chan struct {
+		conn    *amqp.Connection
 		closeCh chan *amqp.Error
 	}
 	closeCh chan *amqp.Error
@@ -34,10 +34,10 @@ func New(
 		logErrFunc:   logErrFunc,
 		logDebugFunc: logDebugFunc,
 
-		ctx:          ctx,
-		cancel: 	  cancel,
-		getCh: make(chan struct{
-			conn *amqp.Connection
+		ctx:    ctx,
+		cancel: cancel,
+		getCh: make(chan struct {
+			conn    *amqp.Connection
 			closeCh chan *amqp.Error
 		}),
 	}
@@ -62,7 +62,7 @@ func (c *Conn) Get() (*amqp.Connection, <-chan *amqp.Error) {
 func (c *Conn) Close() error {
 	c.cancel()
 
-	return <- c.closeCh
+	return <-c.closeCh
 }
 
 func (c *Conn) reconnect() {
