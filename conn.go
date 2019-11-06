@@ -46,7 +46,12 @@ func (c *Conn) Close() error {
 		return nil
 	}
 
-	close(c.doneCh)
+	select {
+	case <-c.doneCh:
+		return nil
+	default:
+		close(c.doneCh)
+	}
 
 	return <-closeCh
 }
@@ -90,12 +95,12 @@ func (c *Conn) reconnect() {
 			case <-closeCh:
 				continue L1
 			case <-c.doneCh:
+				close(c.closeChCh)
+				close(c.connCh)
+
 				if err := conn.Close(); err != nil {
 					c.logError(err)
 				}
-
-				close(c.closeChCh)
-				close(c.connCh)
 
 				return
 			}
