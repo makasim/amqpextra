@@ -1,7 +1,6 @@
 package amqpextra
 
 import (
-	"context"
 	"time"
 
 	"github.com/streadway/amqp"
@@ -12,14 +11,9 @@ type Conn struct {
 	logErrFunc   func(format string, v ...interface{})
 	logDebugFunc func(format string, v ...interface{})
 
-	ctx    context.Context
-	cancel context.CancelFunc
-	getCh  chan struct {
-		conn    *amqp.Connection
-		closeCh chan *amqp.Error
-	}
-	closeCh chan *amqp.Error
-	conn    *amqp.Connection
+	closeChCh chan chan *amqp.Error
+	connCh    chan *amqp.Connection
+	doneCh    chan struct{}
 }
 
 func New(
@@ -27,19 +21,14 @@ func New(
 	logErrFunc func(format string, v ...interface{}),
 	logDebugFunc func(format string, v ...interface{}),
 ) *Conn {
-	ctx, cancel := context.WithCancel(context.Background())
-
 	c := &Conn{
 		dialFunc:     dialFunc,
 		logErrFunc:   logErrFunc,
 		logDebugFunc: logDebugFunc,
 
-		ctx:    ctx,
-		cancel: cancel,
-		getCh: make(chan struct {
-			conn    *amqp.Connection
-			closeCh chan *amqp.Error
-		}),
+		doneCh:    make(chan struct{}),
+		closeChCh: make(chan chan *amqp.Error),
+		connCh:    make(chan *amqp.Connection),
 	}
 
 	go c.reconnect()
@@ -47,90 +36,69 @@ func New(
 	return c
 }
 
-func (c *Conn) Get() (*amqp.Connection, <-chan *amqp.Error) {
-	res, ok := <-c.getCh
-	if !ok {
-		closeCh := make(chan *amqp.Error)
-		close(closeCh)
-
-		return nil, closeCh
-	}
-
-	return res.conn, res.closeCh
+func (c *Conn) Get() (<-chan *amqp.Connection, <-chan *amqp.Error) {
+	return c.connCh, <-c.closeChCh
 }
 
 func (c *Conn) Close() error {
-	c.cancel()
+	closeCh, ok := <-c.closeChCh
+	if !ok {
+		return nil
+	}
 
-	return <-c.closeCh
+	close(c.doneCh)
+
+	return <-closeCh
 }
 
 func (c *Conn) reconnect() {
+	L1:
 	for {
 		select {
-		case <-c.ctx.Done():
-			if c.conn == nil {
-				return
-			}
-
-			if err := c.conn.Close(); err != nil {
-				c.logError(err, "connection close errored")
-			}
-
-			close(c.getCh)
+		case <-c.doneCh:
+			close(c.connCh)
+			close(c.closeChCh)
 
 			return
 		default:
 		}
 
-		if c.conn == nil || c.conn.IsClosed() {
-			conn, err := c.dialFunc()
-			if err != nil {
-				c.logError(err, "connection dialFunc errored")
+		conn, err := c.dialFunc()
+		if err != nil {
+			c.logError(err)
 
-				time.Sleep(time.Second * 5)
-				c.logDebug("try reconnect")
+			time.Sleep(time.Second * 5)
+			c.logDebug("try reconnect")
 
-				continue
-			}
-
-			closeCh := make(chan *amqp.Error)
-			conn.NotifyClose(closeCh)
-
-			c.conn = conn
-			c.closeCh = closeCh
-
-			c.logDebug("connection established")
+			continue
 		}
 
 		closeCh := make(chan *amqp.Error)
-		c.conn.NotifyClose(closeCh)
+		conn.NotifyClose(closeCh)
 
-		res := struct {
-			conn    *amqp.Connection
-			closeCh chan *amqp.Error
-		}{conn: c.conn, closeCh: closeCh}
+		c.logDebug("connection established")
 
-		select {
-		case c.getCh <- res:
-		case err, ok := <-c.closeCh:
-			if !ok {
-				c.logDebug("connection is closed")
+		nextCloseCh := make(chan *amqp.Error)
+		conn.NotifyClose(nextCloseCh)
 
-				close(c.getCh)
+		for {
+			select {
+			case c.closeChCh <- nextCloseCh:
+				nextCloseCh = make(chan *amqp.Error)
+				conn.NotifyClose(nextCloseCh)
+			case c.connCh <- conn:
+			case <-closeCh:
+				continue L1
+			case <-c.doneCh:
+				if err := conn.Close(); err != nil {
+					c.logError(err)
+				}
+
+				close(c.closeChCh)
+				close(c.connCh)
 
 				return
 			}
-
-			c.logError(err, "connection is closed with logError")
-		case <-c.ctx.Done():
-			if err := c.conn.Close(); err != nil {
-				c.logError(err, "connection close errored")
-			}
-
-			close(c.getCh)
-
-			return
 		}
 	}
 }
@@ -139,6 +107,6 @@ func (c *Conn) logDebug(msg string) {
 	c.logDebugFunc(msg)
 }
 
-func (c *Conn) logError(err error, msg string) {
-	c.logErrFunc("%s: %s", msg, err)
+func (c *Conn) logError(err error) {
+	c.logErrFunc(err.Error())
 }
