@@ -6,3 +6,9 @@ The package provides an auto reconnect feature for [streadway/amqp](https://gith
 
 See an [example](examples/conn_example.go). 
 
+## Consumer.
+
+The package provides a handy consumer. It is aware of `<-chan *amqp.Connection` and `<-chan *amqp.Error` and can work with them respectively.
+It also starts multiple works in background and correctly stop them when needed.  
+
+See an [example](examples/consumer_example.go).
