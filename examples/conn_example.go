@@ -9,7 +9,7 @@ import (
 func main() {
 	connextra := amqpextra.New(
 		func() (*amqp.Connection, error) {
-			return amqp.Dial("amqp://guest:guest@localhost:5672/gitcall")
+			return amqp.Dial("amqp://guest:guest@localhost:5672/%2f")
 		},
 		log.Printf,
 		log.Printf,
