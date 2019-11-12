@@ -43,51 +43,51 @@ func (c *Consumer) Run(
 	c.logDbgFunc("starting consumers")
 
 	L1:
-	for conn := range c.connCh {
+	for {
 		select {
+		case conn := <-c.connCh:
+			msgCh, err := initFunc(conn)
+			if err != nil {
+				c.logErrFunc("init func: %s", err)
+				time.Sleep(time.Second * 5)
+
+				continue
+			}
+
+			workerCtx, closeCtx := context.WithCancel(context.Background())
+			for i := 0; i < num; i++ {
+				wg.Add(1)
+				go func() {
+					defer wg.Done()
+
+					for {
+						select {
+						case msg := <-msgCh:
+							consumeFunc(msg)
+						case <-workerCtx.Done():
+							return
+						}
+					}
+				}()
+			}
+
+			c.logDbgFunc("consumers started")
+
+			select {
+			case <-c.closeCh:
+				closeCtx()
+
+				wg.Wait()
+
+				c.logDbgFunc("consumers stopped")
+			case <-c.doneCh:
+				closeCtx()
+
+				break L1
+			}
 		case <-c.doneCh:
 			break L1
 		default:
-		}
-
-		msgCh, err := initFunc(conn)
-		if err != nil {
-			c.logErrFunc("init func: %s", err)
-			time.Sleep(time.Second * 5)
-
-			continue
-		}
-
-		workerCtx, closeCtx := context.WithCancel(context.Background())
-		for i := 0; i < num; i++ {
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
-
-				for {
-					select {
-					case msg := <-msgCh:
-						consumeFunc(msg)
-					case <-workerCtx.Done():
-						return
-					}
-				}
-			}()
-		}
-
-		c.logDbgFunc("consumers started")
-
-		select {
-		case <-c.closeCh:
-			closeCtx()
-
-			wg.Wait()
-
-			c.logDbgFunc("consumers stopped")
-		case <-c.doneCh:
-			closeCtx()
-
-			break L1
 		}
 	}
 

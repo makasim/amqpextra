@@ -10,23 +10,24 @@ type Conn struct {
 	dialFunc     func() (*amqp.Connection, error)
 	logErrFunc   func(format string, v ...interface{})
 	logDebugFunc func(format string, v ...interface{})
+	doneCh       chan struct{}
 
 	closeChCh chan chan *amqp.Error
 	connCh    chan *amqp.Connection
-	doneCh    chan struct{}
 }
 
 func New(
 	dialFunc func() (*amqp.Connection, error),
 	logErrFunc func(format string, v ...interface{}),
 	logDebugFunc func(format string, v ...interface{}),
+	doneCh chan struct{},
 ) *Conn {
 	c := &Conn{
 		dialFunc:     dialFunc,
 		logErrFunc:   logErrFunc,
 		logDebugFunc: logDebugFunc,
+		doneCh:       doneCh,
 
-		doneCh:    make(chan struct{}),
 		closeChCh: make(chan chan *amqp.Error),
 		connCh:    make(chan *amqp.Connection),
 	}
@@ -38,22 +39,6 @@ func New(
 
 func (c *Conn) Get() (<-chan *amqp.Connection, <-chan *amqp.Error) {
 	return c.connCh, <-c.closeChCh
-}
-
-func (c *Conn) Close() error {
-	closeCh, ok := <-c.closeChCh
-	if !ok {
-		return nil
-	}
-
-	select {
-	case <-c.doneCh:
-		return nil
-	default:
-		close(c.doneCh)
-	}
-
-	return <-closeCh
 }
 
 func (c *Conn) reconnect() {
