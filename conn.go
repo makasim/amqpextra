@@ -8,9 +8,9 @@ import (
 
 type Conn struct {
 	dialFunc     func() (*amqp.Connection, error)
+	doneCh       <-chan struct{}
 	logErrFunc   func(format string, v ...interface{})
 	logDebugFunc func(format string, v ...interface{})
-	doneCh       chan struct{}
 
 	closeChCh chan chan *amqp.Error
 	connCh    chan *amqp.Connection
@@ -18,9 +18,9 @@ type Conn struct {
 
 func New(
 	dialFunc func() (*amqp.Connection, error),
+	doneCh <-chan struct{},
 	logErrFunc func(format string, v ...interface{}),
 	logDebugFunc func(format string, v ...interface{}),
-	doneCh chan struct{},
 ) *Conn {
 	c := &Conn{
 		dialFunc:     dialFunc,

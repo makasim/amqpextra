@@ -45,7 +45,11 @@ func (c *Consumer) Run(
 	L1:
 	for {
 		select {
-		case conn := <-c.connCh:
+		case conn, ok := <-c.connCh:
+			if !ok {
+				break L1
+			}
+
 			msgCh, err := initFunc(conn)
 			if err != nil {
 				c.logErrFunc("init func: %s", err)
