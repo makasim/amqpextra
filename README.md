@@ -12,3 +12,9 @@ The package provides a handy consumer. It is aware of `<-chan *amqp.Connection` 
 It also starts multiple works in background and correctly stop them when needed.  
 
 See an [example](examples/consumer_example.go).
+
+## Publisher.
+
+The package provides a handy publisher. It is aware of `<-chan *amqp.Connection` and `<-chan *amqp.Error` and can work with them respectively.  
+
+See an [example](examples/publisher_example.go).
