@@ -14,6 +14,9 @@ type Conn struct {
 
 	closeChCh chan chan *amqp.Error
 	connCh    chan *amqp.Connection
+
+	closeChs        []chan *amqp.Error
+	internalCloseCh chan *amqp.Error
 }
 
 func New(
@@ -42,7 +45,7 @@ func (c *Conn) Get() (<-chan *amqp.Connection, <-chan *amqp.Error) {
 }
 
 func (c *Conn) reconnect() {
-	L1:
+L1:
 	for {
 		select {
 		case <-c.doneCh:
@@ -63,21 +66,28 @@ func (c *Conn) reconnect() {
 			continue
 		}
 
-		closeCh := make(chan *amqp.Error)
-		conn.NotifyClose(closeCh)
+		c.internalCloseCh = make(chan *amqp.Error)
+		conn.NotifyClose(c.internalCloseCh)
 
 		c.logDebug("connection established")
 
 		nextCloseCh := make(chan *amqp.Error)
-		conn.NotifyClose(nextCloseCh)
 
 		for {
 			select {
 			case c.closeChCh <- nextCloseCh:
+				c.closeChs = append(c.closeChs, nextCloseCh)
 				nextCloseCh = make(chan *amqp.Error)
-				conn.NotifyClose(nextCloseCh)
 			case c.connCh <- conn:
-			case <-closeCh:
+			case err := <-c.internalCloseCh:
+				if err == nil {
+					err = amqp.ErrClosed
+				}
+
+				for _, closeCh := range c.closeChs {
+					closeCh <- err
+				}
+
 				continue L1
 			case <-c.doneCh:
 				close(c.closeChCh)
@@ -85,6 +95,12 @@ func (c *Conn) reconnect() {
 
 				if err := conn.Close(); err != nil {
 					c.logError(err)
+				}
+
+				c.logDebug("connection is closed")
+
+				for _, closeCh := range c.closeChs {
+					close(closeCh)
 				}
 
 				return
