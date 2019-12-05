@@ -2,9 +2,10 @@ package main
 
 import (
 	"context"
+	"log"
+
 	"github.com/makasim/amqpextra"
 	"github.com/streadway/amqp"
-	"log"
 )
 
 func main() {
@@ -18,18 +19,20 @@ func main() {
 	consumer := amqpextra.NewConsumer(
 		connCh,
 		closeCh,
-		ctx.Done(),
+		ctx,
 		log.Printf,
 		log.Printf,
 	)
-	consumer.Run(workersNum, initMsgCh, func(msg amqp.Delivery) {
+	consumer.Run(workersNum, initMsgCh, amqpextra.WorkerFunc(func(msg amqp.Delivery, ctx context.Context) interface{} {
 		// process message
 
 		msg.Ack(false)
-	})
+
+		return nil
+	}))
 }
 
-func initMsgCh(conn *amqp.Connection) (<-chan amqp.Delivery, error){
+func initMsgCh(conn *amqp.Connection) (<-chan amqp.Delivery, error) {
 	ch, err := conn.Channel()
 	if err != nil {
 		log.Printf("amqp: create channel: %s", err)

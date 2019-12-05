@@ -13,6 +13,13 @@ It also starts multiple works in background and correctly stop them when needed.
 
 See an [example](examples/consumer_example.go).
 
+## Consumer Middleware
+
+The consumer could chain middlewares for pre precessing received message. 
+Check an example that rejects messages without correlation_id and reply_to properties.  
+
+See an [example](examples/consumer_middleware.go).
+
 ## Publisher.
 
 The package provides a handy publisher. It is aware of `<-chan *amqp.Connection` and `<-chan *amqp.Error` and can work with them respectively.  

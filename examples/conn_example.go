@@ -1,9 +1,11 @@
 package main
 
 import (
+	"context"
+	"log"
+
 	"github.com/makasim/amqpextra"
 	"github.com/streadway/amqp"
-	"log"
 )
 
 func main() {
@@ -11,14 +13,14 @@ func main() {
 		func() (*amqp.Connection, error) {
 			return amqp.Dial("amqp://guest:guest@localhost:5672/%2f")
 		},
+		context.Background().Done(),
 		log.Printf,
 		log.Printf,
 	)
-	defer connextra.Close()
 
 	connCh, closeCh := connextra.Get()
 
-	L1:
+L1:
 	for conn := range connCh {
 		ch, err := conn.Channel()
 		if err != nil {
