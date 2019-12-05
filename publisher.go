@@ -2,9 +2,10 @@ package amqpextra
 
 import (
 	"fmt"
-	"github.com/streadway/amqp"
 	"sync"
 	"time"
+
+	"github.com/streadway/amqp"
 )
 
 type publishing struct {
@@ -30,7 +31,7 @@ type Publisher struct {
 func NewPublisher(
 	connCh <-chan *amqp.Connection,
 	closeCh <-chan *amqp.Error,
-	doneCh  <-chan struct{},
+	doneCh <-chan struct{},
 	initFunc func(conn *amqp.Connection) (*amqp.Channel, error),
 	logErrFunc func(format string, v ...interface{}),
 	logDbgFunc func(format string, v ...interface{}),

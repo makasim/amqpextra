@@ -105,7 +105,6 @@ L1:
 			}
 		case <-c.ctx.Done():
 			break L1
-		default:
 		}
 	}
 
