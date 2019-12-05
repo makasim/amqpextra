@@ -2,32 +2,43 @@ package amqpextra
 
 import (
 	"context"
-	"github.com/streadway/amqp"
 	"sync"
 	"time"
 
-
+	"github.com/streadway/amqp"
 )
 
+type Worker interface {
+	ServeMsg(msg amqp.Delivery, ctx context.Context) interface{}
+}
+
+type WorkerFunc func(msg amqp.Delivery, ctx context.Context) interface{}
+
+func (f WorkerFunc) ServeMsg(msg amqp.Delivery, ctx context.Context) interface{} {
+	return f(msg, ctx)
+}
+
 type Consumer struct {
-	connCh  <-chan *amqp.Connection
-	closeCh <-chan *amqp.Error
-	doneCh  <-chan struct{}
+	connCh     <-chan *amqp.Connection
+	closeCh    <-chan *amqp.Error
+	ctx        context.Context
 	logErrFunc func(format string, v ...interface{})
 	logDbgFunc func(format string, v ...interface{})
+
+	middlewares []func(Worker) Worker
 }
 
 func NewConsumer(
 	connCh <-chan *amqp.Connection,
 	closeCh <-chan *amqp.Error,
-	doneCh <-chan struct{},
+	ctx context.Context,
 	logErrFunc func(format string, v ...interface{}),
 	logDbgFunc func(format string, v ...interface{}),
 ) *Consumer {
 	return &Consumer{
-		connCh:  connCh,
-		closeCh: closeCh,
-		doneCh:  doneCh,
+		connCh:     connCh,
+		closeCh:    closeCh,
+		ctx:        ctx,
 		logErrFunc: logErrFunc,
 		logDbgFunc: logDbgFunc,
 	}
@@ -36,13 +47,14 @@ func NewConsumer(
 func (c *Consumer) Run(
 	num int,
 	initFunc func(conn *amqp.Connection) (<-chan amqp.Delivery, error),
-	consumeFunc func(msg amqp.Delivery),
+	worker Worker,
 ) {
 	var wg sync.WaitGroup
+	c.logDbgFunc("consumer starting")
 
-	c.logDbgFunc("starting consumers")
+	worker = c.chain(c.middlewares, worker)
 
-	L1:
+L1:
 	for {
 		select {
 		case conn, ok := <-c.connCh:
@@ -58,7 +70,7 @@ func (c *Consumer) Run(
 				continue
 			}
 
-			workerCtx, closeCtx := context.WithCancel(context.Background())
+			workerCtx, closeCtx := context.WithCancel(c.ctx)
 			for i := 0; i < num; i++ {
 				wg.Add(1)
 				go func() {
@@ -67,7 +79,9 @@ func (c *Consumer) Run(
 					for {
 						select {
 						case msg := <-msgCh:
-							consumeFunc(msg)
+							if res := worker.ServeMsg(msg, c.ctx); res != nil {
+								c.logErrFunc("serveMsg: non nil result: %#v", res)
+							}
 						case <-workerCtx.Done():
 							return
 						}
@@ -75,7 +89,7 @@ func (c *Consumer) Run(
 				}()
 			}
 
-			c.logDbgFunc("consumers started")
+			c.logDbgFunc("workers started")
 
 			select {
 			case <-c.closeCh:
@@ -83,13 +97,13 @@ func (c *Consumer) Run(
 
 				wg.Wait()
 
-				c.logDbgFunc("consumers stopped")
-			case <-c.doneCh:
+				c.logDbgFunc("workers stopped")
+			case <-c.ctx.Done():
 				closeCtx()
 
 				break L1
 			}
-		case <-c.doneCh:
+		case <-c.ctx.Done():
 			break L1
 		default:
 		}
@@ -97,7 +111,24 @@ func (c *Consumer) Run(
 
 	wg.Wait()
 
-	c.logDbgFunc("consumers stopped")
+	c.logDbgFunc("consumer stopped")
 }
 
+func (c *Consumer) Use(middlewares ...func(Worker) Worker) {
+	c.middlewares = append(c.middlewares, middlewares...)
+}
 
+func (*Consumer) chain(middlewares []func(Worker) Worker, endpoint Worker) Worker {
+	// Return ahead of time if there aren't any middlewares for the chain
+	if len(middlewares) == 0 {
+		return endpoint
+	}
+
+	// Wrap the end handler with the middleware chain
+	w := middlewares[len(middlewares)-1](endpoint)
+	for i := len(middlewares) - 2; i >= 0; i-- {
+		w = middlewares[i](w)
+	}
+
+	return w
+}
