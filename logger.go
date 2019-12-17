@@ -22,6 +22,20 @@ func (l *logger) SetErrorFunc(f func(format string, v ...interface{})) {
 	l.errorFunc = f
 }
 
+func (l *logger) DebugFunc() func(format string, v ...interface{}) {
+	l.mx.Lock()
+	defer l.mx.Unlock()
+
+	return l.debugFunc
+}
+
+func (l *logger) ErrorFunc() func(format string, v ...interface{}) {
+	l.mx.Lock()
+	defer l.mx.Unlock()
+
+	return l.errorFunc
+}
+
 func (l *logger) Debugf(format string, v ...interface{}) {
 	l.mx.Lock()
 	defer l.mx.Unlock()

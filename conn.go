@@ -52,8 +52,8 @@ func (c *Conn) Consumer() *Consumer {
 	connCh, closeCh := c.Get()
 
 	consumer := NewConsumer(connCh, closeCh, c.ctx)
-	consumer.logger.debugFunc = c.logger.debugFunc
-	consumer.logger.errorFunc = c.logger.errorFunc
+	consumer.logger.SetDebugFunc(c.logger.DebugFunc())
+	consumer.logger.SetErrorFunc(c.logger.ErrorFunc())
 
 	return consumer
 }
@@ -62,8 +62,8 @@ func (c *Conn) Publisher(initFunc func(conn *amqp.Connection) (*amqp.Channel, er
 	connCh, closeCh := c.Get()
 
 	publisher := NewPublisher(connCh, closeCh, c.ctx, initFunc)
-	publisher.logger.debugFunc = c.logger.debugFunc
-	publisher.logger.errorFunc = c.logger.errorFunc
+	publisher.logger.SetDebugFunc(c.logger.DebugFunc())
+	publisher.logger.SetErrorFunc(c.logger.ErrorFunc())
 
 	return publisher
 }
