@@ -2,24 +2,25 @@ package main
 
 import (
 	"context"
+	"log"
+
 	"github.com/makasim/amqpextra"
 	"github.com/streadway/amqp"
-	"log"
 )
 
 func main() {
 	connCh := make(<-chan *amqp.Connection)
 	closeCh := make(<-chan *amqp.Error)
-	ctx := context.TODO()
+	ctx := context.Background()
 
 	publisher := amqpextra.NewPublisher(
 		connCh,
 		closeCh,
-		ctx.Done(),
+		ctx,
 		intiCh,
-		log.Printf,
-		log.Printf,
 	)
+	publisher.SetErrorFunc(log.Printf)
+	publisher.SetDebugFunc(log.Printf)
 
 	err := <-publisher.Publish(
 		"",
@@ -27,8 +28,8 @@ func main() {
 		false,
 		false,
 		amqp.Publishing{
-		Body:        []byte(`{"foo": "fooVal"}`),
-	})
+			Body: []byte(`{"foo": "fooVal"}`),
+		})
 	if err != nil {
 		panic(err)
 	}

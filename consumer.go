@@ -19,12 +19,11 @@ func (f WorkerFunc) ServeMsg(msg amqp.Delivery, ctx context.Context) interface{}
 }
 
 type Consumer struct {
-	connCh     <-chan *amqp.Connection
-	closeCh    <-chan *amqp.Error
-	ctx        context.Context
-	logErrFunc func(format string, v ...interface{})
-	logDbgFunc func(format string, v ...interface{})
+	connCh  <-chan *amqp.Connection
+	closeCh <-chan *amqp.Error
+	ctx     context.Context
 
+	logger      *logger
 	middlewares []func(Worker) Worker
 }
 
@@ -32,16 +31,22 @@ func NewConsumer(
 	connCh <-chan *amqp.Connection,
 	closeCh <-chan *amqp.Error,
 	ctx context.Context,
-	logErrFunc func(format string, v ...interface{}),
-	logDbgFunc func(format string, v ...interface{}),
 ) *Consumer {
 	return &Consumer{
-		connCh:     connCh,
-		closeCh:    closeCh,
-		ctx:        ctx,
-		logErrFunc: logErrFunc,
-		logDbgFunc: logDbgFunc,
+		connCh:  connCh,
+		closeCh: closeCh,
+		ctx:     ctx,
+
+		logger: &logger{},
 	}
+}
+
+func (c *Consumer) SetDebugFunc(f func(format string, v ...interface{})) {
+	c.logger.SetDebugFunc(f)
+}
+
+func (c *Consumer) SetErrorFunc(f func(format string, v ...interface{})) {
+	c.logger.SetErrorFunc(f)
 }
 
 func (c *Consumer) Run(
@@ -50,7 +55,7 @@ func (c *Consumer) Run(
 	worker Worker,
 ) {
 	var wg sync.WaitGroup
-	c.logDbgFunc("consumer starting")
+	c.logger.Debugf("consumer starting")
 
 	worker = c.chain(c.middlewares, worker)
 
@@ -64,7 +69,7 @@ L1:
 
 			msgCh, err := initFunc(conn)
 			if err != nil {
-				c.logErrFunc("init func: %s", err)
+				c.logger.Errorf("init func: %s", err)
 				time.Sleep(time.Second * 5)
 
 				continue
@@ -80,7 +85,7 @@ L1:
 						select {
 						case msg := <-msgCh:
 							if res := worker.ServeMsg(msg, c.ctx); res != nil {
-								c.logErrFunc("serveMsg: non nil result: %#v", res)
+								c.logger.Errorf("serveMsg: non nil result: %#v", res)
 							}
 						case <-workerCtx.Done():
 							return
@@ -89,7 +94,7 @@ L1:
 				}()
 			}
 
-			c.logDbgFunc("workers started")
+			c.logger.Debugf("workers started")
 
 			select {
 			case <-c.closeCh:
@@ -97,7 +102,7 @@ L1:
 
 				wg.Wait()
 
-				c.logDbgFunc("workers stopped")
+				c.logger.Debugf("workers stopped")
 			case <-c.ctx.Done():
 				closeCtx()
 
@@ -110,7 +115,7 @@ L1:
 
 	wg.Wait()
 
-	c.logDbgFunc("consumer stopped")
+	c.logger.Debugf("consumer stopped")
 }
 
 func (c *Consumer) Use(middlewares ...func(Worker) Worker) {

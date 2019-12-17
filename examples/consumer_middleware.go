@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"log"
 
 	"github.com/makasim/amqpextra"
 	"github.com/streadway/amqp"
@@ -11,7 +10,7 @@ import (
 func main() {
 	connCh := make(<-chan *amqp.Connection)
 	closeCh := make(<-chan *amqp.Error)
-	ctx := context.TODO()
+	ctx := context.Background()
 
 	// usually it equals to pre_fetch_count
 	workersNum := 5
@@ -23,13 +22,8 @@ func main() {
 		return nil
 	})
 
-	consumer := amqpextra.NewConsumer(
-		connCh,
-		closeCh,
-		ctx,
-		log.Printf,
-		log.Printf,
-	)
+	consumer := amqpextra.NewConsumer(connCh, closeCh, ctx)
+
 	consumer.Use(func(next amqpextra.Worker) amqpextra.Worker {
 		fn := func(msg amqp.Delivery, ctx context.Context) interface{} {
 			if msg.CorrelationId == "" {
@@ -48,5 +42,6 @@ func main() {
 
 		return amqpextra.WorkerFunc(fn)
 	})
+
 	consumer.Run(workersNum, initMsgCh, worker)
 }

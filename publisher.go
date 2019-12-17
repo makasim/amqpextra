@@ -1,6 +1,7 @@
 package amqpextra
 
 import (
+	"context"
 	"fmt"
 	"sync"
 	"time"
@@ -18,38 +19,42 @@ type publishing struct {
 }
 
 type Publisher struct {
-	connCh     <-chan *amqp.Connection
-	closeCh    <-chan *amqp.Error
-	doneCh     <-chan struct{}
-	initFunc   func(conn *amqp.Connection) (*amqp.Channel, error)
-	logErrFunc func(format string, v ...interface{})
-	logDbgFunc func(format string, v ...interface{})
+	connCh   <-chan *amqp.Connection
+	closeCh  <-chan *amqp.Error
+	ctx      context.Context
+	initFunc func(conn *amqp.Connection) (*amqp.Channel, error)
 
+	logger       *logger
 	publishingCh chan publishing
 }
 
 func NewPublisher(
 	connCh <-chan *amqp.Connection,
 	closeCh <-chan *amqp.Error,
-	doneCh <-chan struct{},
+	ctx context.Context,
 	initFunc func(conn *amqp.Connection) (*amqp.Channel, error),
-	logErrFunc func(format string, v ...interface{}),
-	logDbgFunc func(format string, v ...interface{}),
 ) *Publisher {
 	p := &Publisher{
-		connCh:     connCh,
-		closeCh:    closeCh,
-		doneCh:     doneCh,
-		initFunc:   initFunc,
-		logErrFunc: logErrFunc,
-		logDbgFunc: logDbgFunc,
+		connCh:   connCh,
+		closeCh:  closeCh,
+		ctx:      ctx,
+		initFunc: initFunc,
 
+		logger:       &logger{},
 		publishingCh: make(chan publishing),
 	}
 
 	go p.worker()
 
 	return p
+}
+
+func (p *Publisher) SetDebugFunc(f func(format string, v ...interface{})) {
+	p.logger.SetDebugFunc(f)
+}
+
+func (p *Publisher) SetErrorFunc(f func(format string, v ...interface{})) {
+	p.logger.SetErrorFunc(f)
 }
 
 func (p *Publisher) Publish(exchange, key string, mandatory, immediate bool, msg amqp.Publishing) <-chan error {
@@ -64,7 +69,7 @@ func (p *Publisher) Publish(exchange, key string, mandatory, immediate bool, msg
 	}
 
 	select {
-	case <-p.doneCh:
+	case <-p.ctx.Done():
 		doneCh <- fmt.Errorf("publisher closed")
 
 		return doneCh
@@ -78,20 +83,20 @@ func (p *Publisher) worker() {
 L1:
 	for conn := range p.connCh {
 		select {
-		case <-p.doneCh:
+		case <-p.ctx.Done():
 			break L1
 		default:
 		}
 
 		ch, err := p.initFunc(conn)
 		if err != nil {
-			p.logErrFunc("init func: %s", err)
+			p.logger.Errorf("init func: %s", err)
 			time.Sleep(time.Second * 5)
 
 			continue
 		}
 
-		p.logDbgFunc("publisher started")
+		p.logger.Debugf("publisher started")
 
 		for {
 			select {
@@ -104,10 +109,10 @@ L1:
 					publishing.Publishing,
 				)
 			case <-p.closeCh:
-				p.logDbgFunc("publisher stopped")
+				p.logger.Debugf("publisher stopped")
 
 				continue L1
-			case <-p.doneCh:
+			case <-p.ctx.Done():
 				break L1
 			}
 		}
@@ -115,5 +120,5 @@ L1:
 
 	wg.Wait()
 
-	p.logDbgFunc("publisher stopped")
+	p.logger.Debugf("publisher stopped")
 }

@@ -11,7 +11,7 @@ import (
 func main() {
 	connCh := make(<-chan *amqp.Connection)
 	closeCh := make(<-chan *amqp.Error)
-	ctx := context.TODO()
+	ctx := context.Background()
 
 	// usually it equals to pre_fetch_count
 	workersNum := 5
@@ -20,9 +20,10 @@ func main() {
 		connCh,
 		closeCh,
 		ctx,
-		log.Printf,
-		log.Printf,
 	)
+	consumer.SetErrorFunc(log.Printf)
+	consumer.SetDebugFunc(log.Printf)
+
 	consumer.Run(workersNum, initMsgCh, amqpextra.WorkerFunc(func(msg amqp.Delivery, ctx context.Context) interface{} {
 		// process message
 
