@@ -91,9 +91,13 @@ L1:
 		ch, err := p.initFunc(conn)
 		if err != nil {
 			p.logger.Errorf("init func: %s", err)
-			time.Sleep(time.Second * 5)
 
-			continue
+			select {
+			case <-time.NewTimer(time.Second * 5).C:
+				continue
+			case <-p.ctx.Done():
+				break L1
+			}
 		}
 
 		p.logger.Debugf("publisher started")

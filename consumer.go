@@ -70,9 +70,13 @@ L1:
 			msgCh, err := initFunc(conn)
 			if err != nil {
 				c.logger.Errorf("init func: %s", err)
-				time.Sleep(time.Second * 5)
 
-				continue
+				select {
+				case <-time.NewTimer(time.Second * 5).C:
+					continue
+				case <-c.ctx.Done():
+					break L1
+				}
 			}
 
 			workerCtx, closeCtx := context.WithCancel(c.ctx)

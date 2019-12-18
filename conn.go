@@ -8,8 +8,8 @@ import (
 )
 
 type Conn struct {
-	dialFunc func() (*amqp.Connection, error)
-	ctx      context.Context
+	dialer Dialer
+	ctx    context.Context
 
 	closeChCh       chan chan *amqp.Error
 	connCh          chan *amqp.Connection
@@ -18,13 +18,10 @@ type Conn struct {
 	logger          *logger
 }
 
-func New(
-	dialFunc func() (*amqp.Connection, error),
-	ctx context.Context,
-) *Conn {
+func New(dialer Dialer, ctx context.Context) *Conn {
 	c := &Conn{
-		dialFunc: dialFunc,
-		ctx:      ctx,
+		dialer: dialer,
+		ctx:    ctx,
 
 		closeChCh: make(chan chan *amqp.Error),
 		connCh:    make(chan *amqp.Connection),
@@ -73,21 +70,26 @@ L1:
 	for {
 		select {
 		case <-c.ctx.Done():
-			close(c.connCh)
-			close(c.closeChCh)
+			c.close()
 
 			return
 		default:
 		}
 
-		conn, err := c.dialFunc()
+		conn, err := c.dialer()
 		if err != nil {
 			c.logger.Errorf("%s", err)
 
-			time.Sleep(time.Second * 5)
-			c.logger.Debugf("try reconnect")
+			select {
+			case <-time.NewTimer(time.Second * 5).C:
+				c.logger.Debugf("try reconnect")
 
-			continue
+				continue
+			case <-c.ctx.Done():
+				c.close()
+
+				return
+			}
 		}
 
 		c.internalCloseCh = make(chan *amqp.Error)
@@ -114,8 +116,7 @@ L1:
 
 				continue L1
 			case <-c.ctx.Done():
-				close(c.closeChCh)
-				close(c.connCh)
+				c.close()
 
 				if err := conn.Close(); err != nil {
 					c.logger.Errorf("%s", err)
@@ -131,4 +132,9 @@ L1:
 			}
 		}
 	}
+}
+
+func (c *Conn) close() {
+	close(c.connCh)
+	close(c.closeChCh)
 }
