@@ -43,7 +43,12 @@ L1:
 		log.Printf("amqp: consumption started")
 		for {
 			select {
-			case msg := <-msgCh:
+			case msg, ok := <-msgCh:
+				if !ok {
+					log.Printf("amqp: consumption stopped")
+
+					continue L1
+				}
 				// process message here
 				log.Printf(string(msg.Body))
 				msg.Ack(false)
