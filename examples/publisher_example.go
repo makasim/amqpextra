@@ -18,9 +18,8 @@ func main() {
 		closeCh,
 		ctx,
 		intiCh,
+		amqpextra.LoggerFunc(log.Printf), // or nil
 	)
-	publisher.SetErrorFunc(log.Printf)
-	publisher.SetDebugFunc(log.Printf)
 
 	err := <-publisher.Publish(
 		"",
