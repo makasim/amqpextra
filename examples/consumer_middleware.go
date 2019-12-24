@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"log"
 
 	"github.com/makasim/amqpextra"
 	"github.com/streadway/amqp"
@@ -22,7 +23,12 @@ func main() {
 		return nil
 	})
 
-	consumer := amqpextra.NewConsumer(connCh, closeCh, ctx)
+	consumer := amqpextra.NewConsumer(
+		connCh,
+		closeCh,
+		ctx,
+		amqpextra.LoggerFunc(log.Printf), // or nil
+	)
 
 	consumer.Use(func(next amqpextra.Worker) amqpextra.Worker {
 		fn := func(msg amqp.Delivery, ctx context.Context) interface{} {

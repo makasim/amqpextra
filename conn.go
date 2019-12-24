@@ -2,6 +2,7 @@ package amqpextra
 
 import (
 	"context"
+	"sync"
 	"time"
 
 	"github.com/streadway/amqp"
@@ -11,58 +12,57 @@ type Conn struct {
 	dialer Dialer
 	ctx    context.Context
 
+	once            sync.Once
 	closeChCh       chan chan *amqp.Error
 	connCh          chan *amqp.Connection
 	closeChs        []chan *amqp.Error
 	internalCloseCh chan *amqp.Error
-	logger          *logger
+	logger          Logger
 }
 
-func New(dialer Dialer, ctx context.Context) *Conn {
+func New(dialer Dialer, ctx context.Context, logger Logger) *Conn {
+	if logger == nil {
+		logger = nilLogger()
+	}
+
 	c := &Conn{
 		dialer: dialer,
 		ctx:    ctx,
+		logger: logger,
 
 		closeChCh: make(chan chan *amqp.Error),
 		connCh:    make(chan *amqp.Connection),
-		logger:    &logger{},
 	}
-
-	go c.reconnect()
 
 	return c
 }
 
 func (c *Conn) Get() (<-chan *amqp.Connection, <-chan *amqp.Error) {
+	c.once.Do(func() {
+		go c.reconnect()
+	})
+
 	return c.connCh, <-c.closeChCh
 }
 
-func (c *Conn) SetDebugFunc(f func(format string, v ...interface{})) {
-	c.logger.SetDebugFunc(f)
-}
-
-func (c *Conn) SetErrorFunc(f func(format string, v ...interface{})) {
-	c.logger.SetErrorFunc(f)
-}
-
-func (c *Conn) Consumer() *Consumer {
+func (c *Conn) Consumer(l Logger) *Consumer {
 	connCh, closeCh := c.Get()
 
-	consumer := NewConsumer(connCh, closeCh, c.ctx)
-	consumer.logger.SetDebugFunc(c.logger.DebugFunc())
-	consumer.logger.SetErrorFunc(c.logger.ErrorFunc())
+	if l == nil {
+		l = c.logger
+	}
 
-	return consumer
+	return NewConsumer(connCh, closeCh, c.ctx, l)
 }
 
-func (c *Conn) Publisher(initFunc func(conn *amqp.Connection) (*amqp.Channel, error)) *Publisher {
+func (c *Conn) Publisher(initFunc func(conn *amqp.Connection) (*amqp.Channel, error), l Logger) *Publisher {
 	connCh, closeCh := c.Get()
 
-	publisher := NewPublisher(connCh, closeCh, c.ctx, initFunc)
-	publisher.logger.SetDebugFunc(c.logger.DebugFunc())
-	publisher.logger.SetErrorFunc(c.logger.ErrorFunc())
+	if l == nil {
+		l = c.logger
+	}
 
-	return publisher
+	return NewPublisher(connCh, closeCh, c.ctx, initFunc, l)
 }
 
 func (c *Conn) reconnect() {
@@ -72,38 +72,38 @@ L1:
 		case <-c.ctx.Done():
 			c.close()
 
-			return
+			break L1
 		default:
 		}
 
 		conn, err := c.dialer()
 		if err != nil {
-			c.logger.Errorf("%s", err)
+			c.logger.Printf("[ERROR] %s", err)
 
 			select {
 			case <-time.NewTimer(time.Second * 5).C:
-				c.logger.Debugf("try reconnect")
+				c.logger.Printf("[DEBUG] try reconnect")
 
-				continue
+				continue L1
 			case <-c.ctx.Done():
 				c.close()
 
-				return
+				break L1
 			}
 		}
 
 		c.internalCloseCh = make(chan *amqp.Error)
 		conn.NotifyClose(c.internalCloseCh)
 
-		c.logger.Debugf("connection established")
+		c.logger.Printf("[DEBUG] connection established")
 
-		nextCloseCh := make(chan *amqp.Error)
+		nextCloseCh := make(chan *amqp.Error, 1)
 
 		for {
 			select {
 			case c.closeChCh <- nextCloseCh:
 				c.closeChs = append(c.closeChs, nextCloseCh)
-				nextCloseCh = make(chan *amqp.Error)
+				nextCloseCh = make(chan *amqp.Error, 1)
 			case c.connCh <- conn:
 			case err := <-c.internalCloseCh:
 				if err == nil {
@@ -111,7 +111,11 @@ L1:
 				}
 
 				for _, closeCh := range c.closeChs {
-					closeCh <- err
+					select {
+					case closeCh <- err:
+					case <-time.NewTimer(time.Second * 5).C:
+						c.logger.Printf("[WARN] closeCh has not been read within safeguard time. Make sure you are reading closeCh out.")
+					}
 				}
 
 				continue L1
@@ -119,16 +123,16 @@ L1:
 				c.close()
 
 				if err := conn.Close(); err != nil {
-					c.logger.Errorf("%s", err)
+					c.logger.Printf("[ERROR] %s", err)
 				}
 
-				c.logger.Debugf("connection is closed")
+				c.logger.Printf("[DEBUG] connection is closed")
 
 				for _, closeCh := range c.closeChs {
 					close(closeCh)
 				}
 
-				return
+				break L1
 			}
 		}
 	}

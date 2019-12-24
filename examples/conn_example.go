@@ -9,11 +9,13 @@ import (
 )
 
 func main() {
-	connextra := amqpextra.New(func() (*amqp.Connection, error) {
-		return amqp.Dial("amqp://guest:guest@localhost:5672/%2f")
-	}, context.Background())
-	connextra.SetErrorFunc(log.Printf)
-	connextra.SetDebugFunc(log.Printf)
+	connextra := amqpextra.New(
+		func() (*amqp.Connection, error) {
+			return amqp.Dial("amqp://guest:guest@localhost:5672/%2f")
+		},
+		context.Background(),
+		amqpextra.LoggerFunc(log.Printf), // or nil
+	)
 
 	connCh, closeCh := connextra.Get()
 

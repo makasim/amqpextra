@@ -23,7 +23,7 @@ type Consumer struct {
 	closeCh <-chan *amqp.Error
 	ctx     context.Context
 
-	logger      *logger
+	logger      Logger
 	middlewares []func(Worker) Worker
 }
 
@@ -31,22 +31,19 @@ func NewConsumer(
 	connCh <-chan *amqp.Connection,
 	closeCh <-chan *amqp.Error,
 	ctx context.Context,
+	logger Logger,
 ) *Consumer {
+	if logger == nil {
+		logger = nilLogger()
+	}
+
 	return &Consumer{
 		connCh:  connCh,
 		closeCh: closeCh,
 		ctx:     ctx,
 
-		logger: &logger{},
+		logger: logger,
 	}
-}
-
-func (c *Consumer) SetDebugFunc(f func(format string, v ...interface{})) {
-	c.logger.SetDebugFunc(f)
-}
-
-func (c *Consumer) SetErrorFunc(f func(format string, v ...interface{})) {
-	c.logger.SetErrorFunc(f)
 }
 
 func (c *Consumer) Run(
@@ -55,8 +52,6 @@ func (c *Consumer) Run(
 	worker Worker,
 ) {
 	var wg sync.WaitGroup
-	c.logger.Debugf("consumer starting")
-
 	worker = c.chain(c.middlewares, worker)
 
 L1:
@@ -69,7 +64,7 @@ L1:
 
 			msgCh, err := initFunc(conn)
 			if err != nil {
-				c.logger.Errorf("init func: %s", err)
+				c.logger.Printf("[ERROR] init func: %s", err)
 
 				select {
 				case <-time.NewTimer(time.Second * 5).C:
@@ -79,6 +74,26 @@ L1:
 				}
 			}
 
+			c.logger.Printf("[DEBUG] consumer starting")
+
+			msgCloseCh := make(chan struct{})
+			workerMsgCh := make(chan amqp.Delivery)
+
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				defer close(msgCloseCh)
+				defer close(workerMsgCh)
+
+				for msg := range msgCh {
+					select {
+					case workerMsgCh <- msg:
+					case <-c.ctx.Done():
+						return
+					}
+				}
+			}()
+
 			workerCtx, closeCtx := context.WithCancel(c.ctx)
 			for i := 0; i < num; i++ {
 				wg.Add(1)
@@ -87,9 +102,14 @@ L1:
 
 					for {
 						select {
-						case msg := <-msgCh:
+						case msg, ok := <-workerMsgCh:
+							if !ok {
+
+								return
+							}
+
 							if res := worker.ServeMsg(msg, c.ctx); res != nil {
-								c.logger.Errorf("serveMsg: non nil result: %#v", res)
+								c.logger.Printf("[ERROR] worker.serveMsg: non nil result: %#v", res)
 							}
 						case <-workerCtx.Done():
 							return
@@ -98,7 +118,7 @@ L1:
 				}()
 			}
 
-			c.logger.Debugf("workers started")
+			c.logger.Printf("[DEBUG] workers started")
 
 			select {
 			case <-c.closeCh:
@@ -106,9 +126,24 @@ L1:
 
 				wg.Wait()
 
-				c.logger.Debugf("workers stopped")
+				c.logger.Printf("[DEBUG] workers stopped")
+
+				continue L1
+			case <-msgCloseCh:
+				c.logger.Printf("[DEBUG] msg channel closed")
+				closeCtx()
+
+				wg.Wait()
+
+				c.logger.Printf("[DEBUG] workers stopped")
+
+				continue L1
 			case <-c.ctx.Done():
 				closeCtx()
+
+				wg.Wait()
+
+				c.logger.Printf("[DEBUG] consumer stopped")
 
 				break L1
 			}
@@ -116,10 +151,6 @@ L1:
 			break L1
 		}
 	}
-
-	wg.Wait()
-
-	c.logger.Debugf("consumer stopped")
 }
 
 func (c *Consumer) Use(middlewares ...func(Worker) Worker) {

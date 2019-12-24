@@ -20,9 +20,8 @@ func main() {
 		connCh,
 		closeCh,
 		ctx,
+		amqpextra.LoggerFunc(log.Printf), // or nil
 	)
-	consumer.SetErrorFunc(log.Printf)
-	consumer.SetDebugFunc(log.Printf)
 
 	consumer.Run(workersNum, initMsgCh, amqpextra.WorkerFunc(func(msg amqp.Delivery, ctx context.Context) interface{} {
 		// process message

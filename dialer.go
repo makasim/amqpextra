@@ -8,6 +8,12 @@ import (
 
 type Dialer func() (*amqp.Connection, error)
 
+func NewDialer(url string, config amqp.Config) Dialer {
+	return func() (*amqp.Connection, error) {
+		return amqp.DialConfig(url, config)
+	}
+}
+
 //
 func NewMultiHostDialer(
 	username string,
