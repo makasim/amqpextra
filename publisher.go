@@ -34,7 +34,7 @@ func NewPublisher(
 	logger Logger,
 ) *Publisher {
 	if logger == nil {
-		logger = nilLogger()
+		logger = nilLogger
 	}
 
 	p := &Publisher{

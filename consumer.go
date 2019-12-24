@@ -34,7 +34,7 @@ func NewConsumer(
 	logger Logger,
 ) *Consumer {
 	if logger == nil {
-		logger = nilLogger()
+		logger = nilLogger
 	}
 
 	return &Consumer{

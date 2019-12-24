@@ -23,15 +23,15 @@ func (l *Logger) Printf(format string, v ...interface{}) {
 	}
 
 	if strings.HasPrefix(format, "[ERROR] ") {
-		format := format[8:]
+		format = format[8:]
 
 		ll.Errorf(format, v...)
 	} else if strings.HasPrefix(format, "[WARN] ") {
-		format := format[7:]
+		format = format[7:]
 
 		ll.Warnf(format, v...)
 	} else if strings.HasPrefix(format, "[DEBUG] ") {
-		format := format[8:]
+		format = format[8:]
 
 		ll.Debugf(format, v...)
 	} else {
