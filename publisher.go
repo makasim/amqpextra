@@ -82,6 +82,13 @@ L1:
 			if !ok {
 				break L1
 			}
+
+			select {
+			case <-p.closeCh:
+				continue L1
+			default:
+			}
+
 			ch, err := p.initFunc(conn)
 			if err != nil {
 				p.logger.Printf("[ERROR] init func: %s", err)
