@@ -3,6 +3,7 @@ package amqpextra
 import (
 	"context"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/streadway/amqp"
@@ -18,42 +19,87 @@ type publishing struct {
 }
 
 type Publisher struct {
-	connCh       <-chan *amqp.Connection
-	closeCh      <-chan *amqp.Error
+	connCh  <-chan *amqp.Connection
+	closeCh <-chan *amqp.Error
+
+	once         sync.Once
+	started      bool
 	ctx          context.Context
+	cancelFunc   context.CancelFunc
+	restartSleep time.Duration
 	initFunc     func(conn *amqp.Connection) (*amqp.Channel, error)
 	logger       Logger
 	publishingCh chan publishing
+	doneCh       chan struct{}
 }
 
 func NewPublisher(
 	connCh <-chan *amqp.Connection,
 	closeCh <-chan *amqp.Error,
-	ctx context.Context,
-	initFunc func(conn *amqp.Connection) (*amqp.Channel, error),
-	logger Logger,
 ) *Publisher {
-	if logger == nil {
-		logger = nilLogger
-	}
+	ctx, cancelFunc := context.WithCancel(context.Background())
 
-	p := &Publisher{
-		connCh:   connCh,
-		closeCh:  closeCh,
-		ctx:      ctx,
-		initFunc: initFunc,
+	return &Publisher{
+		connCh:  connCh,
+		closeCh: closeCh,
 
-		logger:       logger,
+		started:      false,
+		ctx:          ctx,
+		cancelFunc:   cancelFunc,
+		logger:       nilLogger,
+		restartSleep: time.Second * 5,
 		publishingCh: make(chan publishing),
+		doneCh:       make(chan struct{}),
+		initFunc: func(conn *amqp.Connection) (*amqp.Channel, error) {
+			return conn.Channel()
+		},
 	}
-
-	go p.worker()
-
-	return p
 }
 
-func (p *Publisher) Publish(exchange, key string, mandatory, immediate bool, msg amqp.Publishing) <-chan error {
-	doneCh := make(chan error, 1)
+func (p *Publisher) SetLogger(logger Logger) {
+	if !p.started {
+		p.logger = logger
+	}
+}
+
+func (p *Publisher) SetContext(ctx context.Context) {
+	if !p.started {
+		p.ctx, p.cancelFunc = context.WithCancel(ctx)
+	}
+}
+
+func (p *Publisher) SetRestartSleep(d time.Duration) {
+	if !p.started {
+		p.restartSleep = d
+	}
+}
+
+func (p *Publisher) SetInitFunc(f func(conn *amqp.Connection) (*amqp.Channel, error)) {
+	if !p.started {
+		p.initFunc = f
+	}
+}
+
+func (p *Publisher) Start() {
+	p.once.Do(func() {
+		p.started = true
+		go p.start()
+	})
+}
+
+func (p *Publisher) Run() {
+	p.Start()
+
+	<-p.doneCh
+}
+
+func (p *Publisher) Stop() {
+	p.cancelFunc()
+}
+
+func (p *Publisher) Publish(exchange, key string, mandatory, immediate bool, msg amqp.Publishing, doneCh chan error) {
+	p.Start()
+
 	publishing := publishing{
 		Exchange:   exchange,
 		Queue:      key,
@@ -65,15 +111,17 @@ func (p *Publisher) Publish(exchange, key string, mandatory, immediate bool, msg
 
 	select {
 	case <-p.ctx.Done():
-		doneCh <- fmt.Errorf("publisher closed")
+		p.logger.Printf("[ERROR] cannot publish to stopped publisher")
 
-		return doneCh
+		if doneCh != nil {
+			doneCh <- fmt.Errorf("publisher stopped")
+		}
 	case p.publishingCh <- publishing:
-		return doneCh
 	}
 }
 
-func (p *Publisher) worker() {
+func (p *Publisher) start() {
+	defer close(p.doneCh)
 
 L1:
 	for {
@@ -106,13 +154,23 @@ L1:
 			for {
 				select {
 				case publishing := <-p.publishingCh:
-					publishing.DoneCh <- ch.Publish(
+					result := ch.Publish(
 						publishing.Exchange,
 						publishing.Queue,
 						publishing.Mandatory,
 						publishing.Immediate,
 						publishing.Publishing,
 					)
+
+					if publishing.DoneCh != nil {
+						go func(err error, doneCh chan error) {
+							select {
+							case doneCh <- result:
+							case <-time.NewTimer(time.Second * 5).C:
+								p.logger.Printf("[WARN] publish result has not been read out from doneCh within safeguard time. Make sure you are reading from the channel.")
+							}
+						}(result, publishing.DoneCh)
+					}
 				case <-p.closeCh:
 					p.logger.Printf("[DEBUG] publisher stopped")
 

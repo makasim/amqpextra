@@ -86,14 +86,14 @@ func (c *Conn) Consumer(queue string, worker Worker) *Consumer {
 	return consumer
 }
 
-func (c *Conn) Publisher(initFunc func(conn *amqp.Connection) (*amqp.Channel, error), l Logger) *Publisher {
+func (c *Conn) Publisher() *Publisher {
 	connCh, closeCh := c.Get()
 
-	if l == nil {
-		l = c.logger
-	}
+	publisher := NewPublisher(connCh, closeCh)
+	publisher.SetLogger(c.logger)
+	publisher.SetContext(c.ctx)
 
-	return NewPublisher(connCh, closeCh, c.ctx, initFunc, l)
+	return publisher
 }
 
 func (c *Conn) reconnect() {
