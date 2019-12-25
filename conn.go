@@ -10,7 +10,6 @@ import (
 
 type Conn struct {
 	dialer Dialer
-	ctx    context.Context
 
 	once            sync.Once
 	closeChCh       chan chan *amqp.Error
@@ -18,18 +17,23 @@ type Conn struct {
 	closeChs        []chan *amqp.Error
 	internalCloseCh chan *amqp.Error
 	logger          Logger
+	reconnectSleep  time.Duration
+	ctx             context.Context
+	cancelFunc      context.CancelFunc
+	inited          bool
 }
 
-func New(dialer Dialer, ctx context.Context, logger Logger) *Conn {
-	if logger == nil {
-		logger = nilLogger()
-	}
+func New(dialer Dialer) *Conn {
+	ctx, cancelFunc := context.WithCancel(context.Background())
 
 	c := &Conn{
-		dialer: dialer,
-		ctx:    ctx,
-		logger: logger,
+		dialer:         dialer,
+		ctx:            ctx,
+		cancelFunc:     cancelFunc,
+		logger:         nilLogger,
+		reconnectSleep: time.Second * 5,
 
+		inited:    false,
 		closeChCh: make(chan chan *amqp.Error),
 		connCh:    make(chan *amqp.Connection),
 	}
@@ -37,10 +41,37 @@ func New(dialer Dialer, ctx context.Context, logger Logger) *Conn {
 	return c
 }
 
-func (c *Conn) Get() (<-chan *amqp.Connection, <-chan *amqp.Error) {
+func (c *Conn) SetLogger(logger Logger) {
+	if !c.inited {
+		c.logger = logger
+	}
+}
+
+func (c *Conn) SetContext(ctx context.Context) {
+	if !c.inited {
+		c.ctx, c.cancelFunc = context.WithCancel(ctx)
+	}
+}
+
+func (c *Conn) SetReconnectSleep(d time.Duration) {
+	if !c.inited {
+		c.reconnectSleep = d
+	}
+}
+
+func (c *Conn) Start() {
 	c.once.Do(func() {
+		c.inited = true
 		go c.reconnect()
 	})
+}
+
+func (c *Conn) Stop() {
+	c.cancelFunc()
+}
+
+func (c *Conn) Get() (<-chan *amqp.Connection, <-chan *amqp.Error) {
+	c.Start()
 
 	return c.connCh, <-c.closeChCh
 }
@@ -81,7 +112,7 @@ L1:
 			c.logger.Printf("[ERROR] %s", err)
 
 			select {
-			case <-time.NewTimer(time.Second * 5).C:
+			case <-time.NewTimer(c.reconnectSleep).C:
 				c.logger.Printf("[DEBUG] try reconnect")
 
 				continue L1
@@ -114,7 +145,7 @@ L1:
 					select {
 					case closeCh <- err:
 					case <-time.NewTimer(time.Second * 5).C:
-						c.logger.Printf("[WARN] closeCh has not been read within safeguard time. Make sure you are reading closeCh out.")
+						c.logger.Printf("[WARN] closeCh has not been read out within safeguard time. Make sure you are reading closeCh.")
 					}
 				}
 

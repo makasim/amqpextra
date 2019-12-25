@@ -34,7 +34,7 @@ func NewConsumer(
 	logger Logger,
 ) *Consumer {
 	if logger == nil {
-		logger = nilLogger()
+		logger = nilLogger
 	}
 
 	return &Consumer{
@@ -62,6 +62,12 @@ L1:
 				break L1
 			}
 
+			select {
+			case <-c.closeCh:
+				continue L1
+			default:
+			}
+
 			msgCh, err := initFunc(conn)
 			if err != nil {
 				c.logger.Printf("[ERROR] init func: %s", err)
@@ -85,9 +91,14 @@ L1:
 				defer close(msgCloseCh)
 				defer close(workerMsgCh)
 
-				for msg := range msgCh {
+				for {
 					select {
-					case workerMsgCh <- msg:
+					case msg, ok := <-msgCh:
+						if !ok {
+							return
+						}
+
+						workerMsgCh <- msg
 					case <-c.ctx.Done():
 						return
 					}
@@ -119,7 +130,6 @@ L1:
 			}
 
 			c.logger.Printf("[DEBUG] workers started")
-
 			select {
 			case <-c.closeCh:
 				closeCtx()
