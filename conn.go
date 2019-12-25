@@ -20,7 +20,7 @@ type Conn struct {
 	reconnectSleep  time.Duration
 	ctx             context.Context
 	cancelFunc      context.CancelFunc
-	inited          bool
+	started         bool
 }
 
 func New(dialer Dialer) *Conn {
@@ -33,7 +33,7 @@ func New(dialer Dialer) *Conn {
 		logger:         nilLogger,
 		reconnectSleep: time.Second * 5,
 
-		inited:    false,
+		started:   false,
 		closeChCh: make(chan chan *amqp.Error),
 		connCh:    make(chan *amqp.Connection),
 	}
@@ -42,26 +42,26 @@ func New(dialer Dialer) *Conn {
 }
 
 func (c *Conn) SetLogger(logger Logger) {
-	if !c.inited {
+	if !c.started {
 		c.logger = logger
 	}
 }
 
 func (c *Conn) SetContext(ctx context.Context) {
-	if !c.inited {
+	if !c.started {
 		c.ctx, c.cancelFunc = context.WithCancel(ctx)
 	}
 }
 
 func (c *Conn) SetReconnectSleep(d time.Duration) {
-	if !c.inited {
+	if !c.started {
 		c.reconnectSleep = d
 	}
 }
 
 func (c *Conn) Start() {
 	c.once.Do(func() {
-		c.inited = true
+		c.started = true
 		go c.reconnect()
 	})
 }
@@ -76,14 +76,14 @@ func (c *Conn) Get() (<-chan *amqp.Connection, <-chan *amqp.Error) {
 	return c.connCh, <-c.closeChCh
 }
 
-func (c *Conn) Consumer(l Logger) *Consumer {
+func (c *Conn) Consumer(queue string, worker Worker) *Consumer {
 	connCh, closeCh := c.Get()
 
-	if l == nil {
-		l = c.logger
-	}
+	consumer := NewConsumer(queue, worker, connCh, closeCh)
+	consumer.SetLogger(c.logger)
+	consumer.SetContext(c.ctx)
 
-	return NewConsumer(connCh, closeCh, c.ctx, l)
+	return consumer
 }
 
 func (c *Conn) Publisher(initFunc func(conn *amqp.Connection) (*amqp.Channel, error), l Logger) *Publisher {
@@ -107,7 +107,7 @@ L1:
 		default:
 		}
 
-		conn, err := c.dialer()
+		conn, err := c.dialer.Dial()
 		if err != nil {
 			c.logger.Printf("[ERROR] %s", err)
 

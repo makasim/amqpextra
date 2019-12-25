@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"log"
 
 	"github.com/makasim/amqpextra"
@@ -9,13 +8,8 @@ import (
 )
 
 func main() {
-	connextra := amqpextra.New(
-		func() (*amqp.Connection, error) {
-			return amqp.Dial("amqp://guest:guest@localhost:5672/%2f")
-		},
-		context.Background(),
-		amqpextra.LoggerFunc(log.Printf), // or nil
-	)
+	connextra := amqpextra.New(amqpextra.NewDialer("amqp://guest:guest@localhost:5672/%2f", amqp.Config{}))
+	connextra.SetLogger(amqpextra.LoggerFunc(log.Printf))
 
 	connCh, closeCh := connextra.Get()
 

@@ -19,40 +19,134 @@ func (f WorkerFunc) ServeMsg(msg amqp.Delivery, ctx context.Context) interface{}
 }
 
 type Consumer struct {
+	queue   string
+	worker  Worker
 	connCh  <-chan *amqp.Connection
 	closeCh <-chan *amqp.Error
-	ctx     context.Context
 
-	logger      Logger
-	middlewares []func(Worker) Worker
+	once         sync.Once
+	started      bool
+	workerNum    int
+	restartSleep time.Duration
+	initFunc     func(conn *amqp.Connection) (<-chan amqp.Delivery, error)
+	ctx          context.Context
+	cancelFunc   context.CancelFunc
+	logger       Logger
+	middlewares  []func(Worker) Worker
+	doneCh       chan struct{}
 }
 
 func NewConsumer(
+	queue string,
+	worker Worker,
 	connCh <-chan *amqp.Connection,
 	closeCh <-chan *amqp.Error,
-	ctx context.Context,
-	logger Logger,
 ) *Consumer {
-	if logger == nil {
-		logger = nilLogger
-	}
+	ctx, cancelFunc := context.WithCancel(context.Background())
 
 	return &Consumer{
+		queue:   queue,
+		worker:  worker,
 		connCh:  connCh,
 		closeCh: closeCh,
-		ctx:     ctx,
 
-		logger: logger,
+		started:      false,
+		workerNum:    1,
+		restartSleep: time.Second * 5,
+		ctx:          ctx,
+		cancelFunc:   cancelFunc,
+		logger:       nilLogger,
+		doneCh:       make(chan struct{}),
+		initFunc: func(conn *amqp.Connection) (<-chan amqp.Delivery, error) {
+			ch, err := conn.Channel()
+			if err != nil {
+				return nil, err
+			}
+
+			return ch.Consume(
+				queue,
+				"",
+				false,
+				false,
+				false,
+				false,
+				nil,
+			)
+		},
 	}
 }
 
-func (c *Consumer) Run(
-	num int,
-	initFunc func(conn *amqp.Connection) (<-chan amqp.Delivery, error),
-	worker Worker,
-) {
+func (c *Consumer) SetLogger(logger Logger) {
+	if !c.started {
+		c.logger = logger
+	}
+}
+
+func (c *Consumer) SetContext(ctx context.Context) {
+	if !c.started {
+		c.ctx, c.cancelFunc = context.WithCancel(ctx)
+	}
+}
+
+func (c *Consumer) SetRestartSleep(d time.Duration) {
+	if !c.started {
+		c.restartSleep = d
+	}
+}
+
+func (c *Consumer) SetWorkerNum(n int) {
+	if !c.started {
+		c.workerNum = n
+	}
+}
+
+func (c *Consumer) SetInitFunc(f func(conn *amqp.Connection) (<-chan amqp.Delivery, error)) {
+	if !c.started {
+		c.initFunc = f
+	}
+}
+
+func (c *Consumer) Use(middlewares ...func(Worker) Worker) {
+	c.middlewares = append(c.middlewares, middlewares...)
+}
+
+func (c *Consumer) Start() {
+	c.once.Do(func() {
+		c.started = true
+		go c.start()
+	})
+}
+
+func (c *Consumer) Run() {
+	c.Start()
+
+	<-c.doneCh
+}
+
+func (c *Consumer) Stop() {
+	c.cancelFunc()
+}
+
+func (*Consumer) chain(middlewares []func(Worker) Worker, endpoint Worker) Worker {
+	// Return ahead of time if there aren't any middlewares for the chain
+	if len(middlewares) == 0 {
+		return endpoint
+	}
+
+	// Wrap the end handler with the middleware chain
+	w := middlewares[len(middlewares)-1](endpoint)
+	for i := len(middlewares) - 2; i >= 0; i-- {
+		w = middlewares[i](w)
+	}
+
+	return w
+}
+
+func (c *Consumer) start() {
+	defer close(c.doneCh)
+
 	var wg sync.WaitGroup
-	worker = c.chain(c.middlewares, worker)
+	worker := c.chain(c.middlewares, c.worker)
 
 L1:
 	for {
@@ -68,12 +162,12 @@ L1:
 			default:
 			}
 
-			msgCh, err := initFunc(conn)
+			msgCh, err := c.initFunc(conn)
 			if err != nil {
 				c.logger.Printf("[ERROR] init func: %s", err)
 
 				select {
-				case <-time.NewTimer(time.Second * 5).C:
+				case <-time.NewTimer(c.restartSleep).C:
 					continue
 				case <-c.ctx.Done():
 					break L1
@@ -106,7 +200,7 @@ L1:
 			}()
 
 			workerCtx, closeCtx := context.WithCancel(c.ctx)
-			for i := 0; i < num; i++ {
+			for i := 0; i < c.workerNum; i++ {
 				wg.Add(1)
 				go func() {
 					defer wg.Done()
@@ -161,23 +255,4 @@ L1:
 			break L1
 		}
 	}
-}
-
-func (c *Consumer) Use(middlewares ...func(Worker) Worker) {
-	c.middlewares = append(c.middlewares, middlewares...)
-}
-
-func (*Consumer) chain(middlewares []func(Worker) Worker, endpoint Worker) Worker {
-	// Return ahead of time if there aren't any middlewares for the chain
-	if len(middlewares) == 0 {
-		return endpoint
-	}
-
-	// Wrap the end handler with the middleware chain
-	w := middlewares[len(middlewares)-1](endpoint)
-	for i := len(middlewares) - 2; i >= 0; i-- {
-		w = middlewares[i](w)
-	}
-
-	return w
 }

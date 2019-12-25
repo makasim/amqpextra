@@ -6,15 +6,22 @@ import (
 	"github.com/streadway/amqp"
 )
 
-type Dialer func() (*amqp.Connection, error)
-
-func NewDialer(url string, config amqp.Config) Dialer {
-	return func() (*amqp.Connection, error) {
-		return amqp.DialConfig(url, config)
-	}
+type Dialer interface {
+	Dial() (*amqp.Connection, error)
 }
 
-//
+func NewDialer(url string, config amqp.Config) Dialer {
+	return DialerFunc(func() (*amqp.Connection, error) {
+		return amqp.DialConfig(url, config)
+	})
+}
+
+type DialerFunc func() (*amqp.Connection, error)
+
+func (f DialerFunc) Dial() (*amqp.Connection, error) {
+	return f()
+}
+
 func NewMultiHostDialer(
 	username string,
 	password string,
@@ -26,7 +33,7 @@ func NewMultiHostDialer(
 	i := 0
 	l := len(hosts)
 
-	return func() (*amqp.Connection, error) {
+	return DialerFunc(func() (*amqp.Connection, error) {
 		url := fmt.Sprintf(
 			"amqp://%s:%s@%s:%d/%s",
 			username,
@@ -39,5 +46,5 @@ func NewMultiHostDialer(
 		i = (i + 1) % l
 
 		return amqp.DialConfig(url, config)
-	}
+	})
 }
