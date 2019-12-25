@@ -8,11 +8,16 @@ import (
 )
 
 func main() {
-	connextra := amqpextra.New(amqpextra.NewDialer("amqp://guest:guest@localhost:5672/%2f", amqp.Config{}))
-	connextra.SetLogger(amqpextra.LoggerFunc(log.Printf))
-	publisher := connextra.Publisher()
-
 	resultCh := make(chan error)
+	connCh := make(<-chan *amqp.Connection)
+	closeCh := make(<-chan *amqp.Error)
+
+	publisher := amqpextra.NewPublisher(
+		connCh,
+		closeCh,
+	)
+	publisher.SetLogger(amqpextra.LoggerFunc(log.Printf))
+
 	publisher.Publish(
 		"",
 		"test_queue",
