@@ -5,6 +5,8 @@ import (
 	"testing"
 	"time"
 
+	"context"
+
 	"github.com/streadway/amqp"
 
 	"github.com/makasim/amqpextra"
@@ -37,6 +39,33 @@ func TestCouldNotConnect(t *testing.T) {
 	}
 }
 
+func TestConnectToSecondServer(t *testing.T) {
+	l := NewLogger()
+
+	conn := amqpextra.Dial([]string{
+		"amqp://guest:guest@127.0.0.1:5672/amqpextra",
+		"amqp://guest:guest@rabbitmq:5672/amqpextra",
+	})
+	defer conn.Close()
+
+	conn.SetReconnectSleep(time.Millisecond * 750)
+	conn.SetLogger(l)
+
+	connCh, closeCh := conn.Get()
+	select {
+	case _, ok := <-connCh:
+		assert.True(t, ok)
+
+		expected := `[ERROR] dial tcp 127.0.0.1:5672: connect: connection refused
+[DEBUG] try reconnect
+[DEBUG] connection established
+`
+		assert.Equal(t, expected, l.Logs())
+	case <-closeCh:
+		t.Fatalf("it should not happen")
+	}
+}
+
 func TestCloseConnExplicitly(t *testing.T) {
 	l := NewLogger()
 
@@ -59,6 +88,43 @@ func TestCloseConnExplicitly(t *testing.T) {
 
 	_, ok = <-connCh
 	assert.False(t, ok)
+
+	expected := `[DEBUG] connection established
+[DEBUG] connection is closed
+`
+	assert.Equal(t, expected, l.Logs())
+}
+
+func TestCloseConnByContext(t *testing.T) {
+	l := NewLogger()
+
+	ctx, cancel := context.WithCancel(context.Background())
+
+	conn := amqpextra.Dial([]string{"amqp://guest:guest@rabbitmq:5672/amqpextra"})
+	conn.SetContext(ctx)
+
+	go func() {
+		<-time.NewTimer(time.Second).C
+
+		cancel()
+	}()
+
+	conn.SetLogger(l)
+
+	connCh, closeCh := conn.Get()
+
+	_, ok := <-connCh
+	assert.True(t, ok)
+
+	<-closeCh
+
+	_, ok = <-connCh
+	assert.False(t, ok)
+
+	expected := `[DEBUG] connection established
+[DEBUG] connection is closed
+`
+	assert.Equal(t, expected, l.Logs())
 }
 
 func TestConnPublishConsume(t *testing.T) {
@@ -94,6 +160,10 @@ func TestConnPublishConsume(t *testing.T) {
 
 		assert.NoError(t, msg.Ack(false))
 		assert.Equal(t, "testbdy", string(msg.Body))
+
+		expected := `[DEBUG] connection established
+`
+		assert.Equal(t, expected, l.Logs())
 	case <-closeCh:
 		t.Fatalf("connection is closed")
 	}
