@@ -97,9 +97,14 @@ func (c *Connection) Publisher() *Publisher {
 }
 
 func (c *Connection) reconnect() {
+	nextCloseCh := make(chan *amqp.Error, 1)
+
 L1:
 	for {
 		select {
+		case c.closeChCh <- nextCloseCh:
+			c.closeChs = append(c.closeChs, nextCloseCh)
+			nextCloseCh = make(chan *amqp.Error, 1)
 		case <-c.ctx.Done():
 			c.close()
 
@@ -127,8 +132,6 @@ L1:
 		conn.NotifyClose(c.internalCloseCh)
 
 		c.logger.Printf("[DEBUG] connection established")
-
-		nextCloseCh := make(chan *amqp.Error, 1)
 
 		for {
 			select {
