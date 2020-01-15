@@ -28,7 +28,7 @@ type Consumer struct {
 	started      bool
 	workerNum    int
 	restartSleep time.Duration
-	initFunc     func(conn *amqp.Connection) (<-chan amqp.Delivery, error)
+	initFunc     func(conn *amqp.Connection) (*amqp.Channel, <-chan amqp.Delivery, error)
 	ctx          context.Context
 	cancelFunc   context.CancelFunc
 	logger       Logger
@@ -57,13 +57,13 @@ func NewConsumer(
 		cancelFunc:   cancelFunc,
 		logger:       nilLogger,
 		doneCh:       make(chan struct{}),
-		initFunc: func(conn *amqp.Connection) (<-chan amqp.Delivery, error) {
+		initFunc: func(conn *amqp.Connection) (*amqp.Channel, <-chan amqp.Delivery, error) {
 			ch, err := conn.Channel()
 			if err != nil {
-				return nil, err
+				return nil, nil, err
 			}
 
-			return ch.Consume(
+			msgCh, err := ch.Consume(
 				queue,
 				"",
 				false,
@@ -72,6 +72,11 @@ func NewConsumer(
 				false,
 				nil,
 			)
+			if err != nil {
+				return nil, nil, err
+			}
+
+			return ch, msgCh, nil
 		},
 	}
 }
@@ -100,7 +105,7 @@ func (c *Consumer) SetWorkerNum(n int) {
 	}
 }
 
-func (c *Consumer) SetInitFunc(f func(conn *amqp.Connection) (<-chan amqp.Delivery, error)) {
+func (c *Consumer) SetInitFunc(f func(conn *amqp.Connection) (*amqp.Channel, <-chan amqp.Delivery, error)) {
 	if !c.started {
 		c.initFunc = f
 	}
@@ -123,7 +128,7 @@ func (c *Consumer) Run() {
 	<-c.doneCh
 }
 
-func (c *Consumer) Stop() {
+func (c *Consumer) Close() {
 	c.cancelFunc()
 }
 
@@ -162,7 +167,7 @@ L1:
 			default:
 			}
 
-			msgCh, err := c.initFunc(conn)
+			ch, msgCh, err := c.initFunc(conn)
 			if err != nil {
 				c.logger.Printf("[ERROR] init func: %s", err)
 
@@ -199,7 +204,7 @@ L1:
 				}
 			}()
 
-			workerCtx, closeCtx := context.WithCancel(c.ctx)
+			workerCtx, workerCloseCtx := context.WithCancel(c.ctx)
 			for i := 0; i < c.workerNum; i++ {
 				wg.Add(1)
 				go func() {
@@ -226,7 +231,7 @@ L1:
 			c.logger.Printf("[DEBUG] workers started")
 			select {
 			case <-c.closeCh:
-				closeCtx()
+				workerCloseCtx()
 
 				wg.Wait()
 
@@ -235,7 +240,7 @@ L1:
 				continue L1
 			case <-msgCloseCh:
 				c.logger.Printf("[DEBUG] msg channel closed")
-				closeCtx()
+				workerCloseCtx()
 
 				wg.Wait()
 
@@ -243,9 +248,13 @@ L1:
 
 				continue L1
 			case <-c.ctx.Done():
-				closeCtx()
+				workerCloseCtx()
 
 				wg.Wait()
+
+				if err := ch.Close(); err != nil {
+					c.logger.Printf("[WARN] channel close: %s", err)
+				}
 
 				c.logger.Printf("[DEBUG] consumer stopped")
 

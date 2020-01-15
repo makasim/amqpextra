@@ -8,7 +8,7 @@ import (
 	"github.com/streadway/amqp"
 )
 
-type Conn struct {
+type Connection struct {
 	dialer Dialer
 
 	once            sync.Once
@@ -23,10 +23,10 @@ type Conn struct {
 	started         bool
 }
 
-func New(dialer Dialer) *Conn {
+func New(dialer Dialer) *Connection {
 	ctx, cancelFunc := context.WithCancel(context.Background())
 
-	c := &Conn{
+	c := &Connection{
 		dialer:         dialer,
 		ctx:            ctx,
 		cancelFunc:     cancelFunc,
@@ -41,42 +41,42 @@ func New(dialer Dialer) *Conn {
 	return c
 }
 
-func (c *Conn) SetLogger(logger Logger) {
+func (c *Connection) SetLogger(logger Logger) {
 	if !c.started {
 		c.logger = logger
 	}
 }
 
-func (c *Conn) SetContext(ctx context.Context) {
+func (c *Connection) SetContext(ctx context.Context) {
 	if !c.started {
 		c.ctx, c.cancelFunc = context.WithCancel(ctx)
 	}
 }
 
-func (c *Conn) SetReconnectSleep(d time.Duration) {
+func (c *Connection) SetReconnectSleep(d time.Duration) {
 	if !c.started {
 		c.reconnectSleep = d
 	}
 }
 
-func (c *Conn) Start() {
+func (c *Connection) Start() {
 	c.once.Do(func() {
 		c.started = true
 		go c.reconnect()
 	})
 }
 
-func (c *Conn) Stop() {
+func (c *Connection) Close() {
 	c.cancelFunc()
 }
 
-func (c *Conn) Get() (<-chan *amqp.Connection, <-chan *amqp.Error) {
+func (c *Connection) Get() (<-chan *amqp.Connection, <-chan *amqp.Error) {
 	c.Start()
 
 	return c.connCh, <-c.closeChCh
 }
 
-func (c *Conn) Consumer(queue string, worker Worker) *Consumer {
+func (c *Connection) Consumer(queue string, worker Worker) *Consumer {
 	connCh, closeCh := c.Get()
 
 	consumer := NewConsumer(queue, worker, connCh, closeCh)
@@ -86,7 +86,7 @@ func (c *Conn) Consumer(queue string, worker Worker) *Consumer {
 	return consumer
 }
 
-func (c *Conn) Publisher() *Publisher {
+func (c *Connection) Publisher() *Publisher {
 	connCh, closeCh := c.Get()
 
 	publisher := NewPublisher(connCh, closeCh)
@@ -96,7 +96,7 @@ func (c *Conn) Publisher() *Publisher {
 	return publisher
 }
 
-func (c *Conn) reconnect() {
+func (c *Connection) reconnect() {
 L1:
 	for {
 		select {
@@ -169,7 +169,7 @@ L1:
 	}
 }
 
-func (c *Conn) close() {
+func (c *Connection) close() {
 	close(c.connCh)
 	close(c.closeChCh)
 }

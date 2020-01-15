@@ -93,7 +93,7 @@ func (p *Publisher) Run() {
 	<-p.doneCh
 }
 
-func (p *Publisher) Stop() {
+func (p *Publisher) Close() {
 	p.cancelFunc()
 }
 
@@ -177,6 +177,10 @@ L1:
 					continue L1
 				case <-p.ctx.Done():
 					p.logger.Printf("[DEBUG] publisher stopped")
+
+					if err := ch.Close(); err != nil {
+						p.logger.Printf("[WARN] channel close: %s", err)
+					}
 
 					break L1
 				}

@@ -22,7 +22,7 @@ func (f DialerFunc) Dial() (*amqp.Connection, error) {
 	return f()
 }
 
-func Dial(urls []string) *Conn {
+func Dial(urls []string) *Connection {
 	i := 0
 	l := len(urls)
 
@@ -35,7 +35,7 @@ func Dial(urls []string) *Conn {
 	}))
 }
 
-func DialTLS(urls []string, amqps *tls.Config) *Conn {
+func DialTLS(urls []string, amqps *tls.Config) *Connection {
 	i := 0
 	l := len(urls)
 
@@ -48,7 +48,7 @@ func DialTLS(urls []string, amqps *tls.Config) *Conn {
 	}))
 }
 
-func DialConfig(urls []string, config amqp.Config) *Conn {
+func DialConfig(urls []string, config amqp.Config) *Connection {
 	i := 0
 	l := len(urls)
 
