@@ -4,14 +4,13 @@ import (
 	"log"
 
 	"github.com/makasim/amqpextra"
-	"github.com/streadway/amqp"
 )
 
 func main() {
-	connextra := amqpextra.New(amqpextra.NewDialer("amqp://guest:guest@localhost:5672/%2f", amqp.Config{}))
-	connextra.SetLogger(amqpextra.LoggerFunc(log.Printf))
+	conn := amqpextra.Dial([]string{"amqp://guest:guest@localhost:5672/%2f"})
+	conn.SetLogger(amqpextra.LoggerFunc(log.Printf))
 
-	connCh, closeCh := connextra.Get()
+	connCh, closeCh := conn.Get()
 
 L1:
 	for conn := range connCh {

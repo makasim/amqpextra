@@ -8,9 +8,9 @@ import (
 )
 
 func main() {
-	connextra := amqpextra.New(amqpextra.NewDialer("amqp://guest:guest@localhost:5672/%2f", amqp.Config{}))
-	connextra.SetLogger(amqpextra.LoggerFunc(log.Printf))
-	publisher := connextra.Publisher()
+	conn := amqpextra.Dial([]string{"amqp://guest:guest@localhost:5672/%2f"})
+	conn.SetLogger(amqpextra.LoggerFunc(log.Printf))
+	publisher := conn.Publisher()
 
 	resultCh := make(chan error)
 	publisher.Publish(

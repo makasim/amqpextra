@@ -9,10 +9,10 @@ import (
 )
 
 func main() {
-	connextra := amqpextra.New(amqpextra.NewDialer("amqp://guest:guest@localhost:5672/%2f", amqp.Config{}))
-	connextra.SetLogger(amqpextra.LoggerFunc(log.Printf))
+	conn := amqpextra.Dial([]string{"amqp://guest:guest@localhost:5672/%2f"})
+	conn.SetLogger(amqpextra.LoggerFunc(log.Printf))
 
-	consumer := connextra.Consumer(
+	consumer := conn.Consumer(
 		"some_queue",
 		amqpextra.WorkerFunc(func(msg amqp.Delivery, ctx context.Context) interface{} {
 			// process message
