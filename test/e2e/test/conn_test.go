@@ -37,6 +37,30 @@ func TestCouldNotConnect(t *testing.T) {
 	}
 }
 
+func TestCloseConnExplicitly(t *testing.T) {
+	l := NewLogger()
+
+	conn := amqpextra.Dial([]string{"amqp://guest:guest@rabbitmq:5672/amqpextra"})
+
+	go func() {
+		<-time.NewTimer(time.Second).C
+
+		conn.Close()
+	}()
+
+	conn.SetLogger(l)
+
+	connCh, closeCh := conn.Get()
+
+	_, ok := <-connCh
+	assert.True(t, ok)
+
+	<-closeCh
+
+	_, ok = <-connCh
+	assert.False(t, ok)
+}
+
 func TestConnPublishConsume(t *testing.T) {
 	l := NewLogger()
 
