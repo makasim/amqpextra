@@ -2,6 +2,8 @@ package test
 
 import (
 	"fmt"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -239,6 +241,8 @@ func TestConnPublishConsume(t *testing.T) {
 
 	select {
 	case conn, ok := <-connCh:
+		assert.True(t, ok)
+
 		ch, err := conn.Channel()
 		assert.NoError(t, err)
 
@@ -265,4 +269,128 @@ func TestConnPublishConsume(t *testing.T) {
 	case <-closeCh:
 		t.Fatalf("connection is closed")
 	}
+}
+
+func TestCongruentlyPublishConsumeWhileConnectionLost(t *testing.T) {
+	l := newLogger()
+
+	connName := fmt.Sprintf("amqpextra-test-%d", time.Now().UnixNano())
+
+	conn := amqpextra.DialConfig([]string{"amqp://guest:guest@rabbitmq:5672/amqpextra"}, amqp.Config{
+		Properties: amqp.Table{
+			"connection_name": connName,
+		},
+	})
+	defer conn.Close()
+
+	conn.SetLogger(l)
+
+	var wg sync.WaitGroup
+
+	wg.Add(1)
+	go func(connName string, wg *sync.WaitGroup) {
+		defer wg.Done()
+
+		<-time.NewTimer(time.Second * 5).C
+
+		if !assert.True(t, closeConn(connName)) {
+			return
+		}
+	}(connName, &wg)
+
+	queue := fmt.Sprintf("test-%d", time.Now().Nanosecond())
+
+	var countPublished uint32
+	for i := 0; i < 5; i++ {
+		wg.Add(1)
+		go func(extraconn *amqpextra.Connection, queue string, wg *sync.WaitGroup) {
+			defer wg.Done()
+
+			connCh, closeCh := extraconn.Get()
+
+			ticker := time.NewTicker(time.Millisecond * 100)
+			timer := time.NewTimer(time.Second * 10)
+
+		L1:
+			for conn := range connCh {
+				ch, err := conn.Channel()
+				assert.NoError(t, err)
+
+				_, err = ch.QueueDeclare(queue, true, false, false, false, nil)
+				assert.NoError(t, err)
+
+				for {
+					select {
+					case <-ticker.C:
+						err := ch.Publish("", queue, false, false, amqp.Publishing{})
+
+						if err == nil {
+							atomic.AddUint32(&countPublished, 1)
+						}
+					case <-closeCh:
+						continue L1
+					case <-timer.C:
+						break L1
+					}
+				}
+
+			}
+
+		}(conn, queue, &wg)
+	}
+
+	var countConsumed uint32
+	for i := 0; i < 5; i++ {
+		wg.Add(1)
+		go func(extraconn *amqpextra.Connection, queue string, count *uint32, wg *sync.WaitGroup) {
+			defer wg.Done()
+
+			connCh, closeCh := extraconn.Get()
+
+			timer := time.NewTimer(time.Second * 11)
+
+		L1:
+			for conn := range connCh {
+				ch, err := conn.Channel()
+				assert.NoError(t, err)
+
+				_, err = ch.QueueDeclare(queue, true, false, false, false, nil)
+				assert.NoError(t, err)
+
+				msgCh, err := ch.Consume(queue, "", false, false, false, false, nil)
+				assert.NoError(t, err)
+
+				for {
+					select {
+					case msg, ok := <-msgCh:
+						if !ok {
+							continue L1
+						}
+
+						msg.Ack(false)
+
+						atomic.AddUint32(count, 1)
+					case <-closeCh:
+						continue L1
+					case <-timer.C:
+						break L1
+					}
+				}
+
+			}
+		}(conn, queue, &countConsumed, &wg)
+	}
+
+	wg.Wait()
+
+	expected := `[DEBUG] connection established
+[DEBUG] connection established
+`
+	assert.Equal(t, expected, l.Logs())
+
+	assert.GreaterOrEqual(t, countPublished, uint32(200))
+	assert.LessOrEqual(t, countPublished, uint32(520))
+
+	assert.GreaterOrEqual(t, countConsumed, uint32(200))
+	assert.LessOrEqual(t, countConsumed, uint32(520))
 }
