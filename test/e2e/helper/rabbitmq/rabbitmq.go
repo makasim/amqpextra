@@ -107,3 +107,28 @@ func Queue2(conn *amqpextra.Connection) string {
 
 	return Queue(realconn)
 }
+
+func Publish(conn *amqp.Connection, body string, queue string) {
+	ch, err := conn.Channel()
+	if err != nil {
+		panic(err)
+	}
+
+	err = ch.Publish("", queue, false, false, amqp.Publishing{
+		Body: []byte(body),
+	})
+	if err != nil {
+		panic(err)
+	}
+}
+
+func Publish2(conn *amqpextra.Connection, body string, queue string) {
+	connCh, _ := conn.Get()
+
+	realconn, ok := <-connCh
+	if !ok {
+		panic("connection is closed")
+	}
+
+	Publish(realconn, body, queue)
+}
