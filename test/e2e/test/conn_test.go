@@ -227,6 +227,35 @@ func TestReconnectIfClosedByServer(t *testing.T) {
 	assert.Equal(t, expected, l.Logs())
 }
 
+func TestNotReadingFromCloseCh(t *testing.T) {
+	l := newLogger()
+
+	conn := amqpextra.Dial([]string{"amqp://guest:guest@rabbitmq:5672/amqpextra"})
+	conn.SetLogger(l)
+
+	connCh, _ := conn.Get()
+
+	realconn, ok := <-connCh
+	assert.True(t, ok)
+
+	assert.NoError(t, realconn.Close())
+
+	time.Sleep(time.Millisecond * 100)
+	//<-closeCh
+
+	realconn, ok = <-connCh
+	assert.True(t, ok)
+
+	assert.NoError(t, realconn.Close())
+
+	//<-closeCh
+
+	expected := `[DEBUG] connection established
+[DEBUG] connection established
+`
+	assert.Equal(t, expected, l.Logs())
+}
+
 func TestConnPublishConsume(t *testing.T) {
 	l := newLogger()
 

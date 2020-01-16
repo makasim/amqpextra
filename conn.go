@@ -106,7 +106,7 @@ L1:
 			c.closeChs = append(c.closeChs, nextCloseCh)
 			nextCloseCh = make(chan *amqp.Error, 1)
 		case <-c.ctx.Done():
-			c.close()
+			c.close(nil)
 
 			break L1
 		default:
@@ -122,7 +122,7 @@ L1:
 
 				continue L1
 			case <-c.ctx.Done():
-				c.close()
+				c.close(nil)
 
 				break L1
 			}
@@ -147,24 +147,18 @@ L1:
 				for _, closeCh := range c.closeChs {
 					select {
 					case closeCh <- err:
+					case <-c.ctx.Done():
+						c.close(conn)
+
+						break L1
 					case <-time.NewTimer(time.Second * 5).C:
-						c.logger.Printf("[WARN] closeCh has not been read out within safeguard time. Make sure you are reading closeCh.")
+						c.logger.Printf("[WARN] previous err sent to close channel has not been read out. Make sure you are reading from closeCh.")
 					}
 				}
 
 				continue L1
 			case <-c.ctx.Done():
-				c.close()
-
-				if err := conn.Close(); err != nil {
-					c.logger.Printf("[ERROR] %s", err)
-				}
-
-				c.logger.Printf("[DEBUG] connection is closed")
-
-				for _, closeCh := range c.closeChs {
-					close(closeCh)
-				}
+				c.close(conn)
 
 				break L1
 			}
@@ -172,7 +166,20 @@ L1:
 	}
 }
 
-func (c *Connection) close() {
-	close(c.connCh)
+func (c *Connection) close(conn *amqp.Connection) {
 	close(c.closeChCh)
+
+	if conn != nil && !conn.IsClosed() {
+		if err := conn.Close(); err != nil {
+			c.logger.Printf("[ERROR] connection close: %s", err)
+		}
+
+		c.logger.Printf("[DEBUG] connection is closed")
+	}
+
+	close(c.connCh)
+
+	for _, closeCh := range c.closeChs {
+		close(closeCh)
+	}
 }
