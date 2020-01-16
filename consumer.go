@@ -2,6 +2,7 @@ package amqpextra
 
 import (
 	"context"
+	"strings"
 	"sync"
 	"time"
 
@@ -183,6 +184,7 @@ L1:
 
 			msgCloseCh := make(chan struct{})
 			workerMsgCh := make(chan amqp.Delivery)
+			workerCtx, workerCloseCtx := context.WithCancel(c.ctx)
 
 			wg.Add(1)
 			go func() {
@@ -200,11 +202,12 @@ L1:
 						workerMsgCh <- msg
 					case <-c.ctx.Done():
 						return
+					case <-workerCtx.Done():
+						return
 					}
 				}
 			}()
 
-			workerCtx, workerCloseCtx := context.WithCancel(c.ctx)
 			for i := 0; i < c.workerNum; i++ {
 				wg.Add(1)
 				go func() {
@@ -214,7 +217,6 @@ L1:
 						select {
 						case msg, ok := <-workerMsgCh:
 							if !ok {
-
 								return
 							}
 
@@ -239,7 +241,6 @@ L1:
 
 				continue L1
 			case <-msgCloseCh:
-				c.logger.Printf("[DEBUG] msg channel closed")
 				workerCloseCtx()
 
 				wg.Wait()
@@ -252,16 +253,26 @@ L1:
 
 				wg.Wait()
 
-				if err := ch.Close(); err != nil {
-					c.logger.Printf("[WARN] channel close: %s", err)
-				}
+				c.logger.Printf("[DEBUG] workers stopped")
 
-				c.logger.Printf("[DEBUG] consumer stopped")
+				c.close(ch)
 
 				break L1
 			}
 		case <-c.ctx.Done():
 			break L1
 		}
+	}
+
+	c.logger.Printf("[DEBUG] consumer stopped")
+}
+
+func (c *Consumer) close(ch *amqp.Channel) {
+	if ch == nil {
+		return
+	}
+
+	if err := ch.Close(); err != nil && !strings.Contains(err.Error(), "channel/connection is not open") {
+		c.logger.Printf("[WARN] channel close: %s", err)
 	}
 }

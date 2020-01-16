@@ -1,46 +1,21 @@
-package test
+package rabbitmq
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"net/http"
 	"net/http/httputil"
-	"sync"
+	"time"
+
+	"github.com/makasim/amqpextra"
+
+	"github.com/streadway/amqp"
 )
 
-type Logger struct {
-	mx  *sync.RWMutex
-	buf *bytes.Buffer
-}
-
-func newLogger() *Logger {
-	return &Logger{
-		buf: bytes.NewBuffer(make([]byte, 0)),
-		mx:  &sync.RWMutex{},
-	}
-}
-
-func (l Logger) Printf(format string, args ...interface{}) {
-	l.mx.Lock()
-	defer l.mx.Unlock()
-
-	fmt.Fprintf(l.buf, format+"\n", args...)
-}
-
-func (l Logger) Logs() string {
-	l.mx.RLock()
-	defer l.mx.RUnlock()
-
-	b, _ := ioutil.ReadAll(l.buf)
-
-	return string(b)
-}
-
-func closeConn(userProvidedName string) bool {
+func CloseConn(userProvidedName string) bool {
 	var data []map[string]interface{}
-	if err := json.Unmarshal([]byte(conns()), &data); err != nil {
+	if err := json.Unmarshal([]byte(OpenedConns()), &data); err != nil {
 		panic(err)
 	}
 
@@ -79,7 +54,7 @@ func closeConn(userProvidedName string) bool {
 	return false
 }
 
-func conns() string {
+func OpenedConns() string {
 	req, err := http.NewRequest("GET", "http://guest:guest@rabbitmq:15672/api/connections", nil)
 	if err != nil {
 		panic(err)
@@ -103,4 +78,32 @@ func conns() string {
 	}
 
 	return string(b)
+}
+
+func Queue(conn *amqp.Connection) string {
+	queue := fmt.Sprintf("test-amqpextra-%d", time.Now().UnixNano())
+
+	ch, err := conn.Channel()
+	if err != nil {
+		panic(err)
+	}
+	defer ch.Close()
+
+	q, err := ch.QueueDeclare(queue, true, false, false, false, nil)
+	if err != nil {
+		panic(err)
+	}
+
+	return q.Name
+}
+
+func Queue2(conn *amqpextra.Connection) string {
+	connCh, _ := conn.Get()
+
+	realconn, ok := <-connCh
+	if !ok {
+		panic("connection is closed")
+	}
+
+	return Queue(realconn)
 }
