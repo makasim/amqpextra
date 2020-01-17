@@ -35,6 +35,7 @@ type Consumer struct {
 	logger       Logger
 	middlewares  []func(Worker) Worker
 	doneCh       chan struct{}
+	notifyReady  chan struct{}
 }
 
 func NewConsumer(
@@ -79,6 +80,12 @@ func NewConsumer(
 
 			return ch, msgCh, nil
 		},
+	}
+}
+
+func (c *Consumer) SetNotifyReady(ch chan struct{}) {
+	if !c.started {
+		c.notifyReady = ch
 	}
 }
 
@@ -178,6 +185,11 @@ L1:
 				case <-c.ctx.Done():
 					break L1
 				}
+			}
+
+			select {
+			case c.notifyReady <- struct{}{}:
+			default:
 			}
 
 			c.logger.Printf("[DEBUG] consumer starting")

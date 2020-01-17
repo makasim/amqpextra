@@ -3,6 +3,7 @@ package amqpextra
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -31,6 +32,7 @@ type Publisher struct {
 	logger       Logger
 	publishingCh chan publishing
 	doneCh       chan struct{}
+	notifyReady  chan struct{}
 }
 
 func NewPublisher(
@@ -120,6 +122,12 @@ func (p *Publisher) Publish(exchange, key string, mandatory, immediate bool, msg
 	}
 }
 
+func (p *Publisher) SetNotifyReady(ch chan struct{}) {
+	if !p.started {
+		p.notifyReady = ch
+	}
+}
+
 func (p *Publisher) start() {
 	defer close(p.doneCh)
 
@@ -153,6 +161,7 @@ L1:
 
 			for {
 				select {
+				case p.notifyReady <- struct{}{}:
 				case publishing := <-p.publishingCh:
 					result := ch.Publish(
 						publishing.Exchange,
@@ -178,7 +187,7 @@ L1:
 				case <-p.ctx.Done():
 					p.logger.Printf("[DEBUG] publisher stopped")
 
-					if err := ch.Close(); err != nil {
+					if err := ch.Close(); err != nil && !strings.Contains(err.Error(), "channel/connection is not open") {
 						p.logger.Printf("[WARN] channel close: %s", err)
 					}
 
