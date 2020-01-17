@@ -259,6 +259,8 @@ L1:
 
 				break L1
 			}
+		case <-c.closeCh:
+			continue L1
 		case <-c.ctx.Done():
 			break L1
 		}
