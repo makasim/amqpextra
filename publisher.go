@@ -163,13 +163,13 @@ L1:
 					)
 
 					if publishing.DoneCh != nil {
-						go func(err error, doneCh chan error) {
-							select {
-							case doneCh <- result:
-							case <-time.NewTimer(time.Second * 5).C:
-								p.logger.Printf("[WARN] publish result has not been read out from doneCh within safeguard time. Make sure you are reading from the channel.")
-							}
-						}(result, publishing.DoneCh)
+						select {
+						case publishing.DoneCh <- result:
+						case <-time.NewTimer(time.Second * 5).C:
+							p.logger.Printf("[WARN] publish result has not been read out from doneCh within safeguard time. Make sure you are reading from the channel.")
+						}
+					} else {
+						p.logger.Printf("[ERROR] publish: %s", err)
 					}
 				case <-p.closeCh:
 					p.logger.Printf("[DEBUG] publisher stopped")
@@ -184,6 +184,16 @@ L1:
 
 					break L1
 				}
+			}
+		case publishing := <-p.publishingCh:
+			if publishing.DoneCh != nil {
+				select {
+				case publishing.DoneCh <- amqp.ErrClosed:
+				case <-time.NewTimer(time.Second * 5).C:
+					p.logger.Printf("[WARN] publish result has not been read out from doneCh within safeguard time. Make sure you are reading from the channel.")
+				}
+			} else {
+				p.logger.Printf("[ERROR] publish: %s", amqp.ErrClosed)
 			}
 		case <-p.ctx.Done():
 			break L1
