@@ -35,7 +35,8 @@ type Consumer struct {
 	logger       Logger
 	middlewares  []func(Worker) Worker
 	doneCh       chan struct{}
-	notifyReady  chan struct{}
+	readyCh      chan struct{}
+	unreadyCh    chan struct{}
 }
 
 func NewConsumer(
@@ -59,6 +60,8 @@ func NewConsumer(
 		cancelFunc:   cancelFunc,
 		logger:       nilLogger,
 		doneCh:       make(chan struct{}),
+		readyCh:      make(chan struct{}),
+		unreadyCh:    make(chan struct{}),
 		initFunc: func(conn *amqp.Connection) (*amqp.Channel, <-chan amqp.Delivery, error) {
 			ch, err := conn.Channel()
 			if err != nil {
@@ -80,12 +83,6 @@ func NewConsumer(
 
 			return ch, msgCh, nil
 		},
-	}
-}
-
-func (c *Consumer) SetNotifyReady(ch chan struct{}) {
-	if !c.started {
-		c.notifyReady = ch
 	}
 }
 
@@ -134,6 +131,14 @@ func (c *Consumer) Run() {
 	c.Start()
 
 	<-c.doneCh
+}
+
+func (c *Consumer) Ready() <-chan struct{} {
+	return c.readyCh
+}
+
+func (c *Consumer) Unready() <-chan struct{} {
+	return c.unreadyCh
 }
 
 func (c *Consumer) Close() {
@@ -185,11 +190,6 @@ L1:
 				case <-c.ctx.Done():
 					break L1
 				}
-			}
-
-			select {
-			case c.notifyReady <- struct{}{}:
-			default:
 			}
 
 			c.logger.Printf("[DEBUG] consumer starting")
@@ -244,6 +244,7 @@ L1:
 
 			c.logger.Printf("[DEBUG] workers started")
 			select {
+			case c.readyCh <- struct{}{}:
 			case <-c.closeCh:
 				workerCloseCtx()
 
@@ -271,6 +272,7 @@ L1:
 
 				break L1
 			}
+		case c.unreadyCh <- struct{}{}:
 		case <-c.closeCh:
 			continue L1
 		case <-c.ctx.Done():
@@ -289,4 +291,7 @@ func (c *Consumer) close(ch *amqp.Channel) {
 	if err := ch.Close(); err != nil && !strings.Contains(err.Error(), "channel/connection is not open") {
 		c.logger.Printf("[WARN] channel close: %s", err)
 	}
+
+	c.readyCh = nil
+	close(c.unreadyCh)
 }

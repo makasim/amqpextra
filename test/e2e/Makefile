@@ -15,3 +15,7 @@ clean:
 .PHONY: enter
 enter: clean
 	COMPOSE_PROJECT_NAME=$(COMPOSE_PROJECT_NAME) docker-compose --file docker-compose.yml run --entrypoint=bash $(APP)-e2e-test
+
+.PHONY: test
+test:
+	go test -mod=vendor -race -count=1  -v ./test/...

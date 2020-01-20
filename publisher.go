@@ -32,7 +32,8 @@ type Publisher struct {
 	logger       Logger
 	publishingCh chan publishing
 	doneCh       chan struct{}
-	notifyReady  chan struct{}
+	readyCh      chan struct{}
+	unreadyCh    chan struct{}
 }
 
 func NewPublisher(
@@ -52,6 +53,8 @@ func NewPublisher(
 		restartSleep: time.Second * 5,
 		publishingCh: make(chan publishing),
 		doneCh:       make(chan struct{}),
+		readyCh:      make(chan struct{}),
+		unreadyCh:    make(chan struct{}),
 		initFunc: func(conn *amqp.Connection) (*amqp.Channel, error) {
 			return conn.Channel()
 		},
@@ -122,10 +125,12 @@ func (p *Publisher) Publish(exchange, key string, mandatory, immediate bool, msg
 	}
 }
 
-func (p *Publisher) SetNotifyReady(ch chan struct{}) {
-	if !p.started {
-		p.notifyReady = ch
-	}
+func (p *Publisher) Ready() <-chan struct{} {
+	return p.readyCh
+}
+
+func (p *Publisher) Unready() <-chan struct{} {
+	return p.unreadyCh
 }
 
 func (p *Publisher) start() {
@@ -136,6 +141,8 @@ L1:
 		select {
 		case conn, ok := <-p.connCh:
 			if !ok {
+				p.close(nil)
+
 				break L1
 			}
 
@@ -153,6 +160,8 @@ L1:
 				case <-time.NewTimer(time.Second * 5).C:
 					continue L1
 				case <-p.ctx.Done():
+					p.close(nil)
+
 					break L1
 				}
 			}
@@ -161,7 +170,7 @@ L1:
 
 			for {
 				select {
-				case p.notifyReady <- struct{}{}:
+				case p.readyCh <- struct{}{}:
 				case publishing := <-p.publishingCh:
 					result := ch.Publish(
 						publishing.Exchange,
@@ -187,13 +196,12 @@ L1:
 				case <-p.ctx.Done():
 					p.logger.Printf("[DEBUG] publisher stopped")
 
-					if err := ch.Close(); err != nil && !strings.Contains(err.Error(), "channel/connection is not open") {
-						p.logger.Printf("[WARN] channel close: %s", err)
-					}
+					p.close(ch)
 
 					break L1
 				}
 			}
+		case p.unreadyCh <- struct{}{}:
 		case publishing := <-p.publishingCh:
 			if publishing.DoneCh != nil {
 				select {
@@ -205,7 +213,19 @@ L1:
 				p.logger.Printf("[ERROR] publish: %s", amqp.ErrClosed)
 			}
 		case <-p.ctx.Done():
+			p.close(nil)
+
 			break L1
 		}
 	}
+}
+
+func (p *Publisher) close(ch *amqp.Channel) {
+	if ch != nil {
+		if err := ch.Close(); err != nil && !strings.Contains(err.Error(), "channel/connection is not open") {
+			p.logger.Printf("[WARN] channel close: %s", err)
+		}
+	}
+
+	close(p.readyCh)
 }
