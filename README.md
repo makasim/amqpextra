@@ -31,3 +31,10 @@ See an [example](examples/consumer_middleware.go).
 The package provides a handy publisher. It is aware of `<-chan *amqp.Connection` and `<-chan *amqp.Error` and can work with them respectively.  
 
 See an [example](examples/publisher_example.go).
+
+## PoolPublisher.
+
+The pool publisher maintain some internal publishers, or other words connected to different RabbitMq servers, and publishes to first-ready connection.
+Switch to another connection if currently used one is closed.  
+
+See an [example](examples/pool_publisher_example.go).
