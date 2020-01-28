@@ -13,14 +13,14 @@ func main() {
 	publisher := conn.Publisher()
 
 	resultCh := make(chan error)
-	publisher.Publish(
-		"",
-		"test_queue",
-		false,
-		false,
-		amqp.Publishing{
+	publisher.Publish(amqpextra.Publishing{
+		Key:       "test_queue",
+		WaitReady: true,
+		Message: amqp.Publishing{
 			Body: []byte(`{"foo": "fooVal"}`),
-		}, resultCh)
+		},
+		ResultCh: resultCh,
+	})
 
 	if err := <-resultCh; err != nil {
 		log.Fatal(err)

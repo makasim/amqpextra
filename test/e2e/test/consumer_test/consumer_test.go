@@ -17,6 +17,7 @@ import (
 	"github.com/makasim/amqpextra/test/e2e/helper/logger"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestCloseChannelOnAlreadyClosedConnection(t *testing.T) {
@@ -44,9 +45,9 @@ func TestCloseChannelOnAlreadyClosedConnection(t *testing.T) {
 [DEBUG] workers stopped
 [DEBUG] consumer stopped
 `
-	assert.Equal(t, expected, l.Logs())
+	require.Equal(t, expected, l.Logs())
 
-	assert.NotContains(t, l.Logs(), "Exception (504) Reason: \"channel/connection is not open\"\n[DEBUG] consumer stopped\n")
+	require.NotContains(t, l.Logs(), "Exception (504) Reason: \"channel/connection is not open\"\n[DEBUG] consumer stopped\n")
 }
 
 func TestConsumeOneAndCloseConsumer(t *testing.T) {
@@ -80,10 +81,10 @@ func TestConsumeOneAndCloseConsumer(t *testing.T) {
 [DEBUG] workers stopped
 [DEBUG] consumer stopped
 `
-	assert.Equal(t, expected, l.Logs())
+	require.Equal(t, expected, l.Logs())
 }
 
-func TestCongruentlyPublishConsumeWhileConnectionLost(t *testing.T) {
+func TestConcurrentlyPublishConsumeWhileConnectionLost(t *testing.T) {
 	l := logger.New()
 
 	connName := fmt.Sprintf("amqpextra-test-%d", time.Now().UnixNano())
@@ -126,10 +127,10 @@ func TestCongruentlyPublishConsumeWhileConnectionLost(t *testing.T) {
 		L1:
 			for conn := range connCh {
 				ch, err := conn.Channel()
-				assert.NoError(t, err)
+				require.NoError(t, err)
 
 				_, err = ch.QueueDeclare(queue, true, false, false, false, nil)
-				assert.NoError(t, err)
+				require.NoError(t, err)
 
 				for {
 					select {
@@ -183,11 +184,11 @@ func TestCongruentlyPublishConsumeWhileConnectionLost(t *testing.T) {
 [DEBUG] workers stopped
 [DEBUG] consumer stopped
 `
-	assert.Equal(t, expected, l.Logs())
+	require.Equal(t, expected, l.Logs())
 
-	assert.GreaterOrEqual(t, countPublished, uint32(200))
-	assert.LessOrEqual(t, countPublished, uint32(520))
+	require.GreaterOrEqual(t, countPublished, uint32(200))
+	require.LessOrEqual(t, countPublished, uint32(520))
 
-	assert.GreaterOrEqual(t, countConsumed, uint32(200))
-	assert.LessOrEqual(t, countConsumed, uint32(520))
+	require.GreaterOrEqual(t, countConsumed, uint32(200))
+	require.LessOrEqual(t, countConsumed, uint32(520))
 }

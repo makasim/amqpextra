@@ -18,14 +18,14 @@ func main() {
 	)
 	publisher.SetLogger(amqpextra.LoggerFunc(log.Printf))
 
-	publisher.Publish(
-		"",
-		"test_queue",
-		false,
-		false,
-		amqp.Publishing{
+	publisher.Publish(amqpextra.Publishing{
+		Key:       "test_queue",
+		WaitReady: true,
+		Message: amqp.Publishing{
 			Body: []byte(`{"foo": "fooVal"}`),
-		}, resultCh)
+		},
+		ResultCh: resultCh,
+	})
 
 	if err := <-resultCh; err != nil {
 		log.Fatal(err)

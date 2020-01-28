@@ -9,21 +9,20 @@ import (
 	"time"
 
 	"github.com/makasim/amqpextra/test/e2e/helper/rabbitmq"
+	"github.com/stretchr/testify/require"
 
 	"github.com/makasim/amqpextra"
 
 	"github.com/streadway/amqp"
 
 	"github.com/makasim/amqpextra/test/e2e/helper/logger"
-
-	"github.com/stretchr/testify/assert"
 )
 
 func TestCloseConsumerWhenConnChannelClosed(t *testing.T) {
 	l := logger.New()
 
 	conn, err := amqp.Dial("amqp://guest:guest@rabbitmq:5672/amqpextra")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	connCh := make(chan *amqp.Connection, 1)
 	connCh <- conn
@@ -51,7 +50,7 @@ func TestCloseConsumerWhenConnChannelClosed(t *testing.T) {
 [DEBUG] workers stopped
 [DEBUG] consumer stopped
 `
-	assert.Equal(t, expected, l.Logs())
+	require.Equal(t, expected, l.Logs())
 }
 
 func TestGetNewConsumerOnErrorInCloseCh(t *testing.T) {
@@ -60,7 +59,7 @@ func TestGetNewConsumerOnErrorInCloseCh(t *testing.T) {
 	connCh := make(chan *amqp.Connection, 1)
 	closeCh := make(chan *amqp.Error)
 	conn, err := amqp.Dial("amqp://guest:guest@rabbitmq:5672/amqpextra")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	queue := rabbitmq.Queue(conn)
 
@@ -77,7 +76,7 @@ func TestGetNewConsumerOnErrorInCloseCh(t *testing.T) {
 		l.Printf("[DEBUG] trying reconnect")
 
 		conn, err = amqp.Dial("amqp://guest:guest@rabbitmq:5672/amqpextra")
-		assert.NoError(t, err)
+		require.NoError(t, err)
 
 		l.Printf("[DEBUG] reconnected")
 		connCh <- conn
@@ -113,7 +112,7 @@ func TestGetNewConsumerOnErrorInCloseCh(t *testing.T) {
 [DEBUG] workers stopped
 [DEBUG] consumer stopped
 `
-	assert.Equal(t, expected, l.Logs())
+	require.Equal(t, expected, l.Logs())
 }
 
 func TestCloseConsumerByContext(t *testing.T) {
@@ -122,7 +121,7 @@ func TestCloseConsumerByContext(t *testing.T) {
 	connCh := make(chan *amqp.Connection, 1)
 	closeCh := make(chan *amqp.Error)
 	conn, err := amqp.Dial("amqp://guest:guest@rabbitmq:5672/amqpextra")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	queue := rabbitmq.Queue(conn)
 
@@ -153,7 +152,7 @@ func TestCloseConsumerByContext(t *testing.T) {
 [DEBUG] workers stopped
 [DEBUG] consumer stopped
 `
-	assert.Equal(t, expected, l.Logs())
+	require.Equal(t, expected, l.Logs())
 }
 
 func TestCloseChannelOnAlreadyClosedConnection(t *testing.T) {
@@ -162,7 +161,7 @@ func TestCloseChannelOnAlreadyClosedConnection(t *testing.T) {
 	connCh := make(chan *amqp.Connection, 1)
 	closeCh := make(chan *amqp.Error)
 	conn, err := amqp.Dial("amqp://guest:guest@rabbitmq:5672/amqpextra")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	queue := rabbitmq.Queue(conn)
 
@@ -178,7 +177,7 @@ func TestCloseChannelOnAlreadyClosedConnection(t *testing.T) {
 		<-time.NewTimer(time.Second).C
 
 		cancelFunc()
-		assert.NoError(t, conn.Close())
+		require.NoError(t, conn.Close())
 	}()
 
 	c := amqpextra.NewConsumer(queue, worker, connCh, closeCh)
@@ -192,9 +191,9 @@ func TestCloseChannelOnAlreadyClosedConnection(t *testing.T) {
 [DEBUG] workers stopped
 [DEBUG] consumer stopped
 `
-	assert.Equal(t, expected, l.Logs())
+	require.Equal(t, expected, l.Logs())
 
-	assert.NotContains(t, l.Logs(), "Exception (504) Reason: \"channel/connection is not open\"\n[DEBUG] consumer stopped\n")
+	require.NotContains(t, l.Logs(), "Exception (504) Reason: \"channel/connection is not open\"\n[DEBUG] consumer stopped\n")
 }
 
 func TestConsumeOneAndCloseConsumer(t *testing.T) {
@@ -203,7 +202,7 @@ func TestConsumeOneAndCloseConsumer(t *testing.T) {
 	connCh := make(chan *amqp.Connection, 1)
 	closeCh := make(chan *amqp.Error)
 	conn, err := amqp.Dial("amqp://guest:guest@rabbitmq:5672/amqpextra")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	queue := rabbitmq.Queue(conn)
 	rabbitmq.Publish(conn, "testbdy", queue)
@@ -231,10 +230,10 @@ func TestConsumeOneAndCloseConsumer(t *testing.T) {
 [DEBUG] workers stopped
 [DEBUG] consumer stopped
 `
-	assert.Equal(t, expected, l.Logs())
+	require.Equal(t, expected, l.Logs())
 }
 
-func TestCongruentlyPublishConsumeWhileConnectionLost(t *testing.T) {
+func TestConcurrentlyPublishConsumeWhileConnectionLost(t *testing.T) {
 	l := logger.New()
 
 	connName := fmt.Sprintf("amqpextra-test-%d", time.Now().UnixNano())
@@ -246,11 +245,11 @@ func TestCongruentlyPublishConsumeWhileConnectionLost(t *testing.T) {
 			"connection_name": connName,
 		},
 	})
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	defer conn.Close()
 
 	publishConn, err := amqp.Dial("amqp://guest:guest@rabbitmq:5672/amqpextra")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	defer publishConn.Close()
 
 	var wg sync.WaitGroup
@@ -267,7 +266,7 @@ func TestCongruentlyPublishConsumeWhileConnectionLost(t *testing.T) {
 
 		<-time.NewTimer(time.Millisecond * 100).C
 		conn, err := amqp.Dial("amqp://guest:guest@rabbitmq:5672/amqpextra")
-		assert.NoError(t, err)
+		require.NoError(t, err)
 
 		l.Printf("[DEBUG] get new connection")
 
@@ -339,11 +338,11 @@ func TestCongruentlyPublishConsumeWhileConnectionLost(t *testing.T) {
 [DEBUG] workers stopped
 [DEBUG] consumer stopped
 `
-	assert.Equal(t, expected, l.Logs())
+	require.Equal(t, expected, l.Logs())
 
-	assert.GreaterOrEqual(t, countPublished, uint32(100))
-	assert.LessOrEqual(t, countPublished, uint32(220))
+	require.GreaterOrEqual(t, countPublished, uint32(100))
+	require.LessOrEqual(t, countPublished, uint32(220))
 
-	assert.GreaterOrEqual(t, countConsumed, uint32(100))
-	assert.LessOrEqual(t, countConsumed, uint32(220))
+	require.GreaterOrEqual(t, countConsumed, uint32(100))
+	require.LessOrEqual(t, countConsumed, uint32(220))
 }

@@ -17,6 +17,7 @@ import (
 
 	"github.com/makasim/amqpextra"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestCouldNotConnect(t *testing.T) {
@@ -41,7 +42,7 @@ func TestCouldNotConnect(t *testing.T) {
 [DEBUG] try reconnect
 [ERROR] dial tcp 127.0.0.1:5672: connect: connection refused
 `
-		assert.Equal(t, expected, l.Logs())
+		require.Equal(t, expected, l.Logs())
 	}
 }
 
@@ -72,7 +73,7 @@ func TestConnectRoundRobinServers(t *testing.T) {
 [DEBUG] try reconnect
 [ERROR] dial tcp 127.0.0.1:5677: connect: connection refused
 `
-		assert.Equal(t, expected, l.Logs())
+		require.Equal(t, expected, l.Logs())
 	}
 }
 
@@ -91,13 +92,13 @@ func TestConnectToSecondServer(t *testing.T) {
 	connCh, closeCh := conn.Get()
 	select {
 	case _, ok := <-connCh:
-		assert.True(t, ok)
+		require.True(t, ok)
 
 		expected := `[ERROR] dial tcp 127.0.0.1:5672: connect: connection refused
 [DEBUG] try reconnect
 [DEBUG] connection established
 `
-		assert.Equal(t, expected, l.Logs())
+		require.Equal(t, expected, l.Logs())
 	case <-closeCh:
 		t.Fatalf("it should not happen")
 	}
@@ -119,18 +120,18 @@ func TestCloseConnExplicitly(t *testing.T) {
 	connCh, closeCh := conn.Get()
 
 	_, ok := <-connCh
-	assert.True(t, ok)
+	require.True(t, ok)
 
 	_, ok = <-closeCh
-	assert.False(t, ok)
+	require.False(t, ok)
 
 	_, ok = <-connCh
-	assert.False(t, ok)
+	require.False(t, ok)
 
 	expected := `[DEBUG] connection established
 [DEBUG] connection is closed
 `
-	assert.Equal(t, expected, l.Logs())
+	require.Equal(t, expected, l.Logs())
 }
 
 func TestCloseConnByContext(t *testing.T) {
@@ -152,18 +153,18 @@ func TestCloseConnByContext(t *testing.T) {
 	connCh, closeCh := conn.Get()
 
 	_, ok := <-connCh
-	assert.True(t, ok)
+	require.True(t, ok)
 
 	_, ok = <-closeCh
-	assert.False(t, ok)
+	require.False(t, ok)
 
 	_, ok = <-connCh
-	assert.False(t, ok)
+	require.False(t, ok)
 
 	expected := `[DEBUG] connection established
 [DEBUG] connection is closed
 `
-	assert.Equal(t, expected, l.Logs())
+	require.Equal(t, expected, l.Logs())
 }
 
 func TestReconnectIfClosedByUser(t *testing.T) {
@@ -175,21 +176,21 @@ func TestReconnectIfClosedByUser(t *testing.T) {
 	connCh, closeCh := conn.Get()
 
 	realconn, ok := <-connCh
-	assert.True(t, ok)
+	require.True(t, ok)
 
-	assert.NoError(t, realconn.Close())
+	require.NoError(t, realconn.Close())
 
 	err, ok := <-closeCh
-	assert.True(t, ok)
-	assert.EqualError(t, err, "Exception (504) Reason: \"channel/connection is not open\"")
+	require.True(t, ok)
+	require.EqualError(t, err, "Exception (504) Reason: \"channel/connection is not open\"")
 
 	_, ok = <-connCh
-	assert.True(t, ok)
+	require.True(t, ok)
 
 	expected := `[DEBUG] connection established
 [DEBUG] connection established
 `
-	assert.Equal(t, expected, l.Logs())
+	require.Equal(t, expected, l.Logs())
 }
 
 func TestReconnectIfClosedByServer(t *testing.T) {
@@ -209,7 +210,7 @@ func TestReconnectIfClosedByServer(t *testing.T) {
 	connCh, closeCh := conn.Get()
 
 	_, ok := <-connCh
-	assert.True(t, ok)
+	require.True(t, ok)
 
 	assertlog.WaitContainsOrFatal(t, rabbitmq.OpenedConns, connName, time.Second*5)
 
@@ -218,16 +219,16 @@ func TestReconnectIfClosedByServer(t *testing.T) {
 	}
 
 	err, ok := <-closeCh
-	assert.True(t, ok)
-	assert.EqualError(t, err, "Exception (320) Reason: \"CONNECTION_FORCED - Closed via management plugin\"")
+	require.True(t, ok)
+	require.EqualError(t, err, "Exception (320) Reason: \"CONNECTION_FORCED - Closed via management plugin\"")
 
 	_, ok = <-connCh
-	assert.True(t, ok)
+	require.True(t, ok)
 
 	expected := `[DEBUG] connection established
 [DEBUG] connection established
 `
-	assert.Equal(t, expected, l.Logs())
+	require.Equal(t, expected, l.Logs())
 }
 
 func TestNotReadingFromCloseCh(t *testing.T) {
@@ -239,24 +240,24 @@ func TestNotReadingFromCloseCh(t *testing.T) {
 	connCh, _ := conn.Get()
 
 	realconn, ok := <-connCh
-	assert.True(t, ok)
+	require.True(t, ok)
 
-	assert.NoError(t, realconn.Close())
+	require.NoError(t, realconn.Close())
 
 	time.Sleep(time.Millisecond * 100)
 	//<-closeCh
 
 	realconn, ok = <-connCh
-	assert.True(t, ok)
+	require.True(t, ok)
 
-	assert.NoError(t, realconn.Close())
+	require.NoError(t, realconn.Close())
 
 	//<-closeCh
 
 	expected := `[DEBUG] connection established
 [DEBUG] connection established
 `
-	assert.Equal(t, expected, l.Logs())
+	require.Equal(t, expected, l.Logs())
 }
 
 func TestConnPublishConsume(t *testing.T) {
@@ -273,37 +274,37 @@ func TestConnPublishConsume(t *testing.T) {
 
 	select {
 	case conn, ok := <-connCh:
-		assert.True(t, ok)
+		require.True(t, ok)
 
 		ch, err := conn.Channel()
-		assert.NoError(t, err)
+		require.NoError(t, err)
 
 		q, err := ch.QueueDeclare(queue, true, false, false, false, nil)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 
 		err = ch.Publish("", queue, false, false, amqp.Publishing{
 			Body: []byte("testbdy"),
 		})
-		assert.NoError(t, err)
+		require.NoError(t, err)
 
 		msgCh, err := ch.Consume(q.Name, "", false, false, false, false, nil)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 
 		msg, ok := <-msgCh
-		assert.True(t, ok)
+		require.True(t, ok)
 
-		assert.NoError(t, msg.Ack(false))
-		assert.Equal(t, "testbdy", string(msg.Body))
+		require.NoError(t, msg.Ack(false))
+		require.Equal(t, "testbdy", string(msg.Body))
 
 		expected := `[DEBUG] connection established
 `
-		assert.Equal(t, expected, l.Logs())
+		require.Equal(t, expected, l.Logs())
 	case <-closeCh:
 		t.Fatalf("connection is closed")
 	}
 }
 
-func TestCongruentlyPublishConsumeWhileConnectionLost(t *testing.T) {
+func TestConcurrentlyPublishConsumeWhileConnectionLost(t *testing.T) {
 	l := logger.New()
 
 	connName := fmt.Sprintf("amqpextra-test-%d", time.Now().UnixNano())
@@ -346,10 +347,10 @@ func TestCongruentlyPublishConsumeWhileConnectionLost(t *testing.T) {
 		L1:
 			for conn := range connCh {
 				ch, err := conn.Channel()
-				assert.NoError(t, err)
+				require.NoError(t, err)
 
 				_, err = ch.QueueDeclare(queue, true, false, false, false, nil)
-				assert.NoError(t, err)
+				require.NoError(t, err)
 
 				for {
 					select {
@@ -384,13 +385,13 @@ func TestCongruentlyPublishConsumeWhileConnectionLost(t *testing.T) {
 		L1:
 			for conn := range connCh {
 				ch, err := conn.Channel()
-				assert.NoError(t, err)
+				require.NoError(t, err)
 
 				_, err = ch.QueueDeclare(queue, true, false, false, false, nil)
-				assert.NoError(t, err)
+				require.NoError(t, err)
 
 				msgCh, err := ch.Consume(queue, "", false, false, false, false, nil)
-				assert.NoError(t, err)
+				require.NoError(t, err)
 
 				for {
 					select {
@@ -418,7 +419,7 @@ func TestCongruentlyPublishConsumeWhileConnectionLost(t *testing.T) {
 	expected := `[DEBUG] connection established
 [DEBUG] connection established
 `
-	assert.Equal(t, expected, l.Logs())
+	require.Equal(t, expected, l.Logs())
 
 	assert.GreaterOrEqual(t, countPublished, uint32(200))
 	assert.LessOrEqual(t, countPublished, uint32(520))

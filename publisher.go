@@ -10,13 +10,14 @@ import (
 	"github.com/streadway/amqp"
 )
 
-type publishing struct {
-	Exchange   string
-	Queue      string
-	Mandatory  bool
-	Immediate  bool
-	Publishing amqp.Publishing
-	DoneCh     chan error
+type Publishing struct {
+	Exchange  string
+	Key       string
+	Mandatory bool
+	Immediate bool
+	WaitReady bool
+	Message   amqp.Publishing
+	ResultCh  chan error
 }
 
 type Publisher struct {
@@ -30,7 +31,7 @@ type Publisher struct {
 	restartSleep time.Duration
 	initFunc     func(conn *amqp.Connection) (*amqp.Channel, error)
 	logger       Logger
-	publishingCh chan publishing
+	publishingCh chan Publishing
 	doneCh       chan struct{}
 	readyCh      chan struct{}
 	unreadyCh    chan struct{}
@@ -51,7 +52,7 @@ func NewPublisher(
 		cancelFunc:   cancelFunc,
 		logger:       nilLogger,
 		restartSleep: time.Second * 5,
-		publishingCh: make(chan publishing),
+		publishingCh: make(chan Publishing),
 		doneCh:       make(chan struct{}),
 		readyCh:      make(chan struct{}),
 		unreadyCh:    make(chan struct{}),
@@ -102,30 +103,29 @@ func (p *Publisher) Close() {
 	p.cancelFunc()
 }
 
-func (p *Publisher) Publish(exchange, key string, mandatory, immediate bool, msg amqp.Publishing, doneCh chan error) {
+func (p *Publisher) Publish(msg Publishing) {
 	p.Start()
 
-	publishing := publishing{
-		Exchange:   exchange,
-		Queue:      key,
-		Mandatory:  mandatory,
-		Immediate:  immediate,
-		Publishing: msg,
-		DoneCh:     doneCh,
+	if msg.WaitReady {
+		<-p.Ready()
 	}
 
 	select {
 	case <-p.ctx.Done():
 		p.logger.Printf("[ERROR] cannot publish to stopped publisher")
 
-		if doneCh != nil {
-			doneCh <- fmt.Errorf("publisher stopped")
+		if msg.ResultCh != nil {
+			go func() {
+				msg.ResultCh <- fmt.Errorf("publisher stopped")
+			}()
 		}
-	case p.publishingCh <- publishing:
+	case p.publishingCh <- msg:
 	}
 }
 
 func (p *Publisher) Ready() <-chan struct{} {
+	p.Start()
+
 	return p.readyCh
 }
 
@@ -172,23 +172,7 @@ L1:
 				select {
 				case p.readyCh <- struct{}{}:
 				case publishing := <-p.publishingCh:
-					result := ch.Publish(
-						publishing.Exchange,
-						publishing.Queue,
-						publishing.Mandatory,
-						publishing.Immediate,
-						publishing.Publishing,
-					)
-
-					if publishing.DoneCh != nil {
-						select {
-						case publishing.DoneCh <- result:
-						case <-time.NewTimer(time.Second * 5).C:
-							p.logger.Printf("[WARN] publish result has not been read out from doneCh within safeguard time. Make sure you are reading from the channel.")
-						}
-					} else {
-						p.logger.Printf("[ERROR] publish: %s", err)
-					}
+					p.publish(ch, publishing)
 				case <-p.closeCh:
 					p.logger.Printf("[DEBUG] publisher stopped")
 
@@ -203,9 +187,9 @@ L1:
 			}
 		case p.unreadyCh <- struct{}{}:
 		case publishing := <-p.publishingCh:
-			if publishing.DoneCh != nil {
+			if publishing.ResultCh != nil {
 				select {
-				case publishing.DoneCh <- amqp.ErrClosed:
+				case publishing.ResultCh <- amqp.ErrClosed:
 				case <-time.NewTimer(time.Second * 5).C:
 					p.logger.Printf("[WARN] publish result has not been read out from doneCh within safeguard time. Make sure you are reading from the channel.")
 				}
@@ -217,6 +201,26 @@ L1:
 
 			break L1
 		}
+	}
+}
+
+func (p *Publisher) publish(ch *amqp.Channel, publishing Publishing) {
+	result := ch.Publish(
+		publishing.Exchange,
+		publishing.Key,
+		publishing.Mandatory,
+		publishing.Immediate,
+		publishing.Message,
+	)
+
+	if publishing.ResultCh != nil {
+		select {
+		case publishing.ResultCh <- result:
+		case <-time.NewTimer(time.Second * 5).C:
+			p.logger.Printf("[WARN] publish result has not been read out from doneCh within safeguard time. Make sure you are reading from the channel.")
+		}
+	} else {
+		p.logger.Printf("[ERROR] publish: %s", result)
 	}
 }
 
