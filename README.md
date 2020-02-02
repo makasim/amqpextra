@@ -1,4 +1,5 @@
 # Extra features for streadway/amqp package. 
+<a href="https://travis-ci.org/makasim/amqpextra"><img src="https://travis-ci.org/makasim/amqpextra.png?branch=master" alt="Build Status"></a>
 
 ## Auto reconnecting.
 
