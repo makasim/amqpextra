@@ -141,7 +141,7 @@ func TestConcurrentlyPublishConsumeWhileConnectionLost(t *testing.T) {
 							atomic.AddUint32(&countPublished, 1)
 						}
 					case <-closeCh:
-						continue L1
+						break
 					case <-timer.C:
 						break L1
 					}

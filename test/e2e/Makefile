@@ -1,8 +1,9 @@
 APP?=amqpextra
 COMPOSE_PROJECT_NAME?=$(APP)-e2e-test
+TEST?=./test/e2e/test/...
 
-.PHONY: run clean
-run:
+.PHONY: run
+run: clean
 	go mod tidy
 	go mod vendor
 	COMPOSE_PROJECT_NAME=$(COMPOSE_PROJECT_NAME) docker-compose --file docker-compose.yml run $(APP)-e2e-test
@@ -18,4 +19,4 @@ enter: clean
 
 .PHONY: test
 test:
-	go test -mod=vendor -race -count=1  -v ./test/...
+	cd ../../; go test -mod=vendor -race -count=1  -v $(TEST)

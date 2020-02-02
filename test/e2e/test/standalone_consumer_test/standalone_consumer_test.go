@@ -255,7 +255,7 @@ func TestConcurrentlyPublishConsumeWhileConnectionLost(t *testing.T) {
 	var wg sync.WaitGroup
 
 	wg.Add(1)
-	go func(connName string, wg *sync.WaitGroup) {
+	go func(_ string, wg *sync.WaitGroup) {
 		defer wg.Done()
 
 		connCh <- conn
@@ -265,7 +265,7 @@ func TestConcurrentlyPublishConsumeWhileConnectionLost(t *testing.T) {
 		closeCh <- amqp.ErrClosed
 
 		<-time.NewTimer(time.Millisecond * 100).C
-		conn, err := amqp.Dial("amqp://guest:guest@rabbitmq:5672/amqpextra")
+		conn, err = amqp.Dial("amqp://guest:guest@rabbitmq:5672/amqpextra")
 		require.NoError(t, err)
 
 		l.Printf("[DEBUG] get new connection")
@@ -278,29 +278,11 @@ func TestConcurrentlyPublishConsumeWhileConnectionLost(t *testing.T) {
 	var countPublished uint32
 	for i := 0; i < 5; i++ {
 		wg.Add(1)
-		go func(conn *amqp.Connection, queue string, wg *sync.WaitGroup) {
-			defer wg.Done()
 
-			ticker := time.NewTicker(time.Millisecond * 100)
-			timer := time.NewTimer(time.Second * 4)
+		ticker := time.NewTicker(time.Millisecond * 100)
+		timer := time.NewTimer(time.Second * 4)
 
-		L1:
-			for {
-				select {
-				case <-ticker.C:
-					rabbitmq.Publish(publishConn, "", queue)
-
-					if err == nil {
-						atomic.AddUint32(&countPublished, 1)
-					}
-				case <-closeCh:
-					continue L1
-				case <-timer.C:
-					break L1
-				}
-			}
-
-		}(publishConn, queue, &wg)
+		go rabbitmq.PublishTimer(publishConn, timer, ticker, queue, &countPublished, &wg)
 	}
 
 	var countConsumed uint32

@@ -1,4 +1,4 @@
-package main
+package examples
 
 import (
 	"log"
@@ -7,7 +7,7 @@ import (
 	"github.com/streadway/amqp"
 )
 
-func main() {
+func PublisherExample() {
 	conn := amqpextra.Dial([]string{"amqp://guest:guest@localhost:5672/%2f"})
 	conn.SetLogger(amqpextra.LoggerFunc(log.Printf))
 	publisher := conn.Publisher()

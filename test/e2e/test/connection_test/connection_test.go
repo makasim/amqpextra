@@ -3,7 +3,6 @@ package connection_test
 import (
 	"fmt"
 	"sync"
-	"sync/atomic"
 	"testing"
 	"time"
 
@@ -245,14 +244,14 @@ func TestNotReadingFromCloseCh(t *testing.T) {
 	require.NoError(t, realconn.Close())
 
 	time.Sleep(time.Millisecond * 100)
-	//<-closeCh
+	// <-closeCh
 
 	realconn, ok = <-connCh
 	require.True(t, ok)
 
 	require.NoError(t, realconn.Close())
 
-	//<-closeCh
+	// <-closeCh
 
 	expected := `[DEBUG] connection established
 [DEBUG] connection established
@@ -332,86 +331,24 @@ func TestConcurrentlyPublishConsumeWhileConnectionLost(t *testing.T) {
 	}(connName, &wg)
 
 	queue := fmt.Sprintf("test-%d", time.Now().Nanosecond())
-
 	var countPublished uint32
 	for i := 0; i < 5; i++ {
+
 		wg.Add(1)
-		go func(extraconn *amqpextra.Connection, queue string, wg *sync.WaitGroup) {
-			defer wg.Done()
 
-			connCh, closeCh := extraconn.Get()
+		ticker := time.NewTicker(time.Millisecond * 100)
+		timer := time.NewTimer(time.Second * 10)
 
-			ticker := time.NewTicker(time.Millisecond * 100)
-			timer := time.NewTimer(time.Second * 10)
-
-		L1:
-			for conn := range connCh {
-				ch, err := conn.Channel()
-				require.NoError(t, err)
-
-				_, err = ch.QueueDeclare(queue, true, false, false, false, nil)
-				require.NoError(t, err)
-
-				for {
-					select {
-					case <-ticker.C:
-						err := ch.Publish("", queue, false, false, amqp.Publishing{})
-
-						if err == nil {
-							atomic.AddUint32(&countPublished, 1)
-						}
-					case <-closeCh:
-						continue L1
-					case <-timer.C:
-						break L1
-					}
-				}
-
-			}
-
-		}(conn, queue, &wg)
+		go rabbitmq.PublishTimerReconnect(conn, timer, ticker, queue, &countPublished, &wg)
 	}
 
 	var countConsumed uint32
 	for i := 0; i < 5; i++ {
 		wg.Add(1)
-		go func(extraconn *amqpextra.Connection, queue string, count *uint32, wg *sync.WaitGroup) {
-			defer wg.Done()
 
-			connCh, closeCh := extraconn.Get()
+		timer := time.NewTimer(time.Second * 11)
 
-			timer := time.NewTimer(time.Second * 11)
-
-		L1:
-			for conn := range connCh {
-				ch, err := conn.Channel()
-				require.NoError(t, err)
-
-				_, err = ch.QueueDeclare(queue, true, false, false, false, nil)
-				require.NoError(t, err)
-
-				msgCh, err := ch.Consume(queue, "", false, false, false, false, nil)
-				require.NoError(t, err)
-
-				for {
-					select {
-					case msg, ok := <-msgCh:
-						if !ok {
-							continue L1
-						}
-
-						msg.Ack(false)
-
-						atomic.AddUint32(count, 1)
-					case <-closeCh:
-						continue L1
-					case <-timer.C:
-						break L1
-					}
-				}
-
-			}
-		}(conn, queue, &countConsumed, &wg)
+		go rabbitmq.ConsumeTimerReconnect(conn, timer, queue, &countConsumed, &wg)
 	}
 
 	wg.Wait()

@@ -1,4 +1,4 @@
-package main
+package examples
 
 import (
 	"context"
@@ -8,7 +8,7 @@ import (
 	"github.com/streadway/amqp"
 )
 
-func main() {
+func StandaloneConsumerExample() {
 	connCh := make(<-chan *amqp.Connection)
 	closeCh := make(<-chan *amqp.Error)
 

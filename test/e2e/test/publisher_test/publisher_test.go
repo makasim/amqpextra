@@ -240,6 +240,10 @@ func TestPublishConsumeNoWaitReady(t *testing.T) {
 func TestConcurrentlyPublishConsumeWhileConnectionLost(t *testing.T) {
 	l := logger.New()
 
+	consumerConn, err := amqp.Dial("amqp://guest:guest@rabbitmq:5672/amqpextra")
+	assert.NoError(t, err)
+	defer consumerConn.Close()
+
 	connName := fmt.Sprintf("amqpextra-test-%d", time.Now().UnixNano())
 
 	conn := amqpextra.DialConfig([]string{"amqp://guest:guest@rabbitmq:5672/amqpextra"}, amqp.Config{
@@ -307,43 +311,10 @@ func TestConcurrentlyPublishConsumeWhileConnectionLost(t *testing.T) {
 	var countConsumed uint32
 	for i := 0; i < 5; i++ {
 		wg.Add(1)
-		go func(extraconn *amqpextra.Connection, queue string, count *uint32, wg *sync.WaitGroup) {
-			defer wg.Done()
 
-			connCh, closeCh := extraconn.Get()
+		timer := time.NewTimer(time.Second * 11)
 
-			timer := time.NewTimer(time.Second * 11)
-
-		L1:
-			for conn := range connCh {
-				ch, err := conn.Channel()
-				require.NoError(t, err)
-
-				_, err = ch.QueueDeclare(queue, true, false, false, false, nil)
-				require.NoError(t, err)
-
-				msgCh, err := ch.Consume(queue, "", false, false, false, false, nil)
-				require.NoError(t, err)
-
-				for {
-					select {
-					case msg, ok := <-msgCh:
-						if !ok {
-							continue L1
-						}
-
-						msg.Ack(false)
-
-						atomic.AddUint32(count, 1)
-					case <-closeCh:
-						continue L1
-					case <-timer.C:
-						break L1
-					}
-				}
-
-			}
-		}(conn, queue, &countConsumed, &wg)
+		rabbitmq.ConsumeReconnect(consumerConn, timer, queue, &countConsumed, &wg)
 	}
 
 	wg.Wait()

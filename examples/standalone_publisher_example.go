@@ -1,4 +1,4 @@
-package main
+package examples
 
 import (
 	"log"
@@ -7,7 +7,7 @@ import (
 	"github.com/streadway/amqp"
 )
 
-func main() {
+func StandalonePublisherExample() {
 	resultCh := make(chan error)
 	connCh := make(<-chan *amqp.Connection)
 	closeCh := make(<-chan *amqp.Error)
