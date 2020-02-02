@@ -3,7 +3,7 @@ language: go
 env: GO111MODULE=on GOFLAGS='-mod vendor'
 
 go:
-  - "1.13"
+  - "1.13.7"
   - master
 
 git:
