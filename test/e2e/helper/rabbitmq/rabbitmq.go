@@ -6,6 +6,8 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/http/httputil"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/makasim/amqpextra"
@@ -108,7 +110,7 @@ func Queue2(conn *amqpextra.Connection) string {
 	return Queue(realconn)
 }
 
-func Publish(conn *amqp.Connection, body string, queue string) {
+func Publish(conn *amqp.Connection, body, queue string) {
 	ch, err := conn.Channel()
 	if err != nil {
 		panic(err)
@@ -122,7 +124,7 @@ func Publish(conn *amqp.Connection, body string, queue string) {
 	}
 }
 
-func Publish2(conn *amqpextra.Connection, body string, queue string) {
+func Publish2(conn *amqpextra.Connection, body, queue string) {
 	connCh, _ := conn.Get()
 
 	realconn, ok := <-connCh
@@ -131,4 +133,164 @@ func Publish2(conn *amqpextra.Connection, body string, queue string) {
 	}
 
 	Publish(realconn, body, queue)
+}
+
+func PublishTimerReconnect(
+	extraconn *amqpextra.Connection,
+	timer *time.Timer,
+	ticker *time.Ticker,
+	queue string,
+	count *uint32,
+	wg *sync.WaitGroup,
+) {
+	defer wg.Done()
+
+	connCh, closeCh := extraconn.Get()
+
+	for conn := range connCh {
+		ch, err := conn.Channel()
+		if err != nil {
+			panic(err)
+		}
+
+		_, err = ch.QueueDeclare(queue, true, false, false, false, nil)
+		if err != nil {
+			panic(err)
+		}
+
+		for {
+			select {
+			case <-ticker.C:
+				err := ch.Publish("", queue, false, false, amqp.Publishing{})
+
+				if err == nil {
+					atomic.AddUint32(count, 1)
+				}
+			case <-closeCh:
+				break
+			case <-timer.C:
+				return
+			}
+		}
+	}
+}
+
+func PublishTimer(
+	conn *amqp.Connection,
+	timer *time.Timer,
+	ticker *time.Ticker,
+	queue string,
+	count *uint32,
+	wg *sync.WaitGroup,
+) {
+	defer wg.Done()
+
+	ch, err := conn.Channel()
+	if err != nil {
+		panic(err)
+	}
+
+	_, err = ch.QueueDeclare(queue, true, false, false, false, nil)
+	if err != nil {
+		panic(err)
+	}
+
+	for {
+		select {
+		case <-ticker.C:
+			err := ch.Publish("", queue, false, false, amqp.Publishing{})
+
+			if err == nil {
+				atomic.AddUint32(count, 1)
+			}
+		case <-timer.C:
+			return
+		}
+	}
+}
+
+func ConsumeTimerReconnect(
+	extraconn *amqpextra.Connection,
+	timer *time.Timer,
+	queue string,
+	count *uint32,
+	wg *sync.WaitGroup,
+) {
+	defer wg.Done()
+
+	connCh, closeCh := extraconn.Get()
+
+	for conn := range connCh {
+		ch, err := conn.Channel()
+		if err != nil {
+			panic(err)
+		}
+
+		_, err = ch.QueueDeclare(queue, true, false, false, false, nil)
+		if err != nil {
+			panic(err)
+		}
+
+		msgCh, err := ch.Consume(queue, "", false, false, false, false, nil)
+		if err != nil {
+			panic(err)
+		}
+
+		for {
+			select {
+			case msg, ok := <-msgCh:
+				if !ok {
+					break
+				}
+
+				msg.Ack(false)
+
+				atomic.AddUint32(count, 1)
+			case <-closeCh:
+				break
+			case <-timer.C:
+				return
+			}
+		}
+	}
+}
+
+func ConsumeReconnect(
+	conn *amqp.Connection,
+	timer *time.Timer,
+	queue string,
+	count *uint32,
+	wg *sync.WaitGroup,
+) {
+	defer wg.Done()
+
+	ch, err := conn.Channel()
+	if err != nil {
+		panic(err)
+	}
+
+	_, err = ch.QueueDeclare(queue, true, false, false, false, nil)
+	if err != nil {
+		panic(err)
+	}
+
+	msgCh, err := ch.Consume(queue, "", false, false, false, false, nil)
+	if err != nil {
+		panic(err)
+	}
+
+	for {
+		select {
+		case msg, ok := <-msgCh:
+			if !ok {
+				break
+			}
+
+			msg.Ack(false)
+
+			atomic.AddUint32(count, 1)
+		case <-timer.C:
+			return
+		}
+	}
 }

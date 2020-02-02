@@ -94,19 +94,19 @@ func (s *Service) WaitNotContains(expected string, timeout time.Duration) bool {
 }
 
 func (s *Service) WaitContainsOrFatal(expected string, timeout time.Duration) {
-	if false == s.WaitContains(expected, timeout) {
+	if !s.WaitContains(expected, timeout) {
 		s.test.FailNow()
 	}
 }
 
 func (s *Service) WaitNotContainsOrFatal(expected string, timeout time.Duration) {
-	if false == s.WaitNotContains(expected, timeout) {
+	if !s.WaitNotContains(expected, timeout) {
 		s.test.FailNow()
 	}
 }
 
 func (s *Service) NoErrors() bool {
-	if false == assert.NotContains(s.test, s.curr(), "level=error", "failed assert that curr does not contain \"level=error\" word") {
+	if !assert.NotContains(s.test, s.curr(), "level=error", "failed assert that curr does not contain \"level=error\" word") {
 		return false
 	}
 
@@ -122,11 +122,11 @@ func (s *Service) NoRace() bool {
 }
 
 func (s *Service) NoPanicAndRace() bool {
-	if false == s.NoPanic() {
+	if !s.NoPanic() {
 		return false
 	}
 
-	if false == s.NoRace() {
+	if !s.NoRace() {
 		return false
 	}
 

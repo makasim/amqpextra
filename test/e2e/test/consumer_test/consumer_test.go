@@ -25,7 +25,7 @@ func TestCloseChannelOnAlreadyClosedConnection(t *testing.T) {
 
 	conn := amqpextra.Dial([]string{"amqp://guest:guest@rabbitmq:5672/amqpextra"})
 
-	worker := amqpextra.WorkerFunc(func(msg amqp.Delivery, ctx context.Context) interface{} {
+	worker := amqpextra.WorkerFunc(func(ctx context.Context, msg amqp.Delivery) interface{} {
 		return nil
 	})
 
@@ -62,7 +62,7 @@ func TestConsumeOneAndCloseConsumer(t *testing.T) {
 	rabbitmq.Publish2(conn, "testbdy", queue)
 
 	var c *amqpextra.Consumer
-	c = conn.Consumer(queue, amqpextra.WorkerFunc(func(msg amqp.Delivery, ctx context.Context) interface{} {
+	c = conn.Consumer(queue, amqpextra.WorkerFunc(func(ctx context.Context, msg amqp.Delivery) interface{} {
 		l.Printf("[DEBUG] got message %s", msg.Body)
 
 		msg.Ack(false)
@@ -141,7 +141,7 @@ func TestConcurrentlyPublishConsumeWhileConnectionLost(t *testing.T) {
 							atomic.AddUint32(&countPublished, 1)
 						}
 					case <-closeCh:
-						continue L1
+						break
 					case <-timer.C:
 						break L1
 					}
@@ -154,7 +154,7 @@ func TestConcurrentlyPublishConsumeWhileConnectionLost(t *testing.T) {
 
 	var countConsumed uint32
 
-	c := conn.Consumer(queue, amqpextra.WorkerFunc(func(msg amqp.Delivery, ctx context.Context) interface{} {
+	c := conn.Consumer(queue, amqpextra.WorkerFunc(func(ctx context.Context, msg amqp.Delivery) interface{} {
 		atomic.AddUint32(&countConsumed, 1)
 
 		msg.Ack(false)

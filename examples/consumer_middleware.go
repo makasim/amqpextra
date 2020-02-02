@@ -1,4 +1,4 @@
-package main
+package examples
 
 import (
 	"context"
@@ -8,13 +8,13 @@ import (
 	"github.com/streadway/amqp"
 )
 
-func main() {
+func ConsumerMiddleware() {
 	connCh := make(<-chan *amqp.Connection)
 	closeCh := make(<-chan *amqp.Error)
 
 	consumer := amqpextra.NewConsumer(
 		"a_queue",
-		amqpextra.WorkerFunc(func(msg amqp.Delivery, ctx context.Context) interface{} {
+		amqpextra.WorkerFunc(func(ctx context.Context, msg amqp.Delivery) interface{} {
 			// process message
 
 			msg.Ack(false)
@@ -28,7 +28,7 @@ func main() {
 	consumer.SetLogger(amqpextra.LoggerFunc(log.Printf))
 
 	consumer.Use(func(next amqpextra.Worker) amqpextra.Worker {
-		fn := func(msg amqp.Delivery, ctx context.Context) interface{} {
+		fn := func(ctx context.Context, msg amqp.Delivery) interface{} {
 			if msg.CorrelationId == "" {
 				msg.Nack(true, true)
 
@@ -40,7 +40,7 @@ func main() {
 				return nil
 			}
 
-			return next.ServeMsg(msg, ctx)
+			return next.ServeMsg(ctx, msg)
 		}
 
 		return amqpextra.WorkerFunc(fn)

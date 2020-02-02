@@ -21,6 +21,8 @@ type Connection struct {
 	ctx             context.Context
 	cancelFunc      context.CancelFunc
 	started         bool
+	readyCh         chan struct{}
+	unreadyCh       chan struct{}
 }
 
 func New(dialer Dialer) *Connection {
@@ -36,6 +38,8 @@ func New(dialer Dialer) *Connection {
 		started:   false,
 		closeChCh: make(chan chan *amqp.Error),
 		connCh:    make(chan *amqp.Connection),
+		readyCh:   make(chan struct{}),
+		unreadyCh: make(chan struct{}),
 	}
 
 	return c
@@ -59,6 +63,18 @@ func (c *Connection) SetReconnectSleep(d time.Duration) {
 	}
 }
 
+func (c *Connection) Ready() <-chan struct{} {
+	c.Start()
+
+	return c.readyCh
+}
+
+func (c *Connection) Unready() <-chan struct{} {
+	c.Start()
+
+	return c.unreadyCh
+}
+
 func (c *Connection) Start() {
 	c.once.Do(func() {
 		c.started = true
@@ -70,7 +86,7 @@ func (c *Connection) Close() {
 	c.cancelFunc()
 }
 
-func (c *Connection) Get() (<-chan *amqp.Connection, <-chan *amqp.Error) {
+func (c *Connection) Get() (connCh <-chan *amqp.Connection, closeCh <-chan *amqp.Error) {
 	c.Start()
 
 	return c.connCh, <-c.closeChCh
@@ -99,7 +115,6 @@ func (c *Connection) Publisher() *Publisher {
 func (c *Connection) reconnect() {
 	nextCloseCh := make(chan *amqp.Error, 1)
 
-L1:
 	for {
 		select {
 		case c.closeChCh <- nextCloseCh:
@@ -108,7 +123,9 @@ L1:
 		case <-c.ctx.Done():
 			c.close(nil)
 
-			break L1
+			return
+		case c.unreadyCh <- struct{}{}:
+			continue
 		default:
 		}
 
@@ -120,48 +137,58 @@ L1:
 			case <-time.NewTimer(c.reconnectSleep).C:
 				c.logger.Printf("[DEBUG] try reconnect")
 
-				continue L1
+				continue
 			case <-c.ctx.Done():
 				c.close(nil)
 
-				break L1
+				return
 			}
 		}
 
-		c.internalCloseCh = make(chan *amqp.Error)
-		conn.NotifyClose(c.internalCloseCh)
-
 		c.logger.Printf("[DEBUG] connection established")
 
-		for {
-			select {
-			case c.closeChCh <- nextCloseCh:
-				c.closeChs = append(c.closeChs, nextCloseCh)
-				nextCloseCh = make(chan *amqp.Error, 1)
-			case c.connCh <- conn:
-			case err := <-c.internalCloseCh:
-				if err == nil {
-					err = amqp.ErrClosed
-				}
+		if !c.serve(conn) {
+			return
+		}
+	}
+}
 
-				for _, closeCh := range c.closeChs {
-					select {
-					case closeCh <- err:
-					case <-c.ctx.Done():
-						c.close(conn)
+func (c *Connection) serve(conn *amqp.Connection) bool {
+	nextCloseCh := make(chan *amqp.Error, 1)
 
-						break L1
-					case <-time.NewTimer(time.Second * 5).C:
-						c.logger.Printf("[WARN] previous err sent to close channel has not been read out. Make sure you are reading from closeCh.")
-					}
-				}
+	c.internalCloseCh = make(chan *amqp.Error)
+	conn.NotifyClose(c.internalCloseCh)
 
-				continue L1
-			case <-c.ctx.Done():
-				c.close(conn)
-
-				break L1
+	for {
+		select {
+		case c.closeChCh <- nextCloseCh:
+			c.closeChs = append(c.closeChs, nextCloseCh)
+			nextCloseCh = make(chan *amqp.Error, 1)
+		case c.connCh <- conn:
+		case err := <-c.internalCloseCh:
+			if err == nil {
+				err = amqp.ErrClosed
 			}
+
+			for _, closeCh := range c.closeChs {
+				select {
+				case closeCh <- err:
+				case <-c.ctx.Done():
+					c.close(conn)
+
+					return false
+				case <-time.NewTimer(time.Second * 5).C:
+					c.logger.Printf("[WARN] previous err sent to close channel has not been read out. Make sure you are reading from closeCh.")
+				}
+			}
+
+			return true
+		case c.readyCh <- struct{}{}:
+			continue
+		case <-c.ctx.Done():
+			c.close(conn)
+
+			return false
 		}
 	}
 }

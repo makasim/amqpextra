@@ -29,7 +29,7 @@ func TestCloseConsumerWhenConnChannelClosed(t *testing.T) {
 
 	closeCh := make(chan *amqp.Error)
 
-	worker := amqpextra.WorkerFunc(func(msg amqp.Delivery, ctx context.Context) interface{} {
+	worker := amqpextra.WorkerFunc(func(ctx context.Context, msg amqp.Delivery) interface{} {
 		return nil
 	})
 
@@ -89,7 +89,7 @@ func TestGetNewConsumerOnErrorInCloseCh(t *testing.T) {
 		close(closeCh)
 	}()
 
-	worker := amqpextra.WorkerFunc(func(msg amqp.Delivery, ctx context.Context) interface{} {
+	worker := amqpextra.WorkerFunc(func(ctx context.Context, msg amqp.Delivery) interface{} {
 		return nil
 	})
 
@@ -127,7 +127,7 @@ func TestCloseConsumerByContext(t *testing.T) {
 
 	ctx, cancelFunc := context.WithCancel(context.Background())
 
-	worker := amqpextra.WorkerFunc(func(msg amqp.Delivery, ctx context.Context) interface{} {
+	worker := amqpextra.WorkerFunc(func(ctx context.Context, msg amqp.Delivery) interface{} {
 		return nil
 	})
 
@@ -165,7 +165,7 @@ func TestCloseChannelOnAlreadyClosedConnection(t *testing.T) {
 
 	queue := rabbitmq.Queue(conn)
 
-	worker := amqpextra.WorkerFunc(func(msg amqp.Delivery, ctx context.Context) interface{} {
+	worker := amqpextra.WorkerFunc(func(ctx context.Context, msg amqp.Delivery) interface{} {
 		return nil
 	})
 
@@ -210,7 +210,7 @@ func TestConsumeOneAndCloseConsumer(t *testing.T) {
 	connCh <- conn
 
 	var c *amqpextra.Consumer
-	worker := amqpextra.WorkerFunc(func(msg amqp.Delivery, ctx context.Context) interface{} {
+	worker := amqpextra.WorkerFunc(func(ctx context.Context, msg amqp.Delivery) interface{} {
 		l.Printf("[DEBUG] got message %s", msg.Body)
 
 		msg.Ack(false)
@@ -255,7 +255,7 @@ func TestConcurrentlyPublishConsumeWhileConnectionLost(t *testing.T) {
 	var wg sync.WaitGroup
 
 	wg.Add(1)
-	go func(connName string, wg *sync.WaitGroup) {
+	go func(_ string, wg *sync.WaitGroup) {
 		defer wg.Done()
 
 		connCh <- conn
@@ -265,7 +265,7 @@ func TestConcurrentlyPublishConsumeWhileConnectionLost(t *testing.T) {
 		closeCh <- amqp.ErrClosed
 
 		<-time.NewTimer(time.Millisecond * 100).C
-		conn, err := amqp.Dial("amqp://guest:guest@rabbitmq:5672/amqpextra")
+		conn, err = amqp.Dial("amqp://guest:guest@rabbitmq:5672/amqpextra")
 		require.NoError(t, err)
 
 		l.Printf("[DEBUG] get new connection")
@@ -278,34 +278,16 @@ func TestConcurrentlyPublishConsumeWhileConnectionLost(t *testing.T) {
 	var countPublished uint32
 	for i := 0; i < 5; i++ {
 		wg.Add(1)
-		go func(conn *amqp.Connection, queue string, wg *sync.WaitGroup) {
-			defer wg.Done()
 
-			ticker := time.NewTicker(time.Millisecond * 100)
-			timer := time.NewTimer(time.Second * 4)
+		ticker := time.NewTicker(time.Millisecond * 100)
+		timer := time.NewTimer(time.Second * 4)
 
-		L1:
-			for {
-				select {
-				case <-ticker.C:
-					rabbitmq.Publish(publishConn, "", queue)
-
-					if err == nil {
-						atomic.AddUint32(&countPublished, 1)
-					}
-				case <-closeCh:
-					continue L1
-				case <-timer.C:
-					break L1
-				}
-			}
-
-		}(publishConn, queue, &wg)
+		go rabbitmq.PublishTimer(publishConn, timer, ticker, queue, &countPublished, &wg)
 	}
 
 	var countConsumed uint32
 
-	worker := amqpextra.WorkerFunc(func(msg amqp.Delivery, ctx context.Context) interface{} {
+	worker := amqpextra.WorkerFunc(func(ctx context.Context, msg amqp.Delivery) interface{} {
 		atomic.AddUint32(&countConsumed, 1)
 
 		msg.Ack(false)

@@ -1,4 +1,4 @@
-package main
+package examples
 
 import (
 	"context"
@@ -8,13 +8,13 @@ import (
 	"github.com/streadway/amqp"
 )
 
-func main() {
+func StandaloneConsumerExample() {
 	connCh := make(<-chan *amqp.Connection)
 	closeCh := make(<-chan *amqp.Error)
 
 	// usually it equals to pre_fetch_count
 	workersNum := 5
-	worker := amqpextra.WorkerFunc(func(msg amqp.Delivery, ctx context.Context) interface{} {
+	worker := amqpextra.WorkerFunc(func(ctx context.Context, msg amqp.Delivery) interface{} {
 		// process message
 
 		msg.Ack(false)
