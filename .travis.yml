@@ -7,14 +7,15 @@ matrix:
   include:
     - go: 1.13.x
       sudo: false
-      env: LINTER=true GOFLAGS=-mod=vendor
+      env: LINTER=true
     - go: 1.13.x
       sudo: required
       services: docker
-      env: TESTS=true GOFLAGS=-mod=vendor
+      env: TESTS=true
 
 install:
   - go mod tidy
+  - go mod vendor
 
 before_script:
   - if [ "$LINTER" = true ]; then curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $GOPATH/bin v1.23.1; fi
