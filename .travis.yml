@@ -1,0 +1,16 @@
+language: go
+
+env: GO111MODULE=on GOFLAGS='-mod vendor'
+
+go:
+  - "1.13"
+  - master
+
+git:
+  depth: 10
+
+before_script:
+  - curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $GOPATH/bin v1.23.1
+
+script:
+  - golangci-lint run
