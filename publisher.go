@@ -89,7 +89,7 @@ func (p *Publisher) SetInitFunc(f func(conn *amqp.Connection) (*amqp.Channel, er
 func (p *Publisher) Start() {
 	p.once.Do(func() {
 		p.started = true
-		go p.start()
+		go p.connect()
 	})
 }
 
@@ -133,57 +133,29 @@ func (p *Publisher) Unready() <-chan struct{} {
 	return p.unreadyCh
 }
 
-func (p *Publisher) start() {
+func (p *Publisher) connect() {
 	defer close(p.doneCh)
 
-L1:
 	for {
 		select {
 		case conn, ok := <-p.connCh:
 			if !ok {
 				p.close(nil)
 
-				break L1
+				return
 			}
 
 			select {
 			case <-p.closeCh:
-				continue L1
+				continue
+			case <-p.ctx.Done():
+				return
 			default:
 			}
 
-			ch, err := p.initFunc(conn)
-			if err != nil {
-				p.logger.Printf("[ERROR] init func: %s", err)
-
-				select {
-				case <-time.NewTimer(time.Second * 5).C:
-					continue L1
-				case <-p.ctx.Done():
-					p.close(nil)
-
-					break L1
-				}
-			}
-
 			p.logger.Printf("[DEBUG] publisher started")
-
-			for {
-				select {
-				case p.readyCh <- struct{}{}:
-				case publishing := <-p.publishingCh:
-					p.publish(ch, publishing)
-				case <-p.closeCh:
-					p.logger.Printf("[DEBUG] publisher stopped")
-
-					continue L1
-				case <-p.ctx.Done():
-					p.logger.Printf("[DEBUG] publisher stopped")
-
-					p.close(ch)
-
-					break L1
-				}
+			if !p.serve(conn) {
+				return
 			}
 		case p.unreadyCh <- struct{}{}:
 		case publishing := <-p.publishingCh:
@@ -199,7 +171,41 @@ L1:
 		case <-p.ctx.Done():
 			p.close(nil)
 
-			break L1
+			return
+		}
+	}
+}
+
+func (p *Publisher) serve(conn *amqp.Connection) bool {
+	ch, err := p.initFunc(conn)
+	if err != nil {
+		p.logger.Printf("[ERROR] init func: %s", err)
+
+		select {
+		case <-time.NewTimer(time.Second * 5).C:
+			return true
+		case <-p.ctx.Done():
+			p.close(nil)
+
+			return false
+		}
+	}
+
+	for {
+		select {
+		case p.readyCh <- struct{}{}:
+		case publishing := <-p.publishingCh:
+			p.publish(ch, publishing)
+		case <-p.closeCh:
+			p.logger.Printf("[DEBUG] publisher stopped")
+
+			return true
+		case <-p.ctx.Done():
+			p.logger.Printf("[DEBUG] publisher stopped")
+
+			p.close(ch)
+
+			return false
 		}
 	}
 }

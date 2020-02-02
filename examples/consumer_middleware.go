@@ -14,7 +14,7 @@ func ConsumerMiddleware() {
 
 	consumer := amqpextra.NewConsumer(
 		"a_queue",
-		amqpextra.WorkerFunc(func(msg amqp.Delivery, ctx context.Context) interface{} {
+		amqpextra.WorkerFunc(func(ctx context.Context, msg amqp.Delivery) interface{} {
 			// process message
 
 			msg.Ack(false)
@@ -28,7 +28,7 @@ func ConsumerMiddleware() {
 	consumer.SetLogger(amqpextra.LoggerFunc(log.Printf))
 
 	consumer.Use(func(next amqpextra.Worker) amqpextra.Worker {
-		fn := func(msg amqp.Delivery, ctx context.Context) interface{} {
+		fn := func(ctx context.Context, msg amqp.Delivery) interface{} {
 			if msg.CorrelationId == "" {
 				msg.Nack(true, true)
 
@@ -40,7 +40,7 @@ func ConsumerMiddleware() {
 				return nil
 			}
 
-			return next.ServeMsg(msg, ctx)
+			return next.ServeMsg(ctx, msg)
 		}
 
 		return amqpextra.WorkerFunc(fn)

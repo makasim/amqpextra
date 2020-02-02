@@ -29,7 +29,7 @@ func TestCloseConsumerWhenConnChannelClosed(t *testing.T) {
 
 	closeCh := make(chan *amqp.Error)
 
-	worker := amqpextra.WorkerFunc(func(msg amqp.Delivery, ctx context.Context) interface{} {
+	worker := amqpextra.WorkerFunc(func(ctx context.Context, msg amqp.Delivery) interface{} {
 		return nil
 	})
 
@@ -89,7 +89,7 @@ func TestGetNewConsumerOnErrorInCloseCh(t *testing.T) {
 		close(closeCh)
 	}()
 
-	worker := amqpextra.WorkerFunc(func(msg amqp.Delivery, ctx context.Context) interface{} {
+	worker := amqpextra.WorkerFunc(func(ctx context.Context, msg amqp.Delivery) interface{} {
 		return nil
 	})
 
@@ -127,7 +127,7 @@ func TestCloseConsumerByContext(t *testing.T) {
 
 	ctx, cancelFunc := context.WithCancel(context.Background())
 
-	worker := amqpextra.WorkerFunc(func(msg amqp.Delivery, ctx context.Context) interface{} {
+	worker := amqpextra.WorkerFunc(func(ctx context.Context, msg amqp.Delivery) interface{} {
 		return nil
 	})
 
@@ -165,7 +165,7 @@ func TestCloseChannelOnAlreadyClosedConnection(t *testing.T) {
 
 	queue := rabbitmq.Queue(conn)
 
-	worker := amqpextra.WorkerFunc(func(msg amqp.Delivery, ctx context.Context) interface{} {
+	worker := amqpextra.WorkerFunc(func(ctx context.Context, msg amqp.Delivery) interface{} {
 		return nil
 	})
 
@@ -210,7 +210,7 @@ func TestConsumeOneAndCloseConsumer(t *testing.T) {
 	connCh <- conn
 
 	var c *amqpextra.Consumer
-	worker := amqpextra.WorkerFunc(func(msg amqp.Delivery, ctx context.Context) interface{} {
+	worker := amqpextra.WorkerFunc(func(ctx context.Context, msg amqp.Delivery) interface{} {
 		l.Printf("[DEBUG] got message %s", msg.Body)
 
 		msg.Ack(false)
@@ -287,7 +287,7 @@ func TestConcurrentlyPublishConsumeWhileConnectionLost(t *testing.T) {
 
 	var countConsumed uint32
 
-	worker := amqpextra.WorkerFunc(func(msg amqp.Delivery, ctx context.Context) interface{} {
+	worker := amqpextra.WorkerFunc(func(ctx context.Context, msg amqp.Delivery) interface{} {
 		atomic.AddUint32(&countConsumed, 1)
 
 		msg.Ack(false)

@@ -14,7 +14,7 @@ func ConsumerExample() {
 
 	consumer := conn.Consumer(
 		"some_queue",
-		amqpextra.WorkerFunc(func(msg amqp.Delivery, ctx context.Context) interface{} {
+		amqpextra.WorkerFunc(func(ctx context.Context, msg amqp.Delivery) interface{} {
 			// process message
 
 			msg.Ack(false)

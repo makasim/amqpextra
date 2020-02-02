@@ -10,13 +10,13 @@ import (
 )
 
 type Worker interface {
-	ServeMsg(msg amqp.Delivery, ctx context.Context) interface{}
+	ServeMsg(ctx context.Context, msg amqp.Delivery) interface{}
 }
 
-type WorkerFunc func(msg amqp.Delivery, ctx context.Context) interface{}
+type WorkerFunc func(ctx context.Context, msg amqp.Delivery) interface{}
 
-func (f WorkerFunc) ServeMsg(msg amqp.Delivery, ctx context.Context) interface{} {
-	return f(msg, ctx)
+func (f WorkerFunc) ServeMsg(ctx context.Context, msg amqp.Delivery) interface{} {
+	return f(ctx, msg)
 }
 
 type Consumer struct {
@@ -289,7 +289,7 @@ func (c *Consumer) runWorkers(
 						return
 					}
 
-					if res := worker.ServeMsg(msg, c.ctx); res != nil {
+					if res := worker.ServeMsg(c.ctx, msg); res != nil {
 						c.logger.Printf("[ERROR] worker.serveMsg: non nil result: %#v", res)
 					}
 				case <-workerCtx.Done():

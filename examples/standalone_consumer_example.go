@@ -14,7 +14,7 @@ func StandaloneConsumerExample() {
 
 	// usually it equals to pre_fetch_count
 	workersNum := 5
-	worker := amqpextra.WorkerFunc(func(msg amqp.Delivery, ctx context.Context) interface{} {
+	worker := amqpextra.WorkerFunc(func(ctx context.Context, msg amqp.Delivery) interface{} {
 		// process message
 
 		msg.Ack(false)
