@@ -123,7 +123,7 @@ func (c *Consumer) Use(middlewares ...func(Worker) Worker) {
 func (c *Consumer) Start() {
 	c.once.Do(func() {
 		c.started = true
-		go c.start()
+		go c.connect()
 	})
 }
 
@@ -160,23 +160,22 @@ func (*Consumer) chain(middlewares []func(Worker) Worker, endpoint Worker) Worke
 	return w
 }
 
-func (c *Consumer) start() {
+func (c *Consumer) connect() {
 	defer close(c.doneCh)
+	defer c.logger.Printf("[DEBUG] consumer stopped")
 
-	var wg sync.WaitGroup
 	worker := c.chain(c.middlewares, c.worker)
 
-L1:
 	for {
 		select {
 		case conn, ok := <-c.connCh:
 			if !ok {
-				break L1
+				return
 			}
 
 			select {
 			case <-c.closeCh:
-				continue L1
+				continue
 			default:
 			}
 
@@ -188,99 +187,117 @@ L1:
 				case <-time.NewTimer(c.restartSleep).C:
 					continue
 				case <-c.ctx.Done():
-					break L1
+					return
 				}
 			}
 
 			c.logger.Printf("[DEBUG] consumer starting")
-
-			msgCloseCh := make(chan struct{})
-			workerMsgCh := make(chan amqp.Delivery)
-			workerCtx, workerCloseCtx := context.WithCancel(c.ctx)
-
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
-				defer close(msgCloseCh)
-				defer close(workerMsgCh)
-
-				for {
-					select {
-					case msg, ok := <-msgCh:
-						if !ok {
-							return
-						}
-
-						workerMsgCh <- msg
-					case <-c.ctx.Done():
-						return
-					case <-workerCtx.Done():
-						return
-					}
-				}
-			}()
-
-			for i := 0; i < c.workerNum; i++ {
-				wg.Add(1)
-				go func() {
-					defer wg.Done()
-
-					for {
-						select {
-						case msg, ok := <-workerMsgCh:
-							if !ok {
-								return
-							}
-
-							if res := worker.ServeMsg(msg, c.ctx); res != nil {
-								c.logger.Printf("[ERROR] worker.serveMsg: non nil result: %#v", res)
-							}
-						case <-workerCtx.Done():
-							return
-						}
-					}
-				}()
-			}
-
-			c.logger.Printf("[DEBUG] workers started")
-			select {
-			case c.readyCh <- struct{}{}:
-			case <-c.closeCh:
-				workerCloseCtx()
-
-				wg.Wait()
-
-				c.logger.Printf("[DEBUG] workers stopped")
-
-				continue L1
-			case <-msgCloseCh:
-				workerCloseCtx()
-
-				wg.Wait()
-
-				c.logger.Printf("[DEBUG] workers stopped")
-
-				continue L1
-			case <-c.ctx.Done():
-				workerCloseCtx()
-
-				wg.Wait()
-
-				c.logger.Printf("[DEBUG] workers stopped")
-
-				c.close(ch)
-
-				break L1
+			if !c.serve(ch, msgCh, worker) {
+				return
 			}
 		case c.unreadyCh <- struct{}{}:
 		case <-c.closeCh:
-			continue L1
+			continue
 		case <-c.ctx.Done():
-			break L1
+			return
 		}
 	}
+}
 
-	c.logger.Printf("[DEBUG] consumer stopped")
+func (c *Consumer) serve(ch *amqp.Channel, msgCh <-chan amqp.Delivery, worker Worker) bool {
+	var wg sync.WaitGroup
+
+	msgCloseCh := make(chan struct{})
+	workerCtx, workerCloseCtx := context.WithCancel(c.ctx)
+
+	c.runWorkers(workerCtx, msgCh, msgCloseCh, worker, &wg)
+	c.logger.Printf("[DEBUG] workers started")
+
+	for {
+		select {
+		case c.readyCh <- struct{}{}:
+		case <-c.closeCh:
+			workerCloseCtx()
+
+			wg.Wait()
+
+			c.logger.Printf("[DEBUG] workers stopped")
+
+			return true
+		case <-msgCloseCh:
+			workerCloseCtx()
+
+			wg.Wait()
+
+			c.logger.Printf("[DEBUG] workers stopped")
+
+			return true
+		case <-c.ctx.Done():
+			workerCloseCtx()
+
+			wg.Wait()
+
+			c.logger.Printf("[DEBUG] workers stopped")
+
+			c.close(ch)
+
+			return false
+		}
+	}
+}
+
+func (c *Consumer) runWorkers(
+	workerCtx context.Context,
+	msgCh <-chan amqp.Delivery,
+	msgCloseCh chan struct{},
+	worker Worker,
+	wg *sync.WaitGroup,
+) {
+	workerMsgCh := make(chan amqp.Delivery)
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		defer close(msgCloseCh)
+		defer close(workerMsgCh)
+
+		for {
+			select {
+			case msg, ok := <-msgCh:
+				if !ok {
+					return
+				}
+
+				workerMsgCh <- msg
+			case <-c.ctx.Done():
+				return
+			case <-workerCtx.Done():
+				return
+			}
+		}
+	}()
+
+	for i := 0; i < c.workerNum; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+
+			for {
+				select {
+				case msg, ok := <-workerMsgCh:
+					if !ok {
+						return
+					}
+
+					if res := worker.ServeMsg(msg, c.ctx); res != nil {
+						c.logger.Printf("[ERROR] worker.serveMsg: non nil result: %#v", res)
+					}
+				case <-workerCtx.Done():
+					return
+				}
+			}
+		}()
+	}
 }
 
 func (c *Consumer) close(ch *amqp.Channel) {
