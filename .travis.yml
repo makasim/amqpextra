@@ -17,8 +17,8 @@ install:
   - go mod tidy
 
 before_script:
-  - if [ "LINTER" = true ]; then curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $GOPATH/bin v1.23.1; fi
+  - if [ "$LINTER" = true ]; then curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $GOPATH/bin v1.23.1; fi
 
 script:
-  - if [ "LINTER" = true ]; then golangci-lint version && golangci-lint run; fi
-  - if [ "TESTS" = true ]; then make -C test/e2e run; fi
+  - if [ "$LINTER" = true ]; then golangci-lint version && golangci-lint run; fi
+  - if [ "$TESTS" = true ]; then make -C test/e2e run; fi
