@@ -6,10 +6,10 @@ go:
 git:
   depth: 10
 
-os: linux
-arch: arm64
+#os: linux
+#arch: arm64
 
-env: GO111MODULE=on GOFLAGS='-mod vendor'
+#env: GO111MODULE=on GOFLAGS='-mod vendor'
 
 before_script:
   - curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $GOPATH/bin v1.23.1
