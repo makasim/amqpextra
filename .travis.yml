@@ -11,7 +11,7 @@ git:
 #  - GOFLAGS='-mod vendor'
 
 install:
-  - go mod -tidy
+  - go mod tidy
   - go mod vendor
 
 before_script:
