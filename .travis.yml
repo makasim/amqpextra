@@ -14,7 +14,7 @@ matrix:
       env: TESTS=true GOFLAGS=-mod=vendor
 
 install:
-  - go get
+  - go mod tidy
 
 before_script:
   - curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $GOPATH/bin v1.23.1
