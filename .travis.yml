@@ -7,11 +7,11 @@ matrix:
   include:
     - go: 1.13.x
       sudo: false
-      env: LINTER=true
+      env: LINTER=true GOFLAGS=-mod=vendor GO111MODULE=on
     - go: 1.13.x
       sudo: required
       services: docker
-      env: TESTS=true
+      env: TESTS=true GOFLAGS=-mod=vendor GO111MODULE=on
 
 install:
   - go mod tidy
