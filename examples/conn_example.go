@@ -10,7 +10,7 @@ func ConnExample() {
 	conn := amqpextra.Dial([]string{"amqp://guest:guest@localhost:5672/%2f"})
 	conn.SetLogger(amqpextra.LoggerFunc(log.Printf))
 
-	connCh, closeCh := conn.Get()
+	connCh, closeCh := conn.ConnCh()
 
 L1:
 	for conn := range connCh {

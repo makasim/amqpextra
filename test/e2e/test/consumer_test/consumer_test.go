@@ -119,7 +119,7 @@ func TestConcurrentlyPublishConsumeWhileConnectionLost(t *testing.T) {
 		go func(extraconn *amqpextra.Connection, queue string, wg *sync.WaitGroup) {
 			defer wg.Done()
 
-			connCh, closeCh := extraconn.Get()
+			connCh, closeCh := extraconn.ConnCh()
 
 			ticker := time.NewTicker(time.Millisecond * 100)
 			timer := time.NewTimer(time.Second * 10)

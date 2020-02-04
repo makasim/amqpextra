@@ -86,14 +86,35 @@ func (c *Connection) Close() {
 	c.cancelFunc()
 }
 
+// @deprecated
 func (c *Connection) Get() (connCh <-chan *amqp.Connection, closeCh <-chan *amqp.Error) {
+	return c.ConnCh()
+}
+
+// You must use closeCh properly.
+func (c *Connection) ConnCh() (connCh <-chan *amqp.Connection, closeCh <-chan *amqp.Error) {
 	c.Start()
 
 	return c.connCh, <-c.closeChCh
 }
 
+func (c *Connection) Conn() (*amqp.Connection, error) {
+	c.Start()
+
+	select {
+	case conn, ok := <-c.connCh:
+		if !ok {
+			return nil, amqp.ErrClosed
+		}
+
+		return conn, nil
+	case <-c.unreadyCh:
+		return nil, amqp.ErrClosed
+	}
+}
+
 func (c *Connection) Consumer(queue string, worker Worker) *Consumer {
-	connCh, closeCh := c.Get()
+	connCh, closeCh := c.ConnCh()
 
 	consumer := NewConsumer(queue, worker, connCh, closeCh)
 	consumer.SetLogger(c.logger)
@@ -103,7 +124,7 @@ func (c *Connection) Consumer(queue string, worker Worker) *Consumer {
 }
 
 func (c *Connection) Publisher() *Publisher {
-	connCh, closeCh := c.Get()
+	connCh, closeCh := c.ConnCh()
 
 	publisher := NewPublisher(connCh, closeCh)
 	publisher.SetLogger(c.logger)
@@ -195,6 +216,7 @@ func (c *Connection) serve(conn *amqp.Connection) bool {
 
 func (c *Connection) close(conn *amqp.Connection) {
 	close(c.closeChCh)
+	close(c.unreadyCh)
 
 	if conn != nil && !conn.IsClosed() {
 		if err := conn.Close(); err != nil {
