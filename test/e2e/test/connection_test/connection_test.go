@@ -28,7 +28,7 @@ func TestCouldNotConnect(t *testing.T) {
 	conn.SetReconnectSleep(time.Millisecond * 750)
 	conn.SetLogger(l)
 
-	connCh, closeCh := conn.Get()
+	connCh, closeCh := conn.ConnCh()
 	select {
 	case <-connCh:
 		t.Fatalf("it should not happen")
@@ -57,7 +57,7 @@ func TestConnectRoundRobinServers(t *testing.T) {
 	conn.SetReconnectSleep(time.Millisecond * 750)
 	conn.SetLogger(l)
 
-	connCh, closeCh := conn.Get()
+	connCh, closeCh := conn.ConnCh()
 	select {
 	case <-connCh:
 		t.Fatalf("it should not happen")
@@ -88,7 +88,7 @@ func TestConnectToSecondServer(t *testing.T) {
 	conn.SetReconnectSleep(time.Millisecond * 750)
 	conn.SetLogger(l)
 
-	connCh, closeCh := conn.Get()
+	connCh, closeCh := conn.ConnCh()
 	select {
 	case _, ok := <-connCh:
 		require.True(t, ok)
@@ -116,7 +116,7 @@ func TestCloseConnExplicitly(t *testing.T) {
 
 	conn.SetLogger(l)
 
-	connCh, closeCh := conn.Get()
+	connCh, closeCh := conn.ConnCh()
 
 	_, ok := <-connCh
 	require.True(t, ok)
@@ -149,7 +149,7 @@ func TestCloseConnByContext(t *testing.T) {
 
 	conn.SetLogger(l)
 
-	connCh, closeCh := conn.Get()
+	connCh, closeCh := conn.ConnCh()
 
 	_, ok := <-connCh
 	require.True(t, ok)
@@ -172,7 +172,7 @@ func TestReconnectIfClosedByUser(t *testing.T) {
 	conn := amqpextra.Dial([]string{"amqp://guest:guest@rabbitmq:5672/amqpextra"})
 	conn.SetLogger(l)
 
-	connCh, closeCh := conn.Get()
+	connCh, closeCh := conn.ConnCh()
 
 	realconn, ok := <-connCh
 	require.True(t, ok)
@@ -206,7 +206,7 @@ func TestReconnectIfClosedByServer(t *testing.T) {
 
 	conn.SetLogger(l)
 
-	connCh, closeCh := conn.Get()
+	connCh, closeCh := conn.ConnCh()
 
 	_, ok := <-connCh
 	require.True(t, ok)
@@ -236,7 +236,7 @@ func TestNotReadingFromCloseCh(t *testing.T) {
 	conn := amqpextra.Dial([]string{"amqp://guest:guest@rabbitmq:5672/amqpextra"})
 	conn.SetLogger(l)
 
-	connCh, _ := conn.Get()
+	connCh, _ := conn.ConnCh()
 
 	realconn, ok := <-connCh
 	require.True(t, ok)
@@ -269,7 +269,7 @@ func TestConnPublishConsume(t *testing.T) {
 
 	queue := fmt.Sprintf("test-%d", time.Now().Nanosecond())
 
-	connCh, closeCh := conn.Get()
+	connCh, closeCh := conn.ConnCh()
 
 	select {
 	case conn, ok := <-connCh:
@@ -363,4 +363,60 @@ func TestConcurrentlyPublishConsumeWhileConnectionLost(t *testing.T) {
 
 	assert.GreaterOrEqual(t, countConsumed, uint32(200))
 	assert.LessOrEqual(t, countConsumed, uint32(520))
+}
+
+func TestGetBareConnection(t *testing.T) {
+	l := logger.New()
+
+	connextra := amqpextra.Dial([]string{"amqp://guest:guest@rabbitmq:5672/amqpextra"})
+	defer connextra.Close()
+
+	connextra.SetReconnectSleep(time.Millisecond * 750)
+	connextra.SetLogger(l)
+
+	select {
+	case <-connextra.Ready():
+	case <-time.NewTimer(time.Second).C:
+		t.Fatalf("conn not ready")
+	}
+
+	conn, err := connextra.Conn()
+	assert.NoError(t, err)
+	assert.NotNil(t, conn)
+
+	expected := `[DEBUG] connection established
+`
+	require.Equal(t, expected, l.Logs())
+}
+
+func TestGetBareConnectionIfClosed(t *testing.T) {
+	l := logger.New()
+
+	connextra := amqpextra.Dial([]string{"amqp://guest:guest@rabbitmq:5672/amqpextra"})
+	defer connextra.Close()
+
+	connextra.SetReconnectSleep(time.Millisecond * 750)
+	connextra.SetLogger(l)
+
+	select {
+	case <-connextra.Ready():
+	case <-time.NewTimer(time.Second).C:
+		t.Fatalf("conn not ready")
+	}
+
+	connextra.Close()
+
+	select {
+	case <-connextra.Unready():
+	case <-time.NewTimer(time.Second).C:
+		t.Fatalf("conn still ready")
+	}
+
+	conn, err := connextra.Conn()
+	assert.EqualError(t, err, "Exception (504) Reason: \"channel/connection is not open\"")
+	assert.Nil(t, conn)
+
+	expected := `[DEBUG] connection established
+`
+	require.Equal(t, expected, l.Logs())
 }
