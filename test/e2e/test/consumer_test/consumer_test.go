@@ -181,10 +181,8 @@ func TestConcurrentlyPublishConsumeWhileConnectionLost(t *testing.T) {
 [DEBUG] connection established
 [DEBUG] consumer starting
 [DEBUG] workers started
-[DEBUG] workers stopped
-[DEBUG] consumer stopped
 `
-	require.Equal(t, expected, l.Logs())
+	require.Contains(t, l.Logs(), expected)
 
 	require.GreaterOrEqual(t, countPublished, uint32(200))
 	require.LessOrEqual(t, countPublished, uint32(520))
