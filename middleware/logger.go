@@ -10,11 +10,9 @@ import (
 var loggerKey = &contextKey{"logger"}
 
 func Logger(l amqpextra.Logger) func(next amqpextra.Worker) amqpextra.Worker {
-	return func(next amqpextra.Worker) amqpextra.Worker {
-		return amqpextra.WorkerFunc(func(ctx context.Context, msg amqp.Delivery) interface{} {
-			return next.ServeMsg(WithLogger(ctx, l), msg)
-		})
-	}
+	return wrap(func(ctx context.Context, msg amqp.Delivery, next amqpextra.Worker) interface{} {
+		return next.ServeMsg(WithLogger(ctx, l), msg)
+	})
 }
 
 func WithLogger(ctx context.Context, l amqpextra.Logger) context.Context {

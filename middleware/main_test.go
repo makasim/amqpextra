@@ -28,7 +28,7 @@ func (m *acknowledgerMock) Ack(tag uint64, multiple bool) error {
 	return args.Error(0)
 }
 
-func (m *acknowledgerMock) Nack(tag uint64, multiple bool, requeue bool) error {
+func (m *acknowledgerMock) Nack(tag uint64, multiple, requeue bool) error {
 	args := m.Called(tag, multiple, requeue)
 
 	return args.Error(0)

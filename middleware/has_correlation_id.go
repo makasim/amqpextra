@@ -8,21 +8,13 @@ import (
 )
 
 func HasCorrelationID() func(next amqpextra.Worker) amqpextra.Worker {
-	return func(next amqpextra.Worker) amqpextra.Worker {
-		fn := func(ctx context.Context, msg amqp.Delivery) interface{} {
-			if msg.CorrelationId == "" {
-				log(ctx, "[WARN] no correlation id")
+	return wrap(func(ctx context.Context, msg amqp.Delivery, next amqpextra.Worker) interface{} {
+		if msg.CorrelationId == "" {
+			log(ctx, "[WARN] no correlation id")
 
-				if err := msg.Nack(false, false); err != nil {
-					log(ctx, "[ERROR] msg nack: %s", err)
-				}
-
-				return nil
-			}
-
-			return next.ServeMsg(ctx, msg)
+			return nack(ctx, msg)
 		}
 
-		return amqpextra.WorkerFunc(fn)
-	}
+		return next.ServeMsg(ctx, msg)
+	})
 }
