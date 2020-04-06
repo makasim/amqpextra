@@ -15,12 +15,19 @@ See an [example](examples/conn_example.go).
 
 ## Consumer.
 
-The package provides a handy consumer. It is aware of `<-chan *amqp.Connection` and `<-chan *amqp.Error` and can work with them respectively.
-It also starts multiple works in background and correctly stop them when needed.  
+The package provides a handy consumer abstraction that works on top of `<-chan *amqp.Connection` and `<-chan *amqp.Error` channels.
 
 See an [example](examples/consumer_example.go).
 
-## Consumer Middleware
+### Workers
+
+Consumer can start multipe works and spread the processing between them.
+
+### Context
+
+Consumer supports context.Context. The context is passed to worker function. You can build timeout, cancelation strategies on top of it.
+
+### Middleware
 
 The consumer could chain middlewares for pre precessing received message. 
 Check an example that rejects messages without correlation_id and reply_to properties.  
