@@ -27,6 +27,14 @@ Check an example that rejects messages without correlation_id and reply_to prope
 
 See an [example](examples/consumer_middleware.go).
 
+Some built-in middlewares:
+
+* [HasCorrelationID](middleware/has_correlation_id.go) - nack message if has no correlation id
+* [HasReplyTo](middleware/has_reply_to.go) - nack message if has no reply to
+* [Logger](middleware/logger.go) - context with logger
+* [Recover](middleware/recover.go) - recover worker from panic, nack message
+* [Expire](middleware/expire.go) - Convert Message expiration to context with timeout
+
 ## Publisher.
 
 The package provides a handy publisher. It is aware of `<-chan *amqp.Connection` and `<-chan *amqp.Error` and can work with them respectively.  
