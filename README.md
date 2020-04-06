@@ -19,15 +19,15 @@ The package provides a handy consumer abstraction that works on top of `<-chan *
 
 See an [example](examples/consumer_example.go).
 
-### Workers
+#### Workers
 
 Consumer can start multipe works and spread the processing between them.
 
-### Context
+#### Context
 
 Consumer supports context.Context. The context is passed to worker function. You can build timeout, cancelation strategies on top of it.
 
-### Middleware
+#### Middleware
 
 The consumer could chain middlewares for pre precessing received message. 
 Check an example that rejects messages without correlation_id and reply_to properties.  
