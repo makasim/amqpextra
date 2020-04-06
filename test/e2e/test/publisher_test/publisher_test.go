@@ -16,15 +16,19 @@ import (
 
 	"github.com/makasim/amqpextra"
 	"github.com/streadway/amqp"
+	"go.uber.org/goleak"
 )
 
 func TestPublishUnreadyNoResultChannel(t *testing.T) {
+	defer goleak.VerifyNone(t)
+
 	l := logger.New()
 
 	connCh := make(chan *amqp.Connection)
 	closeCh := make(chan *amqp.Error)
 
 	p := amqpextra.NewPublisher(connCh, closeCh)
+	defer p.Close()
 	p.SetLogger(l)
 
 	p.Publish(amqpextra.Publishing{
@@ -39,12 +43,15 @@ func TestPublishUnreadyNoResultChannel(t *testing.T) {
 }
 
 func TestPublishUnreadyWithResultChannel(t *testing.T) {
+	defer goleak.VerifyNone(t)
+
 	l := logger.New()
 
 	connCh := make(chan *amqp.Connection)
 	closeCh := make(chan *amqp.Error)
 
 	p := amqpextra.NewPublisher(connCh, closeCh)
+	defer p.Close()
 	p.SetLogger(l)
 
 	resultCh := make(chan error)
@@ -63,6 +70,8 @@ func TestPublishUnreadyWithResultChannel(t *testing.T) {
 }
 
 func TestPublishToClosedPublisherNoResultChannel(t *testing.T) {
+	defer goleak.VerifyNone(t)
+
 	l := logger.New()
 
 	connCh := make(chan *amqp.Connection)
@@ -85,6 +94,8 @@ func TestPublishToClosedPublisherNoResultChannel(t *testing.T) {
 }
 
 func TestPublishToClosedPublisherWithResultChannel(t *testing.T) {
+	defer goleak.VerifyNone(t)
+
 	l := logger.New()
 
 	connCh := make(chan *amqp.Connection)
@@ -111,6 +122,8 @@ func TestPublishToClosedPublisherWithResultChannel(t *testing.T) {
 }
 
 func TestPublishWithWaitReady(t *testing.T) {
+	defer goleak.VerifyNone(t)
+
 	l := logger.New()
 
 	connCh := make(chan *amqp.Connection)
@@ -118,6 +131,7 @@ func TestPublishWithWaitReady(t *testing.T) {
 
 	conn, err := amqp.Dial("amqp://guest:guest@rabbitmq:5672/amqpextra")
 	require.NoError(t, err)
+	defer conn.Close()
 
 	go func() {
 		<-time.NewTimer(time.Second).C
@@ -126,6 +140,7 @@ func TestPublishWithWaitReady(t *testing.T) {
 	}()
 
 	p := amqpextra.NewPublisher(connCh, closeCh)
+	defer p.Close()
 	p.SetLogger(l)
 
 	resultCh := make(chan error)
@@ -150,10 +165,13 @@ func TestPublishWithWaitReady(t *testing.T) {
 }
 
 func TestPublishConsumeWithWaitReady(t *testing.T) {
+	defer goleak.VerifyNone(t)
+
 	l := logger.New()
 
 	conn, err := amqp.Dial("amqp://guest:guest@rabbitmq:5672/amqpextra")
 	require.NoError(t, err)
+	defer conn.Close()
 
 	connCh := make(chan *amqp.Connection, 1)
 	connCh <- conn
@@ -167,6 +185,7 @@ func TestPublishConsumeWithWaitReady(t *testing.T) {
 	require.NoError(t, err)
 
 	p := amqpextra.NewPublisher(connCh, closeCh)
+	defer p.Close()
 	p.SetLogger(l)
 
 	resultCh := make(chan error)
@@ -193,10 +212,13 @@ func TestPublishConsumeWithWaitReady(t *testing.T) {
 }
 
 func TestPublishConsumeNoWaitReady(t *testing.T) {
+	defer goleak.VerifyNone(t)
+
 	l := logger.New()
 
 	conn, err := amqp.Dial("amqp://guest:guest@rabbitmq:5672/amqpextra")
 	require.NoError(t, err)
+	defer conn.Close()
 
 	connCh := make(chan *amqp.Connection, 1)
 	connCh <- conn
@@ -210,6 +232,7 @@ func TestPublishConsumeNoWaitReady(t *testing.T) {
 	require.NoError(t, err)
 
 	p := amqpextra.NewPublisher(connCh, closeCh)
+	defer p.Close()
 	p.SetLogger(l)
 
 	resultCh := make(chan error)
@@ -238,6 +261,8 @@ func TestPublishConsumeNoWaitReady(t *testing.T) {
 }
 
 func TestConcurrentlyPublishConsumeWhileConnectionLost(t *testing.T) {
+	defer goleak.VerifyNone(t)
+
 	l := logger.New()
 
 	consumerConn, err := amqp.Dial("amqp://guest:guest@rabbitmq:5672/amqpextra")

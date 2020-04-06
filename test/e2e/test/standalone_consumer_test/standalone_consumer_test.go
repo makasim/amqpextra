@@ -16,13 +16,17 @@ import (
 	"github.com/streadway/amqp"
 
 	"github.com/makasim/amqpextra/test/e2e/helper/logger"
+	"go.uber.org/goleak"
 )
 
 func TestCloseConsumerWhenConnChannelClosed(t *testing.T) {
+	defer goleak.VerifyNone(t)
+
 	l := logger.New()
 
 	conn, err := amqp.Dial("amqp://guest:guest@rabbitmq:5672/amqpextra")
 	require.NoError(t, err)
+	defer conn.Close()
 
 	connCh := make(chan *amqp.Connection, 1)
 	connCh <- conn
@@ -41,6 +45,7 @@ func TestCloseConsumerWhenConnChannelClosed(t *testing.T) {
 	}()
 
 	c := amqpextra.NewConsumer(rabbitmq.Queue(conn), worker, connCh, closeCh)
+	defer c.Close()
 	c.SetLogger(l)
 
 	c.Run()
@@ -54,14 +59,24 @@ func TestCloseConsumerWhenConnChannelClosed(t *testing.T) {
 }
 
 func TestGetNewConsumerOnErrorInCloseCh(t *testing.T) {
+	defer goleak.VerifyNone(t)
+
 	l := logger.New()
 
 	connCh := make(chan *amqp.Connection, 1)
 	closeCh := make(chan *amqp.Error)
 	conn, err := amqp.Dial("amqp://guest:guest@rabbitmq:5672/amqpextra")
 	require.NoError(t, err)
+	defer conn.Close()
 
 	queue := rabbitmq.Queue(conn)
+
+	var conn2 *amqp.Connection
+	defer func() {
+		if conn2 != nil {
+			conn2.Close()
+		}
+	}()
 
 	go func() {
 		l.Printf("[DEBUG] send fresh connection")
@@ -75,11 +90,11 @@ func TestGetNewConsumerOnErrorInCloseCh(t *testing.T) {
 		<-time.NewTimer(time.Millisecond * 100).C
 		l.Printf("[DEBUG] trying reconnect")
 
-		conn, err = amqp.Dial("amqp://guest:guest@rabbitmq:5672/amqpextra")
+		conn2, err = amqp.Dial("amqp://guest:guest@rabbitmq:5672/amqpextra")
 		require.NoError(t, err)
 
 		l.Printf("[DEBUG] reconnected")
-		connCh <- conn
+		connCh <- conn2
 
 		<-time.NewTimer(time.Millisecond * 100).C
 
@@ -94,8 +109,8 @@ func TestGetNewConsumerOnErrorInCloseCh(t *testing.T) {
 	})
 
 	c := amqpextra.NewConsumer(queue, worker, connCh, closeCh)
-	c.SetLogger(l)
 	defer c.Close()
+	c.SetLogger(l)
 
 	c.Run()
 
@@ -116,12 +131,15 @@ func TestGetNewConsumerOnErrorInCloseCh(t *testing.T) {
 }
 
 func TestCloseConsumerByContext(t *testing.T) {
+	defer goleak.VerifyNone(t)
+
 	l := logger.New()
 
 	connCh := make(chan *amqp.Connection, 1)
 	closeCh := make(chan *amqp.Error)
 	conn, err := amqp.Dial("amqp://guest:guest@rabbitmq:5672/amqpextra")
 	require.NoError(t, err)
+	defer conn.Close()
 
 	queue := rabbitmq.Queue(conn)
 
@@ -156,6 +174,8 @@ func TestCloseConsumerByContext(t *testing.T) {
 }
 
 func TestCloseChannelOnAlreadyClosedConnection(t *testing.T) {
+	defer goleak.VerifyNone(t)
+
 	l := logger.New()
 
 	connCh := make(chan *amqp.Connection, 1)
@@ -197,12 +217,15 @@ func TestCloseChannelOnAlreadyClosedConnection(t *testing.T) {
 }
 
 func TestConsumeOneAndCloseConsumer(t *testing.T) {
+	defer goleak.VerifyNone(t)
+
 	l := logger.New()
 
 	connCh := make(chan *amqp.Connection, 1)
 	closeCh := make(chan *amqp.Error)
 	conn, err := amqp.Dial("amqp://guest:guest@rabbitmq:5672/amqpextra")
 	require.NoError(t, err)
+	defer conn.Close()
 
 	queue := rabbitmq.Queue(conn)
 	rabbitmq.Publish(conn, "testbdy", queue)
@@ -234,6 +257,8 @@ func TestConsumeOneAndCloseConsumer(t *testing.T) {
 }
 
 func TestConcurrentlyPublishConsumeWhileConnectionLost(t *testing.T) {
+	defer goleak.VerifyNone(t)
+
 	l := logger.New()
 
 	connName := fmt.Sprintf("amqpextra-test-%d", time.Now().UnixNano())
@@ -252,6 +277,13 @@ func TestConcurrentlyPublishConsumeWhileConnectionLost(t *testing.T) {
 	require.NoError(t, err)
 	defer publishConn.Close()
 
+	var conn2 *amqp.Connection
+	defer func() {
+		if conn2 != nil {
+			conn2.Close()
+		}
+	}()
+
 	var wg sync.WaitGroup
 
 	wg.Add(1)
@@ -265,12 +297,12 @@ func TestConcurrentlyPublishConsumeWhileConnectionLost(t *testing.T) {
 		closeCh <- amqp.ErrClosed
 
 		<-time.NewTimer(time.Millisecond * 100).C
-		conn, err = amqp.Dial("amqp://guest:guest@rabbitmq:5672/amqpextra")
+		conn2, err = amqp.Dial("amqp://guest:guest@rabbitmq:5672/amqpextra")
 		require.NoError(t, err)
 
 		l.Printf("[DEBUG] get new connection")
 
-		connCh <- conn
+		connCh <- conn2
 	}(connName, &wg)
 
 	queue := rabbitmq.Queue(conn)
