@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/makasim/amqpextra/middleware"
 	"github.com/streadway/amqp"
 )
 
@@ -289,7 +290,10 @@ func (c *Consumer) runWorkers(
 						return
 					}
 
-					if res := worker.ServeMsg(c.ctx, msg); res != nil {
+					if res := worker.ServeMsg(
+						middleware.WithLogger(c.ctx, c.logger),
+						msg,
+					); res != nil {
 						c.logger.Printf("[ERROR] worker.serveMsg: non nil result: %#v", res)
 					}
 				case <-workerCtx.Done():
