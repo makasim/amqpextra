@@ -16,6 +16,8 @@ import (
 )
 
 func CloseConn(userProvidedName string) bool {
+	defer http.DefaultClient.CloseIdleConnections()
+
 	var data []map[string]interface{}
 	if err := json.Unmarshal([]byte(OpenedConns()), &data); err != nil {
 		panic(err)
@@ -41,7 +43,9 @@ func CloseConn(userProvidedName string) bool {
 			if err != nil {
 				panic(err)
 			}
-			resp.Body.Close()
+			if err := resp.Body.Close(); err != nil {
+				panic(err)
+			}
 
 			if resp.StatusCode != http.StatusNoContent {
 				b, _ := httputil.DumpResponse(resp, true)

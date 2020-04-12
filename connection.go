@@ -219,10 +219,14 @@ func (c *Connection) close(conn *amqp.Connection) {
 	close(c.unreadyCh)
 
 	if conn != nil && !conn.IsClosed() {
+		connCloseCh := make(chan *amqp.Error)
+		conn.NotifyClose(connCloseCh)
+
 		if err := conn.Close(); err != nil {
 			c.logger.Printf("[ERROR] connection close: %s", err)
 		}
 
+		<-connCloseCh
 		c.logger.Printf("[DEBUG] connection is closed")
 	}
 
