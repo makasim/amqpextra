@@ -2,6 +2,7 @@ package amqpextra
 
 import (
 	"crypto/tls"
+	"fmt"
 
 	"github.com/streadway/amqp"
 )
@@ -27,6 +28,10 @@ func Dial(urls []string) *Connection {
 	l := len(urls)
 
 	return New(DialerFunc(func() (*amqp.Connection, error) {
+		if len(urls) == 0 {
+			return nil, fmt.Errorf("urls empty")
+		}
+
 		url := urls[i]
 
 		i = (i + 1) % l
@@ -40,6 +45,10 @@ func DialTLS(urls []string, amqps *tls.Config) *Connection {
 	l := len(urls)
 
 	return New(DialerFunc(func() (*amqp.Connection, error) {
+		if len(urls) == 0 {
+			return nil, fmt.Errorf("urls empty")
+		}
+
 		url := urls[i]
 
 		i = (i + 1) % l
@@ -53,6 +62,10 @@ func DialConfig(urls []string, config amqp.Config) *Connection {
 	l := len(urls)
 
 	return New(DialerFunc(func() (*amqp.Connection, error) {
+		if len(urls) == 0 {
+			return nil, fmt.Errorf("urls empty")
+		}
+
 		url := urls[i]
 
 		i = (i + 1) % l
