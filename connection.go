@@ -198,8 +198,9 @@ func (c *Connection) serve(conn *amqp.Connection) bool {
 					c.close(conn)
 
 					return false
-				case <-time.NewTimer(time.Second * 5).C:
-					c.logger.Printf("[WARN] previous err sent to close channel has not been read out. Make sure you are reading from closeCh.")
+				default:
+					// the close channel already contains the error but receiver has not read it out.
+					// we can safely skip this time.
 				}
 			}
 
