@@ -1,6 +1,7 @@
 package connection_test
 
 import (
+	"crypto/tls"
 	"fmt"
 	"sync"
 	"testing"
@@ -446,4 +447,79 @@ func TestGetBareConnectionIfClosed(t *testing.T) {
 	expected := `[DEBUG] connection established
 `
 	require.Equal(t, expected, l.Logs())
+}
+
+func TestDialUrlsIsEmpty(t *testing.T) {
+	defer goleak.VerifyNone(t)
+
+	l := logger.New()
+
+	conn := amqpextra.Dial([]string{})
+	defer conn.Close()
+
+	conn.SetReconnectSleep(time.Millisecond * 750)
+	conn.SetLogger(l)
+
+	connCh, closeCh := conn.ConnCh()
+	select {
+	case <-connCh:
+		t.Fatalf("it should not happen")
+	case <-closeCh:
+		t.Fatalf("it should not happen")
+	case <-time.NewTimer(time.Second * 2).C:
+		expected := `[ERROR] urls empty
+[DEBUG] try reconnect
+`
+		require.Contains(t, l.Logs(), expected)
+	}
+}
+
+func TestDialConfigUrlsIsEmpty(t *testing.T) {
+	defer goleak.VerifyNone(t)
+
+	l := logger.New()
+
+	conn := amqpextra.DialConfig(nil, amqp.Config{})
+	defer conn.Close()
+
+	conn.SetReconnectSleep(time.Millisecond * 750)
+	conn.SetLogger(l)
+
+	connCh, closeCh := conn.ConnCh()
+	select {
+	case <-connCh:
+		t.Fatalf("it should not happen")
+	case <-closeCh:
+		t.Fatalf("it should not happen")
+	case <-time.NewTimer(time.Second * 2).C:
+		expected := `[ERROR] urls empty
+[DEBUG] try reconnect
+`
+		require.Contains(t, l.Logs(), expected)
+	}
+}
+
+func TestDialTLSUrlsIsEmpty(t *testing.T) {
+	defer goleak.VerifyNone(t)
+
+	l := logger.New()
+
+	conn := amqpextra.DialTLS(nil, &tls.Config{})
+	defer conn.Close()
+
+	conn.SetReconnectSleep(time.Millisecond * 750)
+	conn.SetLogger(l)
+
+	connCh, closeCh := conn.ConnCh()
+	select {
+	case <-connCh:
+		t.Fatalf("it should not happen")
+	case <-closeCh:
+		t.Fatalf("it should not happen")
+	case <-time.NewTimer(time.Second * 2).C:
+		expected := `[ERROR] urls empty
+[DEBUG] try reconnect
+`
+		require.Contains(t, l.Logs(), expected)
+	}
 }
