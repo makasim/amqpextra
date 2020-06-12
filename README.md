@@ -36,11 +36,12 @@ See an [example](examples/consumer_middleware.go).
 
 Some built-in middlewares:
 
-* [HasCorrelationID](middleware/has_correlation_id.go) - nack message if has no correlation id
-* [HasReplyTo](middleware/has_reply_to.go) - nack message if has no reply to
-* [Logger](middleware/logger.go) - context with logger
-* [Recover](middleware/recover.go) - recover worker from panic, nack message
-* [Expire](middleware/expire.go) - Convert Message expiration to context with timeout
+* [HasCorrelationID](middleware/has_correlation_id.go) - Nack message if has no correlation id
+* [HasReplyTo](middleware/has_reply_to.go) - Nack message if has no reply to.
+* [Logger](middleware/logger.go) - Context with logger.
+* [Recover](middleware/recover.go) - Recover worker from panic, nack message.
+* [Expire](middleware/expire.go) - Convert Message expiration to context with timeout.
+* [AckNack](middleware/ack_nack.go) - Return middleware.Ack to ack message.
 
 ## Publisher.
 
