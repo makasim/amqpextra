@@ -5,7 +5,6 @@ services:
     build: { context: "../..", dockerfile: test/e2e/Dockerfile }
     entrypoint: [ "./test/e2e/entrypoint.sh", "go", "test", "-mod=vendor", "-race", "-count=1", "-v", "./test/e2e/test/..."]
     working_dir: "/amqpextra"
-    container_name: "amqpextra-e2e-test"
     restart: "no"
     volumes:
       - "../../:/amqpextra"

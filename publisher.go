@@ -225,7 +225,7 @@ func (p *Publisher) publish(ch *amqp.Channel, publishing Publishing) {
 		case <-time.NewTimer(time.Second * 5).C:
 			p.logger.Printf("[WARN] publish result has not been read out from doneCh within safeguard time. Make sure you are reading from the channel.")
 		}
-	} else {
+	} else if result != nil {
 		p.logger.Printf("[ERROR] publish: %s", result)
 	}
 }
