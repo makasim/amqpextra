@@ -11,6 +11,7 @@ import (
 )
 
 type Publishing struct {
+	Context   context.Context
 	Exchange  string
 	Key       string
 	Mandatory bool
@@ -106,20 +107,40 @@ func (p *Publisher) Close() {
 func (p *Publisher) Publish(msg Publishing) {
 	p.Start()
 
+	if msg.ResultCh != nil && cap(msg.ResultCh) == 0 {
+		panic("amqpextra: resultCh channel is unbuffered")
+	}
+
+	if msg.Context == nil {
+		msg.Context = context.Background()
+	}
+
+	unreadyCh := p.Unready()
 	if msg.WaitReady {
-		<-p.Ready()
+		unreadyCh = nil
 	}
 
 	select {
-	case <-p.ctx.Done():
-		p.logger.Printf("[ERROR] cannot publish to stopped publisher")
-
-		if msg.ResultCh != nil {
-			go func() {
-				msg.ResultCh <- fmt.Errorf("publisher stopped")
-			}()
-		}
 	case p.publishingCh <- msg:
+	case <-msg.Context.Done():
+		if msg.ResultCh != nil {
+			msg.ResultCh <- msg.Context.Err()
+		} else {
+			p.logger.Printf("[ERROR] msg context done: %s", msg.Context.Err())
+		}
+	// noinspection GoNilness
+	case <-unreadyCh:
+		if msg.ResultCh != nil {
+			msg.ResultCh <- fmt.Errorf("publisher not ready")
+		} else {
+			p.logger.Printf("[ERROR] publisher not ready")
+		}
+	case <-p.ctx.Done():
+		if msg.ResultCh != nil {
+			msg.ResultCh <- fmt.Errorf("publisher stopped")
+		} else {
+			p.logger.Printf("[ERROR] publisher stopped")
+		}
 	}
 }
 
@@ -158,16 +179,6 @@ func (p *Publisher) connect() {
 				return
 			}
 		case p.unreadyCh <- struct{}{}:
-		case publishing := <-p.publishingCh:
-			if publishing.ResultCh != nil {
-				select {
-				case publishing.ResultCh <- amqp.ErrClosed:
-				case <-time.NewTimer(time.Second * 5).C:
-					p.logger.Printf("[WARN] publish result has not been read out from doneCh within safeguard time. Make sure you are reading from the channel.")
-				}
-			} else {
-				p.logger.Printf("[ERROR] publish: %s", amqp.ErrClosed)
-			}
 		case <-p.ctx.Done():
 			p.close(nil)
 
@@ -210,21 +221,27 @@ func (p *Publisher) serve(conn *amqp.Connection) bool {
 	}
 }
 
-func (p *Publisher) publish(ch *amqp.Channel, publishing Publishing) {
+func (p *Publisher) publish(ch *amqp.Channel, msg Publishing) {
+	select {
+	case <-msg.Context.Done():
+		if msg.ResultCh != nil {
+			msg.ResultCh <- msg.Context.Err()
+		} else {
+			p.logger.Printf("[ERROR] msg context done: %s", msg.Context.Err())
+		}
+	default:
+	}
+
 	result := ch.Publish(
-		publishing.Exchange,
-		publishing.Key,
-		publishing.Mandatory,
-		publishing.Immediate,
-		publishing.Message,
+		msg.Exchange,
+		msg.Key,
+		msg.Mandatory,
+		msg.Immediate,
+		msg.Message,
 	)
 
-	if publishing.ResultCh != nil {
-		select {
-		case publishing.ResultCh <- result:
-		case <-time.NewTimer(time.Second * 5).C:
-			p.logger.Printf("[WARN] publish result has not been read out from doneCh within safeguard time. Make sure you are reading from the channel.")
-		}
+	if msg.ResultCh != nil {
+		msg.ResultCh <- result
 	} else if result != nil {
 		p.logger.Printf("[ERROR] publish: %s", result)
 	}
