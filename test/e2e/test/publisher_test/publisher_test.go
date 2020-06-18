@@ -70,30 +70,6 @@ func TestPublishUnreadyWithResultChannel(t *testing.T) {
 	require.Equal(t, expected, l.Logs())
 }
 
-func TestPublishToClosedPublisherNoResultChannel(t *testing.T) {
-	defer goleak.VerifyNone(t)
-
-	l := logger.New()
-
-	connCh := make(chan *amqp.Connection)
-	closeCh := make(chan *amqp.Error)
-
-	p := amqpextra.NewPublisher(connCh, closeCh)
-	p.SetLogger(l)
-
-	p.Close()
-
-	p.Publish(amqpextra.Publishing{
-		Context:  context.Background(),
-		Message:  amqp.Publishing{},
-		ResultCh: nil,
-	})
-
-	expected := `[ERROR] cannot publish to stopped publisher
-`
-	require.Equal(t, expected, l.Logs())
-}
-
 func TestPublishResultChannelUnbuffered(t *testing.T) {
 	defer goleak.VerifyNone(t)
 
@@ -114,6 +90,30 @@ func TestPublishResultChannelUnbuffered(t *testing.T) {
 			ResultCh: make(chan error),
 		})
 	})
+}
+
+func TestPublishToClosedPublisherNoResultChannel(t *testing.T) {
+	defer goleak.VerifyNone(t)
+
+	l := logger.New()
+
+	connCh := make(chan *amqp.Connection)
+	closeCh := make(chan *amqp.Error)
+
+	p := amqpextra.NewPublisher(connCh, closeCh)
+	p.SetLogger(l)
+
+	p.Close()
+
+	p.Publish(amqpextra.Publishing{
+		Context:  context.Background(),
+		Message:  amqp.Publishing{},
+		ResultCh: nil,
+	})
+
+	expected := `[ERROR] publisher stopped
+`
+	require.Equal(t, expected, l.Logs())
 }
 
 func TestPublishToClosedPublisherWithResultChannel(t *testing.T) {
@@ -139,8 +139,7 @@ func TestPublishToClosedPublisherWithResultChannel(t *testing.T) {
 	err := <-resultCh
 	require.EqualError(t, err, `publisher stopped`)
 
-	expected := `[ERROR] cannot publish to stopped publisher
-`
+	expected := ``
 	require.Equal(t, expected, l.Logs())
 }
 
@@ -370,7 +369,7 @@ func TestConcurrentlyPublishConsumeWhileConnectionLost(t *testing.T) {
 					if err := <-resultCh; err == nil {
 						atomic.AddUint32(&countPublished, 1)
 					} else {
-						t.Fatalf("publish errored: %s", err)
+						t.Errorf("publish errored: %s", err)
 					}
 				case <-timer.C:
 					p.Close()
