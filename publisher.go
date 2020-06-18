@@ -125,7 +125,10 @@ func (p *Publisher) Publish(msg Publishing) {
 	case <-msg.Context.Done():
 		if msg.ResultCh != nil {
 			msg.ResultCh <- msg.Context.Err()
+		} else {
+			p.logger.Printf("[ERROR] msg context done: %s", msg.Context.Err())
 		}
+
 	// noinspection GoNilness
 	case <-unreadyCh:
 		if msg.ResultCh != nil {
