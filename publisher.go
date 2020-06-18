@@ -126,7 +126,7 @@ func (p *Publisher) Publish(msg Publishing) {
 		if msg.ResultCh != nil {
 			msg.ResultCh <- msg.Context.Err()
 		}
-	//noinspection GoNilness
+	// noinspection GoNilness
 	case <-unreadyCh:
 		if msg.ResultCh != nil {
 			msg.ResultCh <- fmt.Errorf("publisher not ready")
