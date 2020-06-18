@@ -128,7 +128,6 @@ func (p *Publisher) Publish(msg Publishing) {
 		} else {
 			p.logger.Printf("[ERROR] msg context done: %s", msg.Context.Err())
 		}
-
 	// noinspection GoNilness
 	case <-unreadyCh:
 		if msg.ResultCh != nil {
@@ -137,10 +136,10 @@ func (p *Publisher) Publish(msg Publishing) {
 			p.logger.Printf("[ERROR] publisher not ready")
 		}
 	case <-p.ctx.Done():
-		p.logger.Printf("[ERROR] cannot publish to stopped publisher")
-
 		if msg.ResultCh != nil {
 			msg.ResultCh <- fmt.Errorf("publisher stopped")
+		} else {
+			p.logger.Printf("[ERROR] publisher stopped")
 		}
 	}
 }
@@ -222,25 +221,27 @@ func (p *Publisher) serve(conn *amqp.Connection) bool {
 	}
 }
 
-func (p *Publisher) publish(ch *amqp.Channel, publishing Publishing) {
+func (p *Publisher) publish(ch *amqp.Channel, msg Publishing) {
 	select {
-	case <-publishing.Context.Done():
-		if publishing.ResultCh != nil {
-			publishing.ResultCh <- publishing.Context.Err()
+	case <-msg.Context.Done():
+		if msg.ResultCh != nil {
+			msg.ResultCh <- msg.Context.Err()
+		} else {
+			p.logger.Printf("[ERROR] msg context done: %s", msg.Context.Err())
 		}
 	default:
 	}
 
 	result := ch.Publish(
-		publishing.Exchange,
-		publishing.Key,
-		publishing.Mandatory,
-		publishing.Immediate,
-		publishing.Message,
+		msg.Exchange,
+		msg.Key,
+		msg.Mandatory,
+		msg.Immediate,
+		msg.Message,
 	)
 
-	if publishing.ResultCh != nil {
-		publishing.ResultCh <- result
+	if msg.ResultCh != nil {
+		msg.ResultCh <- result
 	} else if result != nil {
 		p.logger.Printf("[ERROR] publish: %s", result)
 	}
