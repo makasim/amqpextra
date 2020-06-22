@@ -253,7 +253,7 @@ func (p *Publisher) publish(ch *amqp.Channel, msg Publishing) {
 func (p *Publisher) close(ch *amqp.Channel) {
 	if ch != nil {
 		if err := ch.Close(); err != nil && !strings.Contains(err.Error(), "channel/connection is not open") {
-			p.logger.Printf("[WARN] channel close: %s", err)
+			p.logger.Printf("[WARN] publisher: channel close: %s", err)
 		}
 	}
 

@@ -198,6 +198,10 @@ func (c *Consumer) connect() {
 			if !c.serve(ch, msgCh, worker) {
 				return
 			}
+
+			if err := ch.Close(); err != nil && !strings.Contains(err.Error(), "channel/connection is not open") {
+				c.logger.Printf("[WARN] consumer: channel close: %s", err)
+			}
 		case c.unreadyCh <- struct{}{}:
 		case <-c.closeCh:
 			continue
