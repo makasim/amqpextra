@@ -214,25 +214,31 @@ func (c *Consumer) connect() {
 func (c *Consumer) serve(ch *amqp.Channel, msgCh <-chan amqp.Delivery, worker Worker) bool {
 	var wg sync.WaitGroup
 
-	msgCloseCh := make(chan struct{})
-	workerCtx, workerCloseCtx := context.WithCancel(c.ctx)
+	workerDoneCh := make(chan struct{})
+	workerCtx, workerCancelFunc := context.WithCancel(c.ctx)
+	defer workerCancelFunc()
 
-	c.runWorkers(workerCtx, msgCh, msgCloseCh, worker, &wg)
+	c.runWorkers(workerCtx, msgCh, worker, &wg)
 	c.logger.Printf("[DEBUG] workers started")
+
+	go func() {
+		wg.Wait()
+		close(workerDoneCh)
+	}()
 
 	for {
 		select {
 		case c.readyCh <- struct{}{}:
 		case <-c.closeCh:
-			workerCloseCtx()
+			workerCancelFunc()
 
 			wg.Wait()
 
 			c.logger.Printf("[DEBUG] workers stopped")
 
 			return true
-		case <-msgCloseCh:
-			workerCloseCtx()
+		case <-workerDoneCh:
+			workerCancelFunc()
 
 			wg.Wait()
 
@@ -240,7 +246,7 @@ func (c *Consumer) serve(ch *amqp.Channel, msgCh <-chan amqp.Delivery, worker Wo
 
 			return true
 		case <-c.ctx.Done():
-			workerCloseCtx()
+			workerCancelFunc()
 
 			wg.Wait()
 
@@ -256,40 +262,28 @@ func (c *Consumer) serve(ch *amqp.Channel, msgCh <-chan amqp.Delivery, worker Wo
 func (c *Consumer) runWorkers(
 	workerCtx context.Context,
 	msgCh <-chan amqp.Delivery,
-	msgCloseCh chan struct{},
 	worker Worker,
 	wg *sync.WaitGroup,
 ) {
-	workerMsgCh := make(chan amqp.Delivery)
-
-	go func() {
-		defer close(msgCloseCh)
-		defer close(workerMsgCh)
-
-		for {
-			select {
-			case msg, ok := <-msgCh:
-				if !ok {
-					return
-				}
-
-				workerMsgCh <- msg
-			case <-c.ctx.Done():
-				return
-			case <-workerCtx.Done():
-				return
-			}
-		}
-	}()
-
 	for i := 0; i < c.workerNum; i++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
 
-			for msg := range workerMsgCh {
-				if res := worker.ServeMsg(c.ctx, msg); res != nil {
-					c.logger.Printf("[ERROR] worker.serveMsg: non nil result: %#v", res)
+			for {
+				select {
+				case msg, ok := <-msgCh:
+					if !ok {
+						return
+					}
+
+					if res := worker.ServeMsg(c.ctx, msg); res != nil {
+						c.logger.Printf("[ERROR] worker.serveMsg: non nil result: %#v", res)
+					}
+				case <-c.ctx.Done():
+					return
+				case <-workerCtx.Done():
+					return
 				}
 			}
 		}()
