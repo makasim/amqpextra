@@ -262,9 +262,7 @@ func (c *Consumer) runWorkers(
 ) {
 	workerMsgCh := make(chan amqp.Delivery)
 
-	wg.Add(1)
 	go func() {
-		defer wg.Done()
 		defer close(msgCloseCh)
 		defer close(workerMsgCh)
 
@@ -289,18 +287,9 @@ func (c *Consumer) runWorkers(
 		go func() {
 			defer wg.Done()
 
-			for {
-				select {
-				case msg, ok := <-workerMsgCh:
-					if !ok {
-						return
-					}
-
-					if res := worker.ServeMsg(c.ctx, msg); res != nil {
-						c.logger.Printf("[ERROR] worker.serveMsg: non nil result: %#v", res)
-					}
-				case <-workerCtx.Done():
-					return
+			for msg := range workerMsgCh {
+				if res := worker.ServeMsg(c.ctx, msg); res != nil {
+					c.logger.Printf("[ERROR] worker.serveMsg: non nil result: %#v", res)
 				}
 			}
 		}()
