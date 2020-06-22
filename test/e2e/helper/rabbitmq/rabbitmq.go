@@ -148,6 +148,8 @@ func PublishTimerReconnect(
 	wg *sync.WaitGroup,
 ) {
 	defer wg.Done()
+	defer timer.Stop()
+	defer ticker.Stop()
 
 	connCh, closeCh := extraconn.ConnCh()
 
@@ -188,6 +190,8 @@ func PublishTimer(
 	wg *sync.WaitGroup,
 ) {
 	defer wg.Done()
+	defer timer.Stop()
+	defer ticker.Stop()
 
 	ch, err := conn.Channel()
 	if err != nil {
@@ -221,6 +225,7 @@ func ConsumeTimerReconnect(
 	wg *sync.WaitGroup,
 ) {
 	defer wg.Done()
+	defer timer.Stop()
 
 	connCh, closeCh := extraconn.ConnCh()
 
@@ -267,6 +272,7 @@ func ConsumeReconnect(
 	wg *sync.WaitGroup,
 ) {
 	defer wg.Done()
+	defer timer.Stop()
 
 	ch, err := conn.Channel()
 	if err != nil {

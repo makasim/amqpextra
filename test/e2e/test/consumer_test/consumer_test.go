@@ -129,7 +129,9 @@ func TestConcurrentlyPublishConsumeWhileConnectionLost(t *testing.T) {
 			connCh, closeCh := extraconn.ConnCh()
 
 			ticker := time.NewTicker(time.Millisecond * 100)
+			defer ticker.Stop()
 			timer := time.NewTimer(time.Second * 10)
+			defer timer.Stop()
 
 		L1:
 			for conn := range connCh {

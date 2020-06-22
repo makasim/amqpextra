@@ -400,9 +400,11 @@ func TestGetBareConnection(t *testing.T) {
 	connextra.SetReconnectSleep(time.Millisecond * 750)
 	connextra.SetLogger(l)
 
+	timer := time.NewTimer(time.Second)
+	defer timer.Stop()
 	select {
 	case <-connextra.Ready():
-	case <-time.NewTimer(time.Second).C:
+	case <-timer.C:
 		t.Fatalf("conn not ready")
 	}
 
@@ -426,17 +428,23 @@ func TestGetBareConnectionIfClosed(t *testing.T) {
 	connextra.SetReconnectSleep(time.Millisecond * 750)
 	connextra.SetLogger(l)
 
+	timer0 := time.NewTimer(time.Second)
+	defer timer0.Stop()
+
 	select {
 	case <-connextra.Ready():
-	case <-time.NewTimer(time.Second).C:
+	case <-timer0.C:
 		t.Fatalf("conn not ready")
 	}
 
 	connextra.Close()
 
+	timer1 := time.NewTimer(time.Second)
+	defer timer1.Stop()
+
 	select {
 	case <-connextra.Unready():
-	case <-time.NewTimer(time.Second).C:
+	case <-timer1.C:
 		t.Fatalf("conn still ready")
 	}
 
