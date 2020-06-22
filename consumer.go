@@ -312,6 +312,5 @@ func (c *Consumer) close(ch *amqp.Channel) {
 		c.logger.Printf("[WARN] channel close: %s", err)
 	}
 
-	c.readyCh = nil
 	close(c.unreadyCh)
 }
