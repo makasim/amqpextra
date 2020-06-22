@@ -154,12 +154,15 @@ func (c *Connection) reconnect() {
 		if err != nil {
 			c.logger.Printf("[ERROR] %s", err)
 
+			timer := time.NewTimer(c.reconnectSleep)
+
 			select {
-			case <-time.NewTimer(c.reconnectSleep).C:
+			case <-timer.C:
 				c.logger.Printf("[DEBUG] try reconnect")
 
 				continue
 			case <-c.ctx.Done():
+				timer.Stop()
 				c.close(nil)
 
 				return

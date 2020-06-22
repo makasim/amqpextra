@@ -183,10 +183,13 @@ func (c *Consumer) connect() {
 			if err != nil {
 				c.logger.Printf("[ERROR] init func: %s", err)
 
+				timer := time.NewTimer(c.restartSleep)
+
 				select {
-				case <-time.NewTimer(c.restartSleep).C:
+				case <-timer.C:
 					continue
 				case <-c.ctx.Done():
+					timer.Stop()
 					return
 				}
 			}

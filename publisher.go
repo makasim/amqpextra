@@ -192,10 +192,13 @@ func (p *Publisher) serve(conn *amqp.Connection) bool {
 	if err != nil {
 		p.logger.Printf("[ERROR] init func: %s", err)
 
+		timer := time.NewTimer(time.Second * 5)
+
 		select {
-		case <-time.NewTimer(time.Second * 5).C:
+		case <-timer.C:
 			return true
 		case <-p.ctx.Done():
+			timer.Stop()
 			p.close(nil)
 
 			return false
