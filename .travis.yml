@@ -9,9 +9,6 @@ matrix:
     - go: 1.13.x
       sudo: false
       env: LINTER=true GOFLAGS=-mod=vendor GO111MODULE=auto
-    - go: 1.15.x
-      sudo: false
-      env: LINTER=true GOFLAGS=-mod=vendor GO111MODULE=auto
    
     # unit tests
     - go: 1.13.x
