@@ -84,7 +84,7 @@ func TestServe(main *testing.T) {
 
 		ch := mock_publisher.NewMockChannel(ctrl)
 
-		connCh, closeCh, l, p := newPublisher(withInitFuncMock(ch, nil))
+		connCh, closeCh, l, p := newPublisher(withInitFuncMock(ch))
 		defer p.Close()
 
 		conn := mock_publisher.NewMockConnection(ctrl)
@@ -147,7 +147,7 @@ func TestServe(main *testing.T) {
 
 		ch := mock_publisher.NewMockChannel(ctrl)
 
-		connCh, closeCh, l, p := newPublisher(withInitFuncMock(ch, nil))
+		connCh, closeCh, l, p := newPublisher(withInitFuncMock(ch))
 		defer p.Close()
 
 		conn := mock_publisher.NewMockConnection(ctrl)
@@ -189,7 +189,7 @@ func TestServe(main *testing.T) {
 
 		ch := mock_publisher.NewMockChannel(ctrl)
 
-		connCh, _, l, p := newPublisher(withInitFuncMock(ch, nil))
+		connCh, _, l, p := newPublisher(withInitFuncMock(ch))
 		defer p.Close()
 
 		chCloseCh := make(chan *amqp.Error)
@@ -386,7 +386,7 @@ func TestUnreadyPublisher(main *testing.T) {
 			}).
 			Times(1)
 
-		connCh, _, l, p := newPublisher(withInitFuncMock(ch, nil))
+		connCh, _, l, p := newPublisher(withInitFuncMock(ch))
 		defer p.Close()
 
 		go func() {
@@ -471,7 +471,7 @@ func TestReadyPublisher(main *testing.T) {
 			}).
 			Times(1)
 
-		connCh, _, l, p := newPublisher(withInitFuncMock(ch, nil))
+		connCh, _, l, p := newPublisher(withInitFuncMock(ch))
 		defer p.Close()
 
 		conn := mock_publisher.NewMockConnection(ctrl)
@@ -548,7 +548,7 @@ func TestReadyPublisher(main *testing.T) {
 			}).
 			Times(1)
 
-		connCh, _, l, p := newPublisher(withInitFuncMock(ch, nil))
+		connCh, _, l, p := newPublisher(withInitFuncMock(ch))
 		defer p.Close()
 
 		conn := mock_publisher.NewMockConnection(ctrl)
@@ -601,7 +601,7 @@ func TestReadyPublisher(main *testing.T) {
 			}).
 			Times(1)
 
-		connCh, _, l, p := newPublisher(withInitFuncMock(ch, nil))
+		connCh, _, l, p := newPublisher(withInitFuncMock(ch))
 		defer p.Close()
 
 		conn := mock_publisher.NewMockConnection(ctrl)
@@ -657,7 +657,7 @@ func TestReadyPublisher(main *testing.T) {
 			}).
 			Times(1)
 
-		connCh, _, l, p := newPublisher(withInitFuncMock(ch, nil))
+		connCh, _, l, p := newPublisher(withInitFuncMock(ch))
 		defer p.Close()
 
 		conn := mock_publisher.NewMockConnection(ctrl)
@@ -714,7 +714,7 @@ func TestReadyPublisher(main *testing.T) {
 			}).
 			Times(1)
 
-		connCh, _, l, p := newPublisher(withInitFuncMock(ch, nil))
+		connCh, _, l, p := newPublisher(withInitFuncMock(ch))
 		defer p.Close()
 
 		conn := mock_publisher.NewMockConnection(ctrl)
@@ -877,7 +877,7 @@ func TestClose(main *testing.T) {
 		ctx, cancelFunc := context.WithCancel(context.Background())
 		defer cancelFunc()
 
-		connCh, _, l, p := newPublisher(publisher.WithContext(ctx), withInitFuncMock(ch, nil))
+		connCh, _, l, p := newPublisher(publisher.WithContext(ctx), withInitFuncMock(ch))
 		defer p.Close()
 
 		conn := mock_publisher.NewMockConnection(ctrl)
@@ -923,7 +923,7 @@ func TestClose(main *testing.T) {
 			}).
 			Times(1)
 
-		connCh, _, l, p := newPublisher(withInitFuncMock(ch, nil))
+		connCh, _, l, p := newPublisher(withInitFuncMock(ch))
 		defer p.Close()
 
 		conn := mock_publisher.NewMockConnection(ctrl)
@@ -970,7 +970,7 @@ func TestClose(main *testing.T) {
 			}).
 			Times(1)
 
-		connCh, _, l, p := newPublisher(withInitFuncMock(ch, nil))
+		connCh, _, l, p := newPublisher(withInitFuncMock(ch))
 		defer p.Close()
 
 		conn := mock_publisher.NewMockConnection(ctrl)
@@ -1340,9 +1340,9 @@ func newPublisher(opts ...publisher.Option) (chan publisher.Connection, chan *am
 	return connCh, closeCh, l, p
 }
 
-func withInitFuncMock(ch publisher.Channel, err error) publisher.Option {
+func withInitFuncMock(ch publisher.Channel) publisher.Option {
 	return publisher.WithInitFunc(func(conn publisher.Connection) (publisher.Channel, error) {
-		return ch, err
+		return ch, nil
 	})
 }
 
