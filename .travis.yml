@@ -5,13 +5,30 @@ language: go
 
 matrix:
   include:
+    # linter
     - go: 1.13.x
       sudo: false
       env: LINTER=true GOFLAGS=-mod=vendor GO111MODULE=on
+    - go: 1.15.x
+      sudo: false
+      env: LINTER=true GOFLAGS=-mod=vendor GO111MODULE=on
+   
+    # unit tests
     - go: 1.13.x
+      sudo: false
+      env: UNIT_TESTS=true GOFLAGS=-mod=vendor GO111MODULE=on
+    - go: 1.14.x
+      sudo: false
+      env: UNIT_TESTS=true GOFLAGS=-mod=vendor GO111MODULE=on
+    - go: 1.15.x
+      sudo: false
+      env: UNIT_TESTS=true GOFLAGS=-mod=vendor GO111MODULE=on
+    
+    # e2e tests
+    - go: 1.15.x
       sudo: required
       services: docker
-      env: TESTS=true GOFLAGS=-mod=vendor GO111MODULE=on
+      env: E2E_TESTS=true GOFLAGS=-mod=vendor GO111MODULE=on
 
 install:
   - go mod tidy
@@ -24,5 +41,5 @@ before_script:
 
 script:
   - if [ "$LINTER" = true ]; then golangci-lint version && make lint; fi
-  - if [ "$TESTS" = true ]; then make unit-test; fi
-  - if [ "$TESTS" = true ]; then make e2e-test; fi
+  - if [ "$UNIT_TESTS" = true ]; then make unit-test; fi
+  - if [ "$E2E_TESTS" = true ]; then make e2e-test; fi
