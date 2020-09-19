@@ -10,17 +10,6 @@ import (
 	"github.com/streadway/amqp"
 )
 
-type Connection interface {
-	NotifyClose(receiver chan *amqp.Error) chan *amqp.Error
-	Close() error
-}
-
-type Channel interface {
-	Publish(exchange, key string, mandatory, immediate bool, msg amqp.Publishing) error
-	NotifyClose(receiver chan *amqp.Error) chan *amqp.Error
-	Close() error
-}
-
 type Option func(p *Publisher)
 
 type Message struct {
@@ -71,7 +60,7 @@ func New(
 				}
 
 				select {
-				case connCh <- conn:
+				case connCh <- &AMQP{Conn: conn}:
 				case <-p.closeCh:
 					return
 				}
@@ -126,7 +115,7 @@ func New2(
 
 	if p.initFunc == nil {
 		p.initFunc = func(conn Connection) (Channel, error) {
-			return conn.(*amqp.Connection).Channel()
+			return conn.Channel()
 		}
 	}
 

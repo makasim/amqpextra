@@ -8,7 +8,7 @@ lint:
 .PHONY: unit-test
 ## unit-test: run unit  tests
 unit-test:
-	mockgen -source=publisher/publisher.go > publisher/mock_publisher/mock_publisher.go
+	mockgen -source=publisher/interfaces.go > publisher/mock_publisher/mock_publisher.go
 	$(GOTEST) -race -v -cover ./middleware/... ./publisher/...
 
 .PHONY: e2e-test
