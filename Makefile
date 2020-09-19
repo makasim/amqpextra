@@ -9,7 +9,7 @@ lint:
 ## unit-test: run unit  tests
 unit-test:
 	mockgen -source=publisher/publisher.go > publisher/mock_publisher/mock_publisher.go
-	$(GOTEST) -v -cover ./middleware/...
+	$(GOTEST) -v -cover ./middleware/... ./publisher/...
 
 .PHONY: e2e-test
 ## e2e-test: run end-to-end tests within docker with complete infrastructure
