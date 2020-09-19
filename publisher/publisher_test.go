@@ -1328,14 +1328,14 @@ func assertUnready(t *testing.T, p *publisher.Publisher) {
 	}
 }
 
-func newPublisher(opts ...publisher.Option) (chan publisher.Connection, chan *amqp.Error, *logger.Logger, *publisher.Publisher) {
-	connCh := make(chan publisher.Connection, 1)
-	closeCh := make(chan *amqp.Error, 1)
+func newPublisher(opts ...publisher.Option) (connCh chan publisher.Connection, closeCh chan *amqp.Error, l *logger.Logger, p *publisher.Publisher) {
+	connCh = make(chan publisher.Connection, 1)
+	closeCh = make(chan *amqp.Error, 1)
 
-	l := logger.New()
+	l = logger.New()
 	opts = append(opts, publisher.WithLogger(l))
 
-	p := publisher.New(connCh, closeCh, opts...)
+	p = publisher.New(connCh, closeCh, opts...)
 
 	return connCh, closeCh, l, p
 }

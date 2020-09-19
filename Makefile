@@ -3,7 +3,7 @@ GOTEST?=go test
 .PHONY: lint
 ## unit-test: run linter
 lint:
-	golangci-lint run
+	golangci-lint run --modules-download-mode=vendor --timeout=300s
 
 .PHONY: unit-test
 ## unit-test: run unit  tests
