@@ -9,7 +9,7 @@ import (
 
 func ConnExample() {
 	conn := amqpextra.Dial([]string{"amqp://guest:guest@localhost:5672/%2f"})
-	conn.SetLogger(logger.LoggerFunc(log.Printf))
+	conn.SetLogger(logger.Std)
 
 	connCh, closeCh := conn.ConnCh()
 

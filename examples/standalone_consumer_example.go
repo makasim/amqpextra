@@ -2,11 +2,10 @@ package examples
 
 import (
 	"context"
-	"log"
 
 	"github.com/makasim/amqpextra"
-	"github.com/streadway/amqp"
 	"github.com/makasim/amqpextra/logger"
+	"github.com/streadway/amqp"
 )
 
 func StandaloneConsumerExample() {
@@ -24,7 +23,7 @@ func StandaloneConsumerExample() {
 	})
 
 	consumer := amqpextra.NewConsumer("some_queue", worker, connCh, closeCh)
-	consumer.SetLogger(logger.LoggerFunc(log.Printf))
+	consumer.SetLogger(logger.Std)
 	consumer.SetWorkerNum(workersNum)
 
 	consumer.Run()

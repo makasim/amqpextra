@@ -34,7 +34,7 @@ func New(dialer Dialer) *Connection {
 		dialer:         dialer,
 		ctx:            ctx,
 		cancelFunc:     cancelFunc,
-		logger:         logger.DiscardLogger,
+		logger:         logger.Discard,
 		reconnectSleep: time.Second * 5,
 
 		started:   false,
@@ -47,9 +47,9 @@ func New(dialer Dialer) *Connection {
 	return c
 }
 
-func (c *Connection) SetLogger(logger logger.Logger) {
+func (c *Connection) SetLogger(l logger.Logger) {
 	if !c.started {
-		c.logger = logger
+		c.logger = l
 	}
 }
 

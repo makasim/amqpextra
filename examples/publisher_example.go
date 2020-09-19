@@ -4,14 +4,14 @@ import (
 	"log"
 
 	"github.com/makasim/amqpextra"
+	"github.com/makasim/amqpextra/logger"
 	"github.com/makasim/amqpextra/publisher"
 	"github.com/streadway/amqp"
-	"github.com/makasim/amqpextra/logger"
 )
 
 func PublisherExample() {
 	conn := amqpextra.Dial([]string{"amqp://guest:guest@localhost:5672/%2f"})
-	conn.SetLogger(logger.LoggerFunc(log.Printf))
+	conn.SetLogger(logger.Std)
 	p := conn.Publisher()
 
 	resultCh := make(chan error)

@@ -3,9 +3,9 @@ package examples
 import (
 	"log"
 
+	"github.com/makasim/amqpextra/logger"
 	"github.com/makasim/amqpextra/publisher"
 	"github.com/streadway/amqp"
-	"github.com/makasim/amqpextra/logger"
 )
 
 func StandalonePublisherExample() {
@@ -16,7 +16,7 @@ func StandalonePublisherExample() {
 	p := publisher.New(
 		connCh,
 		closeCh,
-		publisher.WithLogger(logger.LoggerFunc(log.Printf)),
+		publisher.WithLogger(logger.Std),
 	)
 
 	p.Publish(publisher.Message{

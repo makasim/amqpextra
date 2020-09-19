@@ -2,11 +2,10 @@ package examples
 
 import (
 	"context"
-	"log"
 
 	"github.com/makasim/amqpextra"
-	"github.com/streadway/amqp"
 	"github.com/makasim/amqpextra/logger"
+	"github.com/streadway/amqp"
 )
 
 func ConsumerMiddleware() {
@@ -26,7 +25,7 @@ func ConsumerMiddleware() {
 		closeCh,
 	)
 
-	consumer.SetLogger(logger.LoggerFunc(log.Printf))
+	consumer.SetLogger(logger.Std)
 
 	consumer.Use(func(next amqpextra.Worker) amqpextra.Worker {
 		fn := func(ctx context.Context, msg amqp.Delivery) interface{} {

@@ -2,16 +2,15 @@ package examples
 
 import (
 	"context"
-	"log"
 
 	"github.com/makasim/amqpextra"
-	"github.com/streadway/amqp"
 	"github.com/makasim/amqpextra/logger"
+	"github.com/streadway/amqp"
 )
 
 func ConsumerExample() {
 	conn := amqpextra.Dial([]string{"amqp://guest:guest@localhost:5672/%2f"})
-	conn.SetLogger(logger.LoggerFunc(log.Printf))
+	conn.SetLogger(logger.Std)
 
 	consumer := conn.Consumer(
 		"some_queue",

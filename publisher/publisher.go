@@ -121,7 +121,7 @@ func New2(
 	}
 
 	if p.logger == nil {
-		p.logger = logger.LoggerFunc(func(format string, v ...interface{}) {})
+		p.logger = logger.Discard
 	}
 
 	if p.initFunc == nil {
@@ -135,9 +135,9 @@ func New2(
 	return p
 }
 
-func WithLogger(logger logger.Logger) Option {
+func WithLogger(l logger.Logger) Option {
 	return func(p *Publisher) {
-		p.logger = logger
+		p.logger = l
 	}
 }
 

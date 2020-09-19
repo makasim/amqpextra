@@ -45,6 +45,11 @@ Some built-in middlewares:
 
 ## Publisher.
 
-The package provides a handy publisher. It is aware of `<-chan *amqp.Connection` and `<-chan *amqp.Error` and can work with them respectively.  
+The package provides a handy publisher. 
+* Handles re-connection, channel close.
+* Context aware.
+* Wait between re-connections.
+* Provides ready\unready\closed status channels.
+* An easy configuration (WithXXX). 
 
 See an [example](examples/publisher_example.go).

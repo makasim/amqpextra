@@ -59,7 +59,7 @@ func NewConsumer(
 		restartSleep: time.Second * 5,
 		ctx:          ctx,
 		cancelFunc:   cancelFunc,
-		logger:       logger.DiscardLogger,
+		logger:       logger.Discard,
 		doneCh:       make(chan struct{}),
 		readyCh:      make(chan struct{}),
 		unreadyCh:    make(chan struct{}),
@@ -87,9 +87,9 @@ func NewConsumer(
 	}
 }
 
-func (c *Consumer) SetLogger(logger logger.Logger) {
+func (c *Consumer) SetLogger(l logger.Logger) {
 	if !c.started {
-		c.logger = logger
+		c.logger = l
 	}
 }
 
