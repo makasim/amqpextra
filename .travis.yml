@@ -16,13 +16,13 @@ matrix:
     # unit tests
     - go: 1.13.x
       sudo: false
-      env: UNIT_TESTS=true GOFLAGS=-mod=vendor GO111MODULE=auto
+      env: UNIT_TESTS=true GOFLAGS=-mod=vendor GO111MODULE=auto GOTEST=gotest
     - go: 1.14.x
       sudo: false
-      env: UNIT_TESTS=true GOFLAGS=-mod=vendor GO111MODULE=auto
+      env: UNIT_TESTS=true GOFLAGS=-mod=vendor GO111MODULE=auto GOTEST=gotest
     - go: 1.15.x
       sudo: false
-      env: UNIT_TESTS=true GOFLAGS=-mod=vendor GO111MODULE=auto
+      env: UNIT_TESTS=true GOFLAGS=-mod=vendor GO111MODULE=auto GOTEST=gotest
     
     # e2e tests
     - go: 1.15.x
