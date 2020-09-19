@@ -77,7 +77,7 @@ func New(
 		}
 	}
 
-	go p.connect()
+	go p.unreadyState()
 
 	return p
 }
@@ -163,7 +163,7 @@ func (p *Publisher) Closed() <-chan struct{} {
 	return p.closeCh
 }
 
-func (p *Publisher) connect() {
+func (p *Publisher) unreadyState() {
 	defer close(p.closeCh)
 
 	for {
@@ -184,7 +184,7 @@ func (p *Publisher) connect() {
 			}
 
 			p.logger.Printf("[DEBUG] publisher started")
-			if !p.serve(conn) {
+			if !p.readyState(conn) {
 				return
 			}
 		case p.unreadyCh <- struct{}{}:
@@ -196,7 +196,7 @@ func (p *Publisher) connect() {
 	}
 }
 
-func (p *Publisher) serve(conn Connection) bool {
+func (p *Publisher) readyState(conn Connection) bool {
 	ch, err := p.initFunc(conn)
 	if err != nil {
 		p.logger.Printf("[ERROR] init func: %s", err)
@@ -224,8 +224,8 @@ func (p *Publisher) serve(conn Connection) bool {
 			p.logger.Printf("[DEBUG] channel closed")
 
 			return true
-		case publishing := <-p.publishingCh:
-			p.publish(ch, publishing)
+		case msg := <-p.publishingCh:
+			p.publish(ch, msg)
 		case <-p.connCloseCh:
 			p.logger.Printf("[DEBUG] publisher stopped")
 
