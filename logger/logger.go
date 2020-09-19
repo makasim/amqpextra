@@ -1,6 +1,6 @@
-package amqpextra
+package logger
 
-var nilLogger = LoggerFunc(func(format string, v ...interface{}) {})
+var DiscardLogger = LoggerFunc(func(format string, v ...interface{}) {})
 
 type Logger interface {
 	Printf(format string, v ...interface{})

@@ -12,10 +12,10 @@ import (
 	"context"
 
 	"github.com/makasim/amqpextra/test/e2e/helper/assertlog"
-	"github.com/makasim/amqpextra/test/e2e/helper/logger"
 	"github.com/streadway/amqp"
 
 	"github.com/makasim/amqpextra"
+	"github.com/makasim/amqpextra/logger"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/goleak"
@@ -24,7 +24,7 @@ import (
 func TestCouldNotConnect(t *testing.T) {
 	defer goleak.VerifyNone(t)
 
-	l := logger.New()
+	l := logger.NewTest()
 
 	conn := amqpextra.Dial([]string{"amqp://guest:guest@127.0.0.1:5672/amqpextra"})
 	defer conn.Close()
@@ -52,7 +52,7 @@ func TestCouldNotConnect(t *testing.T) {
 func TestConnectRoundRobinServers(t *testing.T) {
 	defer goleak.VerifyNone(t)
 
-	l := logger.New()
+	l := logger.NewTest()
 
 	conn := amqpextra.Dial([]string{
 		"amqp://guest:guest@127.0.0.1:5672/amqpextra",
@@ -85,7 +85,7 @@ func TestConnectRoundRobinServers(t *testing.T) {
 func TestConnectToSecondServer(t *testing.T) {
 	defer goleak.VerifyNone(t)
 
-	l := logger.New()
+	l := logger.NewTest()
 
 	conn := amqpextra.Dial([]string{
 		"amqp://guest:guest@127.0.0.1:5672/amqpextra",
@@ -114,7 +114,7 @@ func TestConnectToSecondServer(t *testing.T) {
 func TestCloseConnExplicitly(t *testing.T) {
 	defer goleak.VerifyNone(t)
 
-	l := logger.New()
+	l := logger.NewTest()
 
 	conn := amqpextra.Dial([]string{"amqp://guest:guest@rabbitmq:5672/amqpextra"})
 
@@ -146,7 +146,7 @@ func TestCloseConnExplicitly(t *testing.T) {
 func TestCloseConnByContext(t *testing.T) {
 	defer goleak.VerifyNone(t)
 
-	l := logger.New()
+	l := logger.NewTest()
 
 	ctx, cancel := context.WithCancel(context.Background())
 
@@ -181,7 +181,7 @@ func TestCloseConnByContext(t *testing.T) {
 func TestReconnectIfClosedByUser(t *testing.T) {
 	defer goleak.VerifyNone(t)
 
-	l := logger.New()
+	l := logger.NewTest()
 
 	conn := amqpextra.Dial([]string{"amqp://guest:guest@rabbitmq:5672/amqpextra"})
 	conn.SetLogger(l)
@@ -210,7 +210,7 @@ func TestReconnectIfClosedByUser(t *testing.T) {
 func TestReconnectIfClosedByServer(t *testing.T) {
 	defer goleak.VerifyNone(t)
 
-	l := logger.New()
+	l := logger.NewTest()
 
 	connName := fmt.Sprintf("amqpextra-test-%d", time.Now().UnixNano())
 
@@ -250,7 +250,7 @@ func TestReconnectIfClosedByServer(t *testing.T) {
 func TestNotReadingFromCloseCh(t *testing.T) {
 	defer goleak.VerifyNone(t)
 
-	l := logger.New()
+	l := logger.NewTest()
 
 	conn := amqpextra.Dial([]string{"amqp://guest:guest@rabbitmq:5672/amqpextra"})
 	conn.SetLogger(l)
@@ -282,7 +282,7 @@ func TestNotReadingFromCloseCh(t *testing.T) {
 func TestConnPublishConsume(t *testing.T) {
 	defer goleak.VerifyNone(t)
 
-	l := logger.New()
+	l := logger.NewTest()
 
 	conn := amqpextra.Dial([]string{"amqp://guest:guest@rabbitmq:5672/amqpextra"})
 	defer conn.Close()
@@ -328,7 +328,7 @@ func TestConnPublishConsume(t *testing.T) {
 func TestConcurrentlyPublishConsumeWhileConnectionLost(t *testing.T) {
 	defer goleak.VerifyNone(t)
 
-	l := logger.New()
+	l := logger.NewTest()
 
 	connName := fmt.Sprintf("amqpextra-test-%d", time.Now().UnixNano())
 
@@ -392,7 +392,7 @@ func TestConcurrentlyPublishConsumeWhileConnectionLost(t *testing.T) {
 func TestGetBareConnection(t *testing.T) {
 	defer goleak.VerifyNone(t)
 
-	l := logger.New()
+	l := logger.NewTest()
 
 	connextra := amqpextra.Dial([]string{"amqp://guest:guest@rabbitmq:5672/amqpextra"})
 	defer connextra.Close()
@@ -420,7 +420,7 @@ func TestGetBareConnection(t *testing.T) {
 func TestGetBareConnectionIfClosed(t *testing.T) {
 	defer goleak.VerifyNone(t)
 
-	l := logger.New()
+	l := logger.NewTest()
 
 	connextra := amqpextra.Dial([]string{"amqp://guest:guest@rabbitmq:5672/amqpextra"})
 	defer connextra.Close()
@@ -460,7 +460,7 @@ func TestGetBareConnectionIfClosed(t *testing.T) {
 func TestDialUrlsIsEmpty(t *testing.T) {
 	defer goleak.VerifyNone(t)
 
-	l := logger.New()
+	l := logger.NewTest()
 
 	conn := amqpextra.Dial([]string{})
 	defer conn.Close()
@@ -485,7 +485,7 @@ func TestDialUrlsIsEmpty(t *testing.T) {
 func TestDialConfigUrlsIsEmpty(t *testing.T) {
 	defer goleak.VerifyNone(t)
 
-	l := logger.New()
+	l := logger.NewTest()
 
 	conn := amqpextra.DialConfig(nil, amqp.Config{})
 	defer conn.Close()
@@ -510,7 +510,7 @@ func TestDialConfigUrlsIsEmpty(t *testing.T) {
 func TestDialTLSUrlsIsEmpty(t *testing.T) {
 	defer goleak.VerifyNone(t)
 
-	l := logger.New()
+	l := logger.NewTest()
 
 	conn := amqpextra.DialTLS(nil, &tls.Config{})
 	defer conn.Close()

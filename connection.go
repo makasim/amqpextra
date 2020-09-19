@@ -5,6 +5,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/makasim/amqpextra/logger"
+	"github.com/makasim/amqpextra/publisher"
 	"github.com/streadway/amqp"
 )
 
@@ -16,7 +18,7 @@ type Connection struct {
 	connCh          chan *amqp.Connection
 	closeChs        []chan *amqp.Error
 	internalCloseCh chan *amqp.Error
-	logger          Logger
+	logger          logger.Logger
 	reconnectSleep  time.Duration
 	ctx             context.Context
 	cancelFunc      context.CancelFunc
@@ -32,7 +34,7 @@ func New(dialer Dialer) *Connection {
 		dialer:         dialer,
 		ctx:            ctx,
 		cancelFunc:     cancelFunc,
-		logger:         nilLogger,
+		logger:         logger.DiscardLogger,
 		reconnectSleep: time.Second * 5,
 
 		started:   false,
@@ -45,7 +47,7 @@ func New(dialer Dialer) *Connection {
 	return c
 }
 
-func (c *Connection) SetLogger(logger Logger) {
+func (c *Connection) SetLogger(logger logger.Logger) {
 	if !c.started {
 		c.logger = logger
 	}
@@ -123,14 +125,15 @@ func (c *Connection) Consumer(queue string, worker Worker) *Consumer {
 	return consumer
 }
 
-func (c *Connection) Publisher() *Publisher {
+func (c *Connection) Publisher(opts ...publisher.Option) *publisher.Publisher {
 	connCh, closeCh := c.ConnCh()
 
-	publisher := NewPublisher(connCh, closeCh)
-	publisher.SetLogger(c.logger)
-	publisher.SetContext(c.ctx)
+	opts = append([]publisher.Option{
+		publisher.WithLogger(c.logger),
+		publisher.WithContext(c.ctx),
+	}, opts...)
 
-	return publisher
+	return publisher.New(connCh, closeCh, opts...)
 }
 
 func (c *Connection) reconnect() {

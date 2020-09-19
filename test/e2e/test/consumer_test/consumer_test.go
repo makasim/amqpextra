@@ -14,17 +14,16 @@ import (
 
 	"github.com/streadway/amqp"
 
-	"github.com/makasim/amqpextra/test/e2e/helper/logger"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/goleak"
+	logger2 "github.com/makasim/amqpextra/logger"
 )
 
 func TestCloseChannelOnAlreadyClosedConnection(t *testing.T) {
 	defer goleak.VerifyNone(t)
 
-	l := logger.New()
+	l := logger2.NewTest()
 
 	conn := amqpextra.Dial([]string{"amqp://guest:guest@rabbitmq:5672/amqpextra"})
 
@@ -56,7 +55,7 @@ func TestCloseChannelOnAlreadyClosedConnection(t *testing.T) {
 func TestConsumeOneAndCloseConsumer(t *testing.T) {
 	defer goleak.VerifyNone(t)
 
-	l := logger.New()
+	l := logger2.NewTest()
 
 	conn := amqpextra.Dial([]string{"amqp://guest:guest@rabbitmq:5672/amqpextra"})
 	defer conn.Close()
@@ -92,7 +91,7 @@ func TestConsumeOneAndCloseConsumer(t *testing.T) {
 func TestConcurrentlyPublishConsumeWhileConnectionLost(t *testing.T) {
 	defer goleak.VerifyNone(t)
 
-	l := logger.New()
+	l := logger2.NewTest()
 
 	connName := fmt.Sprintf("amqpextra-test-%d", time.Now().UnixNano())
 

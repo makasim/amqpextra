@@ -5,6 +5,7 @@ import (
 
 	"github.com/makasim/amqpextra"
 	"github.com/streadway/amqp"
+	"github.com/makasim/amqpextra/logger"
 )
 
 const Ack = "ack"
@@ -21,7 +22,7 @@ func AckNack() func(next amqpextra.Worker) amqpextra.Worker {
 
 			l, ok := GetLogger(ctx)
 			if !ok {
-				l = amqpextra.LoggerFunc(func(format string, v ...interface{}) {})
+				l = logger.LoggerFunc(func(format string, v ...interface{}) {})
 			}
 
 			switch result {

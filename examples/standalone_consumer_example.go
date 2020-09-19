@@ -6,6 +6,7 @@ import (
 
 	"github.com/makasim/amqpextra"
 	"github.com/streadway/amqp"
+	"github.com/makasim/amqpextra/logger"
 )
 
 func StandaloneConsumerExample() {
@@ -23,7 +24,7 @@ func StandaloneConsumerExample() {
 	})
 
 	consumer := amqpextra.NewConsumer("some_queue", worker, connCh, closeCh)
-	consumer.SetLogger(amqpextra.LoggerFunc(log.Printf))
+	consumer.SetLogger(logger.LoggerFunc(log.Printf))
 	consumer.SetWorkerNum(workersNum)
 
 	consumer.Run()

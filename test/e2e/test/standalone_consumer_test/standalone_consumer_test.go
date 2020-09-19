@@ -15,14 +15,14 @@ import (
 
 	"github.com/streadway/amqp"
 
-	"github.com/makasim/amqpextra/test/e2e/helper/logger"
 	"go.uber.org/goleak"
+	logger2 "github.com/makasim/amqpextra/logger"
 )
 
 func TestCloseConsumerWhenConnChannelClosed(t *testing.T) {
 	defer goleak.VerifyNone(t)
 
-	l := logger.New()
+	l := logger2.NewTest()
 
 	conn, err := amqp.Dial("amqp://guest:guest@rabbitmq:5672/amqpextra")
 	require.NoError(t, err)
@@ -61,7 +61,7 @@ func TestCloseConsumerWhenConnChannelClosed(t *testing.T) {
 func TestGetNewConsumerOnErrorInCloseCh(t *testing.T) {
 	defer goleak.VerifyNone(t)
 
-	l := logger.New()
+	l := logger2.NewTest()
 
 	connCh := make(chan *amqp.Connection, 1)
 	closeCh := make(chan *amqp.Error)
@@ -133,7 +133,7 @@ func TestGetNewConsumerOnErrorInCloseCh(t *testing.T) {
 func TestCloseConsumerByContext(t *testing.T) {
 	defer goleak.VerifyNone(t)
 
-	l := logger.New()
+	l := logger2.NewTest()
 
 	connCh := make(chan *amqp.Connection, 1)
 	closeCh := make(chan *amqp.Error)
@@ -176,7 +176,7 @@ func TestCloseConsumerByContext(t *testing.T) {
 func TestCloseChannelOnAlreadyClosedConnection(t *testing.T) {
 	defer goleak.VerifyNone(t)
 
-	l := logger.New()
+	l := logger2.NewTest()
 
 	connCh := make(chan *amqp.Connection, 1)
 	closeCh := make(chan *amqp.Error)
@@ -219,7 +219,7 @@ func TestCloseChannelOnAlreadyClosedConnection(t *testing.T) {
 func TestConsumeOneAndCloseConsumer(t *testing.T) {
 	defer goleak.VerifyNone(t)
 
-	l := logger.New()
+	l := logger2.NewTest()
 
 	connCh := make(chan *amqp.Connection, 1)
 	closeCh := make(chan *amqp.Error)
@@ -259,7 +259,7 @@ func TestConsumeOneAndCloseConsumer(t *testing.T) {
 func TestConcurrentlyPublishConsumeWhileConnectionLost(t *testing.T) {
 	defer goleak.VerifyNone(t)
 
-	l := logger.New()
+	l := logger2.NewTest()
 
 	connName := fmt.Sprintf("amqpextra-test-%d", time.Now().UnixNano())
 

@@ -4,19 +4,21 @@ import (
 	"log"
 
 	"github.com/makasim/amqpextra"
+	"github.com/makasim/amqpextra/publisher"
 	"github.com/streadway/amqp"
+	"github.com/makasim/amqpextra/logger"
 )
 
 func PublisherExample() {
 	conn := amqpextra.Dial([]string{"amqp://guest:guest@localhost:5672/%2f"})
-	conn.SetLogger(amqpextra.LoggerFunc(log.Printf))
-	publisher := conn.Publisher()
+	conn.SetLogger(logger.LoggerFunc(log.Printf))
+	p := conn.Publisher()
 
 	resultCh := make(chan error)
-	publisher.Publish(amqpextra.Publishing{
+	p.Publish(publisher.Message{
 		Key:       "test_queue",
 		WaitReady: true,
-		Message: amqp.Publishing{
+		Publishing: amqp.Publishing{
 			Body: []byte(`{"foo": "fooVal"}`),
 		},
 		ResultCh: resultCh,

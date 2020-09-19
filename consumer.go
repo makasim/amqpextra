@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/makasim/amqpextra/logger"
 	"github.com/streadway/amqp"
 )
 
@@ -32,7 +33,7 @@ type Consumer struct {
 	initFunc     func(conn *amqp.Connection) (*amqp.Channel, <-chan amqp.Delivery, error)
 	ctx          context.Context
 	cancelFunc   context.CancelFunc
-	logger       Logger
+	logger       logger.Logger
 	middlewares  []func(Worker) Worker
 	doneCh       chan struct{}
 	readyCh      chan struct{}
@@ -58,7 +59,7 @@ func NewConsumer(
 		restartSleep: time.Second * 5,
 		ctx:          ctx,
 		cancelFunc:   cancelFunc,
-		logger:       nilLogger,
+		logger:       logger.DiscardLogger,
 		doneCh:       make(chan struct{}),
 		readyCh:      make(chan struct{}),
 		unreadyCh:    make(chan struct{}),
@@ -86,7 +87,7 @@ func NewConsumer(
 	}
 }
 
-func (c *Consumer) SetLogger(logger Logger) {
+func (c *Consumer) SetLogger(logger logger.Logger) {
 	if !c.started {
 		c.logger = logger
 	}

@@ -8,21 +8,21 @@ import (
 	"sync"
 )
 
-type Logger struct {
+type TestLogger struct {
 	mx     *sync.RWMutex
 	buf    *bytes.Buffer
 	output bool
 }
 
-func New() *Logger {
-	return &Logger{
+func NewTest() *TestLogger {
+	return &TestLogger{
 		buf:    bytes.NewBuffer(make([]byte, 0)),
 		mx:     &sync.RWMutex{},
 		output: false,
 	}
 }
 
-func (l *Logger) Printf(format string, args ...interface{}) {
+func (l *TestLogger) Printf(format string, args ...interface{}) {
 	l.mx.Lock()
 	defer l.mx.Unlock()
 
@@ -33,14 +33,14 @@ func (l *Logger) Printf(format string, args ...interface{}) {
 	}
 }
 
-func (l *Logger) Output(b bool) {
+func (l *TestLogger) Output(b bool) {
 	l.mx.Lock()
 	defer l.mx.Unlock()
 
 	l.output = b
 }
 
-func (l *Logger) Logs() string {
+func (l *TestLogger) Logs() string {
 	l.mx.RLock()
 	defer l.mx.RUnlock()
 

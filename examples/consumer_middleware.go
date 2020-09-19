@@ -6,6 +6,7 @@ import (
 
 	"github.com/makasim/amqpextra"
 	"github.com/streadway/amqp"
+	"github.com/makasim/amqpextra/logger"
 )
 
 func ConsumerMiddleware() {
@@ -25,7 +26,7 @@ func ConsumerMiddleware() {
 		closeCh,
 	)
 
-	consumer.SetLogger(amqpextra.LoggerFunc(log.Printf))
+	consumer.SetLogger(logger.LoggerFunc(log.Printf))
 
 	consumer.Use(func(next amqpextra.Worker) amqpextra.Worker {
 		fn := func(ctx context.Context, msg amqp.Delivery) interface{} {

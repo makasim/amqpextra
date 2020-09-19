@@ -7,16 +7,14 @@ import (
 	"time"
 
 	"github.com/golang/mock/gomock"
-	"github.com/stretchr/testify/require"
-
-	"github.com/makasim/amqpextra/test/e2e/helper/logger"
-
-	"github.com/makasim/amqpextra"
-	"github.com/makasim/amqpextra/publisher"
-	"github.com/makasim/amqpextra/publisher/mock_publisher"
 	"github.com/streadway/amqp"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"go.uber.org/goleak"
+
+	"github.com/makasim/amqpextra/logger"
+	"github.com/makasim/amqpextra/publisher"
+	"github.com/makasim/amqpextra/publisher/mock_publisher"
 )
 
 func TestReconnection(main *testing.T) {
@@ -252,12 +250,12 @@ func TestReconnection(main *testing.T) {
 func TestUnreadyPublisher(main *testing.T) {
 	main.Run("NewPublisherUnready", func(t *testing.T) {
 		defer goleak.VerifyNone(t)
-		l := logger.New()
+		l := logger.NewTest()
 
 		connCh := make(chan publisher.Connection)
 		closeCh := make(chan *amqp.Error)
 
-		p := publisher.New(connCh, closeCh, publisher.WithLogger(l))
+		p := publisher.New2(connCh, closeCh, publisher.WithLogger(l))
 		defer p.Close()
 
 		assertUnready(t, p)
@@ -267,12 +265,12 @@ func TestUnreadyPublisher(main *testing.T) {
 
 	main.Run("ClosedPublisherUnready", func(t *testing.T) {
 		defer goleak.VerifyNone(t)
-		l := logger.New()
+		l := logger.NewTest()
 
 		connCh := make(chan publisher.Connection)
 		closeCh := make(chan *amqp.Error)
 
-		p := publisher.New(connCh, closeCh, publisher.WithLogger(l))
+		p := publisher.New2(connCh, closeCh, publisher.WithLogger(l))
 		defer p.Close()
 
 		assertUnready(t, p)
@@ -283,18 +281,18 @@ func TestUnreadyPublisher(main *testing.T) {
 
 	main.Run("PublishWithNoResultChannel", func(t *testing.T) {
 		defer goleak.VerifyNone(t)
-		l := logger.New()
+		l := logger.NewTest()
 
 		connCh := make(chan publisher.Connection)
 		closeCh := make(chan *amqp.Error)
 
-		p := publisher.New(connCh, closeCh, publisher.WithLogger(l))
+		p := publisher.New2(connCh, closeCh, publisher.WithLogger(l))
 		defer p.Close()
 
-		p.Publish(amqpextra.Publishing{
-			WaitReady: false,
-			Message:   amqp.Publishing{},
-			ResultCh:  nil,
+		p.Publish(publisher.Message{
+			WaitReady:  false,
+			Publishing: amqp.Publishing{},
+			ResultCh:   nil,
 		})
 
 		assertUnready(t, p)
@@ -308,20 +306,20 @@ func TestUnreadyPublisher(main *testing.T) {
 
 	main.Run("PublishWithResultChannel", func(t *testing.T) {
 		defer goleak.VerifyNone(t)
-		l := logger.New()
+		l := logger.NewTest()
 
 		connCh := make(chan publisher.Connection)
 		closeCh := make(chan *amqp.Error)
 
-		p := publisher.New(connCh, closeCh, publisher.WithLogger(l))
+		p := publisher.New2(connCh, closeCh, publisher.WithLogger(l))
 		defer p.Close()
 
 		resultCh := make(chan error, 1)
 
-		p.Publish(amqpextra.Publishing{
-			WaitReady: false,
-			Message:   amqp.Publishing{},
-			ResultCh:  resultCh,
+		p.Publish(publisher.Message{
+			WaitReady:  false,
+			Publishing: amqp.Publishing{},
+			ResultCh:   resultCh,
 		})
 
 		assertUnready(t, p)
@@ -338,19 +336,19 @@ func TestUnreadyPublisher(main *testing.T) {
 
 	main.Run("PublishWithUnbufferedResultChannel", func(t *testing.T) {
 		defer goleak.VerifyNone(t)
-		l := logger.New()
+		l := logger.NewTest()
 
 		connCh := make(chan publisher.Connection)
 		closeCh := make(chan *amqp.Error)
 
-		p := publisher.New(connCh, closeCh, publisher.WithLogger(l))
+		p := publisher.New2(connCh, closeCh, publisher.WithLogger(l))
 		defer p.Close()
 
 		assert.PanicsWithValue(t, "amqpextra: resultCh channel is unbuffered", func() {
-			p.Publish(amqpextra.Publishing{
-				Context:  context.Background(),
-				Message:  amqp.Publishing{},
-				ResultCh: make(chan error),
+			p.Publish(publisher.Message{
+				Context:    context.Background(),
+				Publishing: amqp.Publishing{},
+				ResultCh:   make(chan error),
 			})
 		})
 
@@ -403,10 +401,10 @@ func TestUnreadyPublisher(main *testing.T) {
 			cancelFunc()
 		}()
 
-		p.Publish(amqpextra.Publishing{
-			Context:   msgCtx,
-			WaitReady: true,
-			Message:   amqp.Publishing{},
+		p.Publish(publisher.Message{
+			Context:    msgCtx,
+			WaitReady:  true,
+			Publishing: amqp.Publishing{},
 		})
 
 		time.Sleep(time.Millisecond * 100)
@@ -480,14 +478,14 @@ func TestReadyPublisher(main *testing.T) {
 		assertReady(t, p)
 
 		resultCh := make(chan error, 1)
-		p.Publish(amqpextra.Publishing{
+		p.Publish(publisher.Message{
 			Exchange:  "theExchange",
 			Key:       "theKey",
 			Mandatory: true,
 			Immediate: true,
 			WaitReady: true,
 			ResultCh:  resultCh,
-			Message: amqp.Publishing{
+			Publishing: amqp.Publishing{
 				Headers: amqp.Table{
 					"fooHeader": "fooHeaderVal",
 				},
@@ -556,9 +554,9 @@ func TestReadyPublisher(main *testing.T) {
 
 		assertReady(t, p)
 
-		p.Publish(amqpextra.Publishing{
-			WaitReady: true,
-			Message:   amqp.Publishing{},
+		p.Publish(publisher.Message{
+			WaitReady:  true,
+			Publishing: amqp.Publishing{},
 		})
 
 		time.Sleep(time.Millisecond * 100)
@@ -610,10 +608,10 @@ func TestReadyPublisher(main *testing.T) {
 		assertReady(t, p)
 
 		resultCh := make(chan error, 1)
-		p.Publish(amqpextra.Publishing{
-			WaitReady: true,
-			ResultCh:  resultCh,
-			Message:   amqp.Publishing{},
+		p.Publish(publisher.Message{
+			WaitReady:  true,
+			ResultCh:   resultCh,
+			Publishing: amqp.Publishing{},
 		})
 
 		err := waitResult(resultCh, time.Millisecond*100)
@@ -668,10 +666,10 @@ func TestReadyPublisher(main *testing.T) {
 		msgCtx, cancelFunc := context.WithCancel(context.Background())
 		cancelFunc()
 
-		p.Publish(amqpextra.Publishing{
-			Context:   msgCtx,
-			WaitReady: true,
-			Message:   amqp.Publishing{},
+		p.Publish(publisher.Message{
+			Context:    msgCtx,
+			WaitReady:  true,
+			Publishing: amqp.Publishing{},
 		})
 
 		time.Sleep(time.Millisecond * 100)
@@ -728,10 +726,10 @@ func TestReadyPublisher(main *testing.T) {
 
 		resultCh := make(chan error, 1)
 		before := time.Now().UnixNano()
-		p.Publish(amqpextra.Publishing{
-			WaitReady: true,
-			Message:   amqp.Publishing{},
-			ResultCh:  resultCh,
+		p.Publish(publisher.Message{
+			WaitReady:  true,
+			Publishing: amqp.Publishing{},
+			ResultCh:   resultCh,
 		})
 
 		err := waitResult(resultCh, time.Millisecond*1300)
@@ -755,20 +753,20 @@ func TestReadyPublisher(main *testing.T) {
 func TestClosedPublisher(main *testing.T) {
 	main.Run("PublishWithNoResultChannel", func(t *testing.T) {
 		defer goleak.VerifyNone(t)
-		l := logger.New()
+		l := logger.NewTest()
 
 		connCh := make(chan publisher.Connection)
 		closeCh := make(chan *amqp.Error)
 
-		p := publisher.New(connCh, closeCh, publisher.WithLogger(l))
+		p := publisher.New2(connCh, closeCh, publisher.WithLogger(l))
 
 		p.Close()
 		assertClosed(t, p)
 
-		p.Publish(amqpextra.Publishing{
-			Context:  context.Background(),
-			Message:  amqp.Publishing{},
-			ResultCh: nil,
+		p.Publish(publisher.Message{
+			Context:    context.Background(),
+			Publishing: amqp.Publishing{},
+			ResultCh:   nil,
 		})
 
 		expected := `[ERROR] publisher stopped
@@ -778,22 +776,22 @@ func TestClosedPublisher(main *testing.T) {
 
 	main.Run("PublishWithResultChannel", func(t *testing.T) {
 		defer goleak.VerifyNone(t)
-		l := logger.New()
+		l := logger.NewTest()
 
 		connCh := make(chan publisher.Connection)
 		closeCh := make(chan *amqp.Error)
 
-		p := publisher.New(connCh, closeCh, publisher.WithLogger(l))
+		p := publisher.New2(connCh, closeCh, publisher.WithLogger(l))
 
 		p.Close()
 		assertClosed(t, p)
 
 		resultCh := make(chan error, 1)
 
-		p.Publish(amqpextra.Publishing{
-			Context:  context.Background(),
-			Message:  amqp.Publishing{},
-			ResultCh: resultCh,
+		p.Publish(publisher.Message{
+			Context:    context.Background(),
+			Publishing: amqp.Publishing{},
+			ResultCh:   resultCh,
 		})
 
 		assertUnready(t, p)
@@ -809,12 +807,12 @@ func TestClosedPublisher(main *testing.T) {
 func TestClose(main *testing.T) {
 	main.Run("CloseTwice", func(t *testing.T) {
 		defer goleak.VerifyNone(t)
-		l := logger.New()
+		l := logger.NewTest()
 
 		connCh := make(chan publisher.Connection)
 		closeCh := make(chan *amqp.Error)
 
-		p := publisher.New(connCh, closeCh, publisher.WithLogger(l))
+		p := publisher.New2(connCh, closeCh, publisher.WithLogger(l))
 		defer p.Close()
 
 		assertUnready(t, p)
@@ -826,7 +824,7 @@ func TestClose(main *testing.T) {
 
 	main.Run("CloseUnreadyByContext", func(t *testing.T) {
 		defer goleak.VerifyNone(t)
-		l := logger.New()
+		l := logger.NewTest()
 
 		connCh := make(chan publisher.Connection)
 		closeCh := make(chan *amqp.Error)
@@ -834,7 +832,7 @@ func TestClose(main *testing.T) {
 		ctx, cancelFunc := context.WithCancel(context.Background())
 		defer cancelFunc()
 
-		p := publisher.New(connCh, closeCh, publisher.WithContext(ctx), publisher.WithLogger(l))
+		p := publisher.New2(connCh, closeCh, publisher.WithContext(ctx), publisher.WithLogger(l))
 		defer p.Close()
 
 		assertUnready(t, p)
@@ -1032,7 +1030,7 @@ func TestConcurrency(main *testing.T) {
 			go func() {
 				resultCh := make(chan error, 1)
 				for i := 0; i < 10; i++ {
-					p.Publish(amqpextra.Publishing{
+					p.Publish(publisher.Message{
 						ResultCh: resultCh,
 					})
 					<-resultCh
@@ -1092,7 +1090,7 @@ func TestConcurrency(main *testing.T) {
 			go func() {
 				resultCh := make(chan error, 1)
 				for i := 0; i < 10; i++ {
-					p.Publish(amqpextra.Publishing{
+					p.Publish(publisher.Message{
 						ResultCh: resultCh,
 					})
 					<-resultCh
@@ -1164,7 +1162,7 @@ func TestConcurrency(main *testing.T) {
 			go func() {
 				resultCh := make(chan error, 1)
 				for i := 0; i < 10; i++ {
-					p.Publish(amqpextra.Publishing{
+					p.Publish(publisher.Message{
 						ResultCh: resultCh,
 					})
 					<-resultCh
@@ -1227,14 +1225,14 @@ func assertUnready(t *testing.T, p *publisher.Publisher) {
 	}
 }
 
-func newPublisher(opts ...publisher.Option) (connCh chan publisher.Connection, closeCh chan *amqp.Error, l *logger.Logger, p *publisher.Publisher) {
+func newPublisher(opts ...publisher.Option) (connCh chan publisher.Connection, closeCh chan *amqp.Error, l *logger.TestLogger, p *publisher.Publisher) {
 	connCh = make(chan publisher.Connection, 1)
 	closeCh = make(chan *amqp.Error, 1)
 
-	l = logger.New()
+	l = logger.NewTest()
 	opts = append(opts, publisher.WithLogger(l))
 
-	p = publisher.New(connCh, closeCh, opts...)
+	p = publisher.New2(connCh, closeCh, opts...)
 
 	return connCh, closeCh, l, p
 }
