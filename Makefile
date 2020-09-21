@@ -8,8 +8,12 @@ lint:
 .PHONY: unit-test
 ## unit-test: run unit  tests
 unit-test:
+ifndef NOMOCKGEN
 	mockgen -source=publisher/interfaces.go > publisher/mock_publisher/mock_publisher.go
-	$(GOTEST) -race -v -cover ./middleware/... ./publisher/...
+	mockgen -source=consumer/interfaces.go > consumer/mock_consumer/mock_consumer.go
+	mockgen -source=consumer/handler.go > consumer/mock_consumer/mock_handler.go
+endif
+	$(GOTEST) -race -v -cover ./middleware/... ./publisher/... ./consumer/...
 
 .PHONY: e2e-test
 ## e2e-test: run end-to-end tests within docker with complete infrastructure
