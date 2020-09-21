@@ -50,34 +50,6 @@ func (mr *MockConnectionMockRecorder) Channel() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Channel", reflect.TypeOf((*MockConnection)(nil).Channel))
 }
 
-// NotifyClose mocks base method.
-func (m *MockConnection) NotifyClose(receiver chan *amqp.Error) chan *amqp.Error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "NotifyClose", receiver)
-	ret0, _ := ret[0].(chan *amqp.Error)
-	return ret0
-}
-
-// NotifyClose indicates an expected call of NotifyClose.
-func (mr *MockConnectionMockRecorder) NotifyClose(receiver interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NotifyClose", reflect.TypeOf((*MockConnection)(nil).NotifyClose), receiver)
-}
-
-// Close mocks base method.
-func (m *MockConnection) Close() error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Close")
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// Close indicates an expected call of Close.
-func (mr *MockConnectionMockRecorder) Close() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Close", reflect.TypeOf((*MockConnection)(nil).Close))
-}
-
 // MockChannel is a mock of Channel interface.
 type MockChannel struct {
 	ctrl     *gomock.Controller
