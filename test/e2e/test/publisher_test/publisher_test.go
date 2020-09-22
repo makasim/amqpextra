@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/makasim/amqpextra"
-	logger2 "github.com/makasim/amqpextra/logger"
+	"github.com/makasim/amqpextra/logger"
 	"github.com/makasim/amqpextra/publisher"
 	"go.uber.org/goleak"
 )
@@ -18,7 +18,7 @@ import (
 func TestPublish(t *testing.T) {
 	defer goleak.VerifyNone(t)
 
-	l := logger2.NewTest()
+	l := logger.NewTest()
 
 	conn := amqpextra.Dial([]string{"amqp://guest:guest@rabbitmq:5672/amqpextra"})
 	connCh, closeCh := conn.ConnCh()
@@ -48,7 +48,7 @@ func TestPublish(t *testing.T) {
 	conn.Close()
 	time.Sleep(time.Millisecond * 100)
 
-	expected := `[DEBUG] publisher started
+	expected := `[DEBUG] publisher starting
 [DEBUG] publisher ready
 [DEBUG] publisher stopped
 `
