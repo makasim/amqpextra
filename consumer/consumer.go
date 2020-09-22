@@ -7,8 +7,6 @@ import (
 
 	"fmt"
 
-	"sync"
-
 	"github.com/makasim/amqpextra/logger"
 	"github.com/streadway/amqp"
 )
@@ -24,7 +22,6 @@ type Consumer struct {
 
 	worker Worker
 
-	once        sync.Once
 	retryPeriod time.Duration
 	initFunc    func(conn Connection) (Channel, error)
 	ctx         context.Context
@@ -248,7 +245,7 @@ func (c *Consumer) consumeState(ch Channel) error {
 		case err := <-c.connCloseCh:
 			result = err
 		case <-workerDoneCh:
-			result = fmt.Errorf("workers unexpectadly stopped")
+			result = fmt.Errorf("workers unexpectedly stopped")
 		case <-c.ctx.Done():
 			result = nil
 		}
