@@ -22,7 +22,7 @@ func TestPublish(t *testing.T) {
 
 	conn := amqpextra.Dial([]string{"amqp://guest:guest@rabbitmq:5672/amqpextra"})
 	connCh, closeCh := conn.ConnCh()
-	p := publisher.NewBridge(connCh, closeCh, publisher.WithLogger(l))
+	p := amqpextra.NewPublisher(connCh, closeCh, publisher.WithLogger(l))
 
 	wg := &sync.WaitGroup{}
 	for i := 0; i < 100; i++ {

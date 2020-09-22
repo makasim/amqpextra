@@ -3,6 +3,7 @@ package examples
 import (
 	"log"
 
+	"github.com/makasim/amqpextra"
 	"github.com/makasim/amqpextra/logger"
 	"github.com/makasim/amqpextra/publisher"
 	"github.com/streadway/amqp"
@@ -13,7 +14,7 @@ func StandalonePublisherExample() {
 	connCh := make(<-chan *amqp.Connection)
 	closeCh := make(<-chan *amqp.Error)
 
-	p := publisher.NewBridge(
+	p := amqpextra.NewPublisher(
 		connCh,
 		closeCh,
 		publisher.WithLogger(logger.Std),

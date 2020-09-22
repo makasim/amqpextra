@@ -2,10 +2,9 @@ package consumer
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"time"
-
-	"fmt"
 
 	"github.com/makasim/amqpextra/logger"
 	"github.com/streadway/amqp"

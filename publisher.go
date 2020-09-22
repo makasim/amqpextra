@@ -1,16 +1,19 @@
-package publisher
+package amqpextra
 
-import "github.com/streadway/amqp"
+import (
+	"github.com/makasim/amqpextra/publisher"
+	"github.com/streadway/amqp"
+)
 
-func NewBridge(
+func NewPublisher(
 	amqpConnCh <-chan *amqp.Connection,
 	amqpConnCloseCh <-chan *amqp.Error,
-	opts ...Option,
-) *Publisher {
-	connCh := make(chan Connection)
+	opts ...publisher.Option,
+) *publisher.Publisher {
+	connCh := make(chan publisher.Connection)
 	connCloseCh := make(chan *amqp.Error, 1)
 
-	p := New(connCh, connCloseCh, opts...)
+	p := publisher.New(connCh, connCloseCh, opts...)
 
 	go func() {
 		defer close(connCh)
@@ -24,18 +27,18 @@ func NewBridge(
 				}
 
 				select {
-				case connCh <- &AMQP{Conn: conn}:
-				case <-p.closeCh:
+				case connCh <- &publisher.AMQP{Conn: conn}:
+				case <-p.Closed():
 					return
 				}
 
 				select {
 				case err := <-amqpConnCloseCh:
 					connCloseCh <- err
-				case <-p.closeCh:
+				case <-p.Closed():
 					return
 				}
-			case <-p.closeCh:
+			case <-p.Closed():
 				return
 			}
 		}
