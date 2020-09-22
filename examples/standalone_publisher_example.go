@@ -13,7 +13,7 @@ func StandalonePublisherExample() {
 	connCh := make(<-chan *amqp.Connection)
 	closeCh := make(<-chan *amqp.Error)
 
-	p := publisher.New(
+	p := publisher.NewBridge(
 		connCh,
 		closeCh,
 		publisher.WithLogger(logger.Std),

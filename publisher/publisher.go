@@ -31,7 +31,7 @@ type Publisher struct {
 
 	ctx          context.Context
 	cancelFunc   context.CancelFunc
-	restartSleep time.Duration
+	retryPeriod  time.Duration
 	initFunc     func(conn Connection) (Channel, error)
 	logger       logger.Logger
 	publishingCh chan Message
@@ -41,48 +41,6 @@ type Publisher struct {
 }
 
 func New(
-	amqpConnCh <-chan *amqp.Connection,
-	amqpConnCloseCh <-chan *amqp.Error,
-	opts ...Option,
-) *Publisher {
-	connCh := make(chan Connection)
-	connCloseCh := make(chan *amqp.Error, 1)
-
-	p := New2(connCh, connCloseCh, opts...)
-
-	go func() {
-		defer close(connCh)
-		defer close(connCloseCh)
-
-		for {
-			select {
-			case conn, ok := <-amqpConnCh:
-				if !ok {
-					return
-				}
-
-				select {
-				case connCh <- &AMQP{Conn: conn}:
-				case <-p.closeCh:
-					return
-				}
-
-				select {
-				case err := <-amqpConnCloseCh:
-					connCloseCh <- err
-				case <-p.closeCh:
-					return
-				}
-			case <-p.closeCh:
-				return
-			}
-		}
-	}()
-
-	return p
-}
-
-func New2(
 	connCh <-chan Connection,
 	connCloseCh <-chan *amqp.Error,
 	opts ...Option,
@@ -107,8 +65,8 @@ func New2(
 		p.ctx, p.cancelFunc = context.WithCancel(context.Background())
 	}
 
-	if p.restartSleep == 0 {
-		p.restartSleep = time.Second * 5
+	if p.retryPeriod == 0 {
+		p.retryPeriod = time.Second * 5
 	}
 
 	if p.logger == nil {
@@ -140,7 +98,7 @@ func WithContext(ctx context.Context) Option {
 
 func WithRestartSleep(dur time.Duration) Option {
 	return func(p *Publisher) {
-		p.restartSleep = dur
+		p.retryPeriod = dur
 	}
 }
 
@@ -200,6 +158,8 @@ func (p *Publisher) Closed() <-chan struct{} {
 }
 
 func (p *Publisher) connectionState() {
+	defer p.cancelFunc()
+	defer close(p.unreadyCh)
 	defer close(p.closeCh)
 	defer p.logger.Printf("[DEBUG] publisher stopped")
 
@@ -239,17 +199,7 @@ func (p *Publisher) channelState(conn Connection) error {
 		ch, err := p.initFunc(conn)
 		if err != nil {
 			p.logger.Printf("[ERROR] init func: %s", err)
-
-			timer := time.NewTimer(p.restartSleep)
-
-			select {
-			case <-timer.C:
-				return err
-			case <-p.ctx.Done():
-				timer.Stop()
-				p.close(nil)
-				return nil
-			}
+			return p.retry(err)
 		}
 
 		if err := p.publishState(ch); err != errChannelClosed {
@@ -305,12 +255,32 @@ func (p *Publisher) reply(resultCh chan error, result error) {
 	}
 }
 
+func (p *Publisher) retry(err error) error {
+	timer := time.NewTimer(p.retryPeriod)
+	defer func() {
+		timer.Stop()
+		select {
+		case <-timer.C:
+		default:
+		}
+	}()
+
+	for {
+		select {
+		case p.unreadyCh <- struct{}{}:
+			continue
+		case <-timer.C:
+			return err
+		case <-p.ctx.Done():
+			return nil
+		}
+	}
+}
+
 func (p *Publisher) close(ch Channel) {
 	if ch != nil {
 		if err := ch.Close(); err != nil && !strings.Contains(err.Error(), "channel/connection is not open") {
 			p.logger.Printf("[WARN] publisher: channel close: %s", err)
 		}
 	}
-
-	close(p.unreadyCh)
 }

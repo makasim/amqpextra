@@ -27,7 +27,7 @@ func TestReconnection(main *testing.T) {
 		ch := mock_publisher.NewMockChannel(ctrl)
 		ch.
 			EXPECT().
-			NotifyClose(gomock.Any()).
+			NotifyClose(any()).
 			DoAndReturn(func(receiver chan *amqp.Error) chan *amqp.Error {
 				return receiver
 			}).
@@ -74,6 +74,36 @@ func TestReconnection(main *testing.T) {
 		require.Equal(t, expected, l.Logs())
 	})
 
+	main.Run("UnreadyWhileInitRetrySleep", func(t *testing.T) {
+		defer goleak.VerifyNone(t)
+
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		connCh, _, l, p := newPublisher(
+			publisher.WithInitFunc(func(conn publisher.Connection) (publisher.Channel, error) {
+				return nil, fmt.Errorf("the error")
+			}),
+			publisher.WithRestartSleep(time.Millisecond*400),
+		)
+		defer p.Close()
+
+		conn := mock_publisher.NewMockConnection(ctrl)
+		connCh <- conn
+
+		time.Sleep(time.Millisecond * 200)
+		assertUnready(t, p)
+
+		p.Close()
+		assertClosed(t, p)
+
+		expected := `[DEBUG] publisher starting
+[ERROR] init func: the error
+[DEBUG] publisher stopped
+`
+		require.Equal(t, expected, l.Logs())
+	})
+
 	main.Run("ConnectionLost", func(t *testing.T) {
 		defer goleak.VerifyNone(t)
 
@@ -90,7 +120,7 @@ func TestReconnection(main *testing.T) {
 
 		ch.
 			EXPECT().
-			NotifyClose(gomock.Any()).
+			NotifyClose(any()).
 			DoAndReturn(func(receiver chan *amqp.Error) chan *amqp.Error {
 				return receiver
 			}).
@@ -108,7 +138,7 @@ func TestReconnection(main *testing.T) {
 
 		ch.
 			EXPECT().
-			NotifyClose(gomock.Any()).
+			NotifyClose(any()).
 			DoAndReturn(func(receiver chan *amqp.Error) chan *amqp.Error {
 				return receiver
 			}).
@@ -152,7 +182,7 @@ func TestReconnection(main *testing.T) {
 
 		ch.
 			EXPECT().
-			NotifyClose(gomock.Any()).
+			NotifyClose(any()).
 			DoAndReturn(func(receiver chan *amqp.Error) chan *amqp.Error {
 				return receiver
 			}).
@@ -190,7 +220,7 @@ func TestReconnection(main *testing.T) {
 
 		ch.
 			EXPECT().
-			NotifyClose(gomock.Any()).
+			NotifyClose(any()).
 			DoAndReturn(func(receiver chan *amqp.Error) chan *amqp.Error {
 				chCloseCh = receiver
 				return receiver
@@ -200,7 +230,7 @@ func TestReconnection(main *testing.T) {
 		newCh := mock_publisher.NewMockChannel(ctrl)
 		newCh.
 			EXPECT().
-			NotifyClose(gomock.Any()).
+			NotifyClose(any()).
 			DoAndReturn(func(receiver chan *amqp.Error) chan *amqp.Error {
 				return receiver
 			}).
@@ -254,7 +284,7 @@ func TestReconnection(main *testing.T) {
 
 		ch.
 			EXPECT().
-			NotifyClose(gomock.Any()).
+			NotifyClose(any()).
 			DoAndReturn(func(receiver chan *amqp.Error) chan *amqp.Error {
 				chCloseCh = receiver
 				return receiver
@@ -280,7 +310,7 @@ func TestReconnection(main *testing.T) {
 		newCh := mock_publisher.NewMockChannel(ctrl)
 		newCh.
 			EXPECT().
-			NotifyClose(gomock.Any()).
+			NotifyClose(any()).
 			DoAndReturn(func(receiver chan *amqp.Error) chan *amqp.Error {
 				return receiver
 			}).
@@ -320,7 +350,7 @@ func TestUnreadyPublisher(main *testing.T) {
 		connCh := make(chan publisher.Connection)
 		closeCh := make(chan *amqp.Error)
 
-		p := publisher.New2(connCh, closeCh, publisher.WithLogger(l))
+		p := publisher.New(connCh, closeCh, publisher.WithLogger(l))
 		defer p.Close()
 
 		assertUnready(t, p)
@@ -335,7 +365,7 @@ func TestUnreadyPublisher(main *testing.T) {
 		connCh := make(chan publisher.Connection)
 		closeCh := make(chan *amqp.Error)
 
-		p := publisher.New2(connCh, closeCh, publisher.WithLogger(l))
+		p := publisher.New(connCh, closeCh, publisher.WithLogger(l))
 		defer p.Close()
 
 		assertUnready(t, p)
@@ -351,7 +381,7 @@ func TestUnreadyPublisher(main *testing.T) {
 		connCh := make(chan publisher.Connection)
 		closeCh := make(chan *amqp.Error)
 
-		p := publisher.New2(connCh, closeCh, publisher.WithLogger(l))
+		p := publisher.New(connCh, closeCh, publisher.WithLogger(l))
 		defer p.Close()
 
 		p.Publish(publisher.Message{
@@ -378,7 +408,7 @@ func TestUnreadyPublisher(main *testing.T) {
 		connCh := make(chan publisher.Connection)
 		closeCh := make(chan *amqp.Error)
 
-		p := publisher.New2(connCh, closeCh, publisher.WithLogger(l))
+		p := publisher.New(connCh, closeCh, publisher.WithLogger(l))
 		defer p.Close()
 
 		resultCh := make(chan error, 1)
@@ -410,7 +440,7 @@ func TestUnreadyPublisher(main *testing.T) {
 		connCh := make(chan publisher.Connection)
 		closeCh := make(chan *amqp.Error)
 
-		p := publisher.New2(connCh, closeCh, publisher.WithLogger(l))
+		p := publisher.New(connCh, closeCh, publisher.WithLogger(l))
 		defer p.Close()
 
 		assert.PanicsWithValue(t, "amqpextra: resultCh channel is unbuffered", func() {
@@ -480,14 +510,14 @@ func TestReadyPublisher(main *testing.T) {
 		ch := mock_publisher.NewMockChannel(ctrl)
 		ch.
 			EXPECT().
-			NotifyClose(gomock.Any()).
+			NotifyClose(any()).
 			DoAndReturn(func(receiver chan *amqp.Error) chan *amqp.Error {
 				return receiver
 			}).
 			Times(1)
 		ch.
 			EXPECT().
-			Publish(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+			Publish(any(), any(), any(), any(), any()).
 			DoAndReturn(func(exchange, key string, mandatory, immediate bool, msg amqp.Publishing) error {
 				require.Equal(t, "theExchange", exchange)
 				require.Equal(t, "theKey", key)
@@ -581,14 +611,14 @@ func TestReadyPublisher(main *testing.T) {
 		ch := mock_publisher.NewMockChannel(ctrl)
 		ch.
 			EXPECT().
-			NotifyClose(gomock.Any()).
+			NotifyClose(any()).
 			DoAndReturn(func(receiver chan *amqp.Error) chan *amqp.Error {
 				return receiver
 			}).
 			Times(1)
 		ch.
 			EXPECT().
-			Publish(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+			Publish(any(), any(), any(), any(), any()).
 			Return(fmt.Errorf("publish errored")).
 			Times(1)
 		ch.
@@ -633,14 +663,14 @@ func TestReadyPublisher(main *testing.T) {
 		ch := mock_publisher.NewMockChannel(ctrl)
 		ch.
 			EXPECT().
-			NotifyClose(gomock.Any()).
+			NotifyClose(any()).
 			DoAndReturn(func(receiver chan *amqp.Error) chan *amqp.Error {
 				return receiver
 			}).
 			Times(1)
 		ch.
 			EXPECT().
-			Publish(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+			Publish(any(), any(), any(), any(), any()).
 			Return(fmt.Errorf("publish errored")).
 			Times(1)
 		ch.
@@ -688,14 +718,14 @@ func TestReadyPublisher(main *testing.T) {
 		ch := mock_publisher.NewMockChannel(ctrl)
 		ch.
 			EXPECT().
-			NotifyClose(gomock.Any()).
+			NotifyClose(any()).
 			DoAndReturn(func(receiver chan *amqp.Error) chan *amqp.Error {
 				return receiver
 			}).
 			MaxTimes(1)
 		ch.
 			EXPECT().
-			Publish(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+			Publish(any(), any(), any(), any(), any()).
 			Return(nil).
 			MaxTimes(1)
 		ch.
@@ -744,14 +774,14 @@ func TestReadyPublisher(main *testing.T) {
 		ch := mock_publisher.NewMockChannel(ctrl)
 		ch.
 			EXPECT().
-			NotifyClose(gomock.Any()).
+			NotifyClose(any()).
 			DoAndReturn(func(receiver chan *amqp.Error) chan *amqp.Error {
 				return receiver
 			}).
 			Times(1)
 		ch.
 			EXPECT().
-			Publish(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+			Publish(any(), any(), any(), any(), any()).
 			Return(nil).
 			Times(1)
 		ch.
@@ -808,7 +838,7 @@ func TestClosedPublisher(main *testing.T) {
 		connCh := make(chan publisher.Connection)
 		closeCh := make(chan *amqp.Error)
 
-		p := publisher.New2(connCh, closeCh, publisher.WithLogger(l))
+		p := publisher.New(connCh, closeCh, publisher.WithLogger(l))
 
 		p.Close()
 		assertClosed(t, p)
@@ -833,7 +863,7 @@ func TestClosedPublisher(main *testing.T) {
 		connCh := make(chan publisher.Connection)
 		closeCh := make(chan *amqp.Error)
 
-		p := publisher.New2(connCh, closeCh, publisher.WithLogger(l))
+		p := publisher.New(connCh, closeCh, publisher.WithLogger(l))
 
 		p.Close()
 		assertClosed(t, p)
@@ -866,7 +896,7 @@ func TestClose(main *testing.T) {
 		connCh := make(chan publisher.Connection)
 		closeCh := make(chan *amqp.Error)
 
-		p := publisher.New2(connCh, closeCh, publisher.WithLogger(l))
+		p := publisher.New(connCh, closeCh, publisher.WithLogger(l))
 		defer p.Close()
 
 		assertUnready(t, p)
@@ -886,7 +916,7 @@ func TestClose(main *testing.T) {
 		ctx, cancelFunc := context.WithCancel(context.Background())
 		defer cancelFunc()
 
-		p := publisher.New2(connCh, closeCh, publisher.WithContext(ctx), publisher.WithLogger(l))
+		p := publisher.New(connCh, closeCh, publisher.WithContext(ctx), publisher.WithLogger(l))
 		defer p.Close()
 
 		assertUnready(t, p)
@@ -909,7 +939,7 @@ func TestClose(main *testing.T) {
 		ch := mock_publisher.NewMockChannel(ctrl)
 		ch.
 			EXPECT().
-			NotifyClose(gomock.Any()).
+			NotifyClose(any()).
 			DoAndReturn(func(receiver chan *amqp.Error) chan *amqp.Error {
 				return receiver
 			}).
@@ -952,7 +982,7 @@ func TestClose(main *testing.T) {
 		ch := mock_publisher.NewMockChannel(ctrl)
 		ch.
 			EXPECT().
-			NotifyClose(gomock.Any()).
+			NotifyClose(any()).
 			DoAndReturn(func(receiver chan *amqp.Error) chan *amqp.Error {
 				return receiver
 			}).
@@ -993,7 +1023,7 @@ func TestClose(main *testing.T) {
 		ch := mock_publisher.NewMockChannel(ctrl)
 		ch.
 			EXPECT().
-			NotifyClose(gomock.Any()).
+			NotifyClose(any()).
 			DoAndReturn(func(receiver chan *amqp.Error) chan *amqp.Error {
 				return receiver
 			}).
@@ -1035,14 +1065,14 @@ func TestConcurrency(main *testing.T) {
 		ch := mock_publisher.NewMockChannel(ctrl)
 		ch.
 			EXPECT().
-			NotifyClose(gomock.Any()).
+			NotifyClose(any()).
 			DoAndReturn(func(receiver chan *amqp.Error) chan *amqp.Error {
 				return receiver
 			}).
 			Times(1)
 		ch.
 			EXPECT().
-			Publish(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+			Publish(any(), any(), any(), any(), any()).
 			DoAndReturn(func(exchange, key string, mandatory, immediate bool, msg amqp.Publishing) error {
 				time.Sleep(time.Millisecond * 10)
 				return nil
@@ -1097,19 +1127,19 @@ func TestConcurrency(main *testing.T) {
 		ch := mock_publisher.NewMockChannel(ctrl)
 		ch.
 			EXPECT().
-			NotifyClose(gomock.Any()).
+			NotifyClose(any()).
 			DoAndReturn(func(receiver chan *amqp.Error) chan *amqp.Error {
 				return receiver
 			}).
 			Times(1)
 		ch.
 			EXPECT().
-			Publish(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+			Publish(any(), any(), any(), any(), any()).
 			DoAndReturn(func(exchange, key string, mandatory, immediate bool, msg amqp.Publishing) error {
 				time.Sleep(time.Millisecond * 10)
 				return nil
 			}).
-			MinTimes(20).
+			MinTimes(10).
 			MaxTimes(40)
 
 		connCh, closeCh, l, p := newPublisher()
@@ -1143,20 +1173,20 @@ func TestConcurrency(main *testing.T) {
 
 		newCh.
 			EXPECT().
-			NotifyClose(gomock.Any()).
+			NotifyClose(any()).
 			DoAndReturn(func(receiver chan *amqp.Error) chan *amqp.Error {
 				return receiver
 			}).
 			Times(1)
 		newCh.
 			EXPECT().
-			Publish(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+			Publish(any(), any(), any(), any(), any()).
 			DoAndReturn(func(exchange, key string, mandatory, immediate bool, msg amqp.Publishing) error {
 				time.Sleep(time.Millisecond * 10)
 				return nil
 			}).
 			MinTimes(60).
-			MaxTimes(80)
+			MaxTimes(90)
 		newCh.
 			EXPECT().
 			Close().
@@ -1189,7 +1219,7 @@ func TestConcurrency(main *testing.T) {
 		ch := mock_publisher.NewMockChannel(ctrl)
 		ch.
 			EXPECT().
-			NotifyClose(gomock.Any()).
+			NotifyClose(any()).
 			DoAndReturn(func(receiver chan *amqp.Error) chan *amqp.Error {
 				chCloseCh = receiver
 				return receiver
@@ -1197,7 +1227,7 @@ func TestConcurrency(main *testing.T) {
 			Times(1)
 		ch.
 			EXPECT().
-			Publish(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+			Publish(any(), any(), any(), any(), any()).
 			DoAndReturn(func(exchange, key string, mandatory, immediate bool, msg amqp.Publishing) error {
 				time.Sleep(time.Millisecond * 10)
 				return nil
@@ -1208,14 +1238,14 @@ func TestConcurrency(main *testing.T) {
 		newCh := mock_publisher.NewMockChannel(ctrl)
 		newCh.
 			EXPECT().
-			NotifyClose(gomock.Any()).
+			NotifyClose(any()).
 			DoAndReturn(func(receiver chan *amqp.Error) chan *amqp.Error {
 				return receiver
 			}).
 			Times(1)
 		newCh.
 			EXPECT().
-			Publish(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+			Publish(any(), any(), any(), any(), any()).
 			DoAndReturn(func(exchange, key string, mandatory, immediate bool, msg amqp.Publishing) error {
 				time.Sleep(time.Millisecond * 10)
 				return nil
@@ -1271,7 +1301,6 @@ func TestConcurrency(main *testing.T) {
 `
 		require.Equal(t, expected, l.Logs())
 	})
-
 }
 
 func assertReady(t *testing.T, p *publisher.Publisher) {
@@ -1307,6 +1336,10 @@ func assertUnready(t *testing.T, p *publisher.Publisher) {
 	}
 }
 
+func any() gomock.Matcher {
+	return gomock.Any()
+}
+
 func newPublisher(opts ...publisher.Option) (connCh chan publisher.Connection, closeCh chan *amqp.Error, l *logger.TestLogger, p *publisher.Publisher) {
 	connCh = make(chan publisher.Connection, 1)
 	closeCh = make(chan *amqp.Error, 1)
@@ -1314,7 +1347,7 @@ func newPublisher(opts ...publisher.Option) (connCh chan publisher.Connection, c
 	l = logger.NewTest()
 	opts = append(opts, publisher.WithLogger(l))
 
-	p = publisher.New2(connCh, closeCh, opts...)
+	p = publisher.New(connCh, closeCh, opts...)
 
 	return connCh, closeCh, l, p
 }

@@ -133,7 +133,7 @@ func (c *Connection) Publisher(opts ...publisher.Option) *publisher.Publisher {
 		publisher.WithContext(c.ctx),
 	}, opts...)
 
-	return publisher.New(connCh, closeCh, opts...)
+	return publisher.NewBridge(connCh, closeCh, opts...)
 }
 
 func (c *Connection) reconnect() {
