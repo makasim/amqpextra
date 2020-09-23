@@ -29,6 +29,7 @@ type Consumer struct {
 	started      bool
 	workerNum    int
 	restartSleep time.Duration
+	retryPeriod  time.Duration
 	initFunc     func(conn *amqp.Connection) (*amqp.Channel, <-chan amqp.Delivery, error)
 	ctx          context.Context
 	cancelFunc   context.CancelFunc
@@ -56,6 +57,7 @@ func NewConsumer(
 		started:      false,
 		workerNum:    1,
 		restartSleep: time.Second * 5,
+		retryPeriod:  time.Second * 5,
 		ctx:          ctx,
 		cancelFunc:   cancelFunc,
 		logger:       nilLogger,
@@ -123,7 +125,7 @@ func (c *Consumer) Use(middlewares ...func(Worker) Worker) {
 func (c *Consumer) Start() {
 	c.once.Do(func() {
 		c.started = true
-		go c.connect()
+		go c.connectionState()
 	})
 }
 
@@ -160,12 +162,13 @@ func (*Consumer) chain(middlewares []func(Worker) Worker, endpoint Worker) Worke
 	return w
 }
 
-func (c *Consumer) connect() {
+func (c *Consumer) connectionState() {
 	defer close(c.doneCh)
 	defer c.logger.Printf("[DEBUG] consumer stopped")
 
 	worker := c.chain(c.middlewares, c.worker)
 
+	c.logger.Printf("[DEBUG] consumer starting")
 	for {
 		select {
 		case conn, ok := <-c.connCh:
@@ -179,29 +182,11 @@ func (c *Consumer) connect() {
 			default:
 			}
 
-			ch, msgCh, err := c.initFunc(conn)
-			if err != nil {
-				c.logger.Printf("[ERROR] init func: %s", err)
-
-				timer := time.NewTimer(c.restartSleep)
-
-				select {
-				case <-timer.C:
-					continue
-				case <-c.ctx.Done():
-					timer.Stop()
-					return
-				}
-			}
-
-			c.logger.Printf("[DEBUG] consumer starting")
-			if !c.serve(ch, msgCh, worker) {
+			if err := c.channelState(conn, worker); err == nil {
 				return
 			}
 
-			if err := ch.Close(); err != nil && !strings.Contains(err.Error(), "channel/connection is not open") {
-				c.logger.Printf("[WARN] consumer: channel close: %s", err)
-			}
+			c.logger.Printf("[DEBUG] consumer unready")
 		case c.unreadyCh <- struct{}{}:
 		case <-c.closeCh:
 			continue
@@ -211,50 +196,60 @@ func (c *Consumer) connect() {
 	}
 }
 
-func (c *Consumer) serve(ch *amqp.Channel, msgCh <-chan amqp.Delivery, worker Worker) bool {
+func (c *Consumer) channelState(conn *amqp.Connection, worker Worker) error {
+	for {
+		ch, msgCh, err := c.initFunc(conn)
+		if err != nil {
+			c.logger.Printf("[ERROR] init func: %s", err)
+			return c.waitRetry(err)
+		}
+
+		err = c.consumeState(ch, msgCh, worker)
+		if err == errChannelClosed {
+			continue
+		}
+
+		return err
+	}
+}
+
+func (c *Consumer) consumeState(ch *amqp.Channel, msgCh <-chan amqp.Delivery, worker Worker) error {
 	var wg sync.WaitGroup
 
-	workerDoneCh := make(chan struct{})
+	chCloseCh := ch.NotifyClose(make(chan *amqp.Error, 1))
+
 	workerCtx, workerCancelFunc := context.WithCancel(c.ctx)
 	defer workerCancelFunc()
 
 	c.runWorkers(workerCtx, msgCh, worker, &wg)
 	c.logger.Printf("[DEBUG] workers started")
 
-	go func() {
-		wg.Wait()
-		close(workerDoneCh)
-	}()
-
 	for {
 		select {
 		case c.readyCh <- struct{}{}:
-		case <-c.closeCh:
-			workerCancelFunc()
+		case <-chCloseCh:
+			c.logger.Printf("[DEBUG] workers stopped: channel closed")
 
+			workerCancelFunc()
 			wg.Wait()
 
-			c.logger.Printf("[DEBUG] workers stopped")
+			return errChannelClosed
+		case err := <-c.closeCh:
+			c.logger.Printf("[DEBUG] workers stopped: connection closed")
 
-			return true
-		case <-workerDoneCh:
 			workerCancelFunc()
-
 			wg.Wait()
 
-			c.logger.Printf("[DEBUG] workers stopped")
-
-			return true
+			return err
 		case <-c.ctx.Done():
+			c.logger.Printf("[DEBUG] workers stopped: context closed")
+
 			workerCancelFunc()
-
 			wg.Wait()
-
-			c.logger.Printf("[DEBUG] workers stopped")
 
 			c.close(ch)
 
-			return false
+			return nil
 		}
 	}
 }
@@ -280,13 +275,33 @@ func (c *Consumer) runWorkers(
 					if res := worker.ServeMsg(c.ctx, msg); res != nil {
 						c.logger.Printf("[ERROR] worker.serveMsg: non nil result: %#v", res)
 					}
-				case <-c.ctx.Done():
-					return
 				case <-workerCtx.Done():
 					return
 				}
 			}
 		}()
+	}
+}
+
+func (c *Consumer) waitRetry(err error) error {
+	timer := time.NewTimer(c.retryPeriod)
+	defer func() {
+		timer.Stop()
+		select {
+		case <-timer.C:
+		default:
+		}
+	}()
+
+	for {
+		select {
+		case c.unreadyCh <- struct{}{}:
+			continue
+		case <-timer.C:
+			return err
+		case <-c.ctx.Done():
+			return nil
+		}
 	}
 }
 
