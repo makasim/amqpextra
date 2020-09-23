@@ -1,4 +1,5 @@
 GOTEST?=go test
+RUNTEST?=".*"
 
 .PHONY: lint
 ## unit-test: run linter
@@ -13,12 +14,13 @@ ifndef NOMOCKGEN
 	mockgen -source=consumer/interfaces.go > consumer/mock_consumer/mock_consumer.go
 	mockgen -source=consumer/handler.go > consumer/mock_consumer/mock_handler.go
 endif
-	$(GOTEST) -race -v -cover ./middleware/... ./publisher/... ./consumer/...
+	
+	$(GOTEST) -race -v -cover -run $(RUNTEST) ./ ./publisher/... ./consumer/...
 
 .PHONY: e2e-test
 ## e2e-test: run end-to-end tests within docker with complete infrastructure
 e2e-test:
-	$(MAKE) -C test/e2e run
+	$(MAKE) -C e2e_test run
 
 .PHONY: test
 ## test: run linter, unit and e2e tests

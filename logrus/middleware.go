@@ -3,7 +3,7 @@ package logrus
 import (
 	"context"
 
-	"github.com/makasim/amqpextra/middleware"
+	"github.com/makasim/amqpextra/consumer/middleware"
 	"github.com/sirupsen/logrus"
 )
 
