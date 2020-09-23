@@ -1,4 +1,4 @@
-package connection_test
+package connection_test_test
 
 import (
 	"crypto/tls"
@@ -7,11 +7,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/makasim/amqpextra/test/e2e/helper/rabbitmq"
+	"github.com/makasim/amqpextra/e2e_test/helper/rabbitmq"
 
 	"context"
 
-	"github.com/makasim/amqpextra/test/e2e/helper/assertlog"
+	"github.com/makasim/amqpextra/e2e_test/helper/assertlog"
 	"github.com/streadway/amqp"
 
 	"github.com/makasim/amqpextra"

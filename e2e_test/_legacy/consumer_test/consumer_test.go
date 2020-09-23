@@ -1,4 +1,4 @@
-package consumer_test
+package consumer_test_test
 
 import (
 	"context"
@@ -8,85 +8,17 @@ import (
 	"testing"
 	"time"
 
-	"github.com/makasim/amqpextra/test/e2e/helper/rabbitmq"
+	"github.com/makasim/amqpextra/e2e_test/helper/rabbitmq"
 
 	"github.com/makasim/amqpextra"
 
 	"github.com/streadway/amqp"
 
+	logger2 "github.com/makasim/amqpextra/logger"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/goleak"
-	logger2 "github.com/makasim/amqpextra/logger"
 )
-
-func TestCloseChannelOnAlreadyClosedConnection(t *testing.T) {
-	defer goleak.VerifyNone(t)
-
-	l := logger2.NewTest()
-
-	conn := amqpextra.Dial([]string{"amqp://guest:guest@rabbitmq:5672/amqpextra"})
-
-	worker := amqpextra.WorkerFunc(func(ctx context.Context, msg amqp.Delivery) interface{} {
-		return nil
-	})
-
-	go func() {
-		<-time.NewTimer(time.Second).C
-
-		conn.Close()
-	}()
-
-	c := conn.Consumer(rabbitmq.Queue2(conn), worker)
-	c.SetLogger(l)
-
-	c.Run()
-
-	expected := `[DEBUG] consumer starting
-[DEBUG] workers started
-[DEBUG] workers stopped
-[DEBUG] consumer stopped
-`
-	require.Equal(t, expected, l.Logs())
-
-	require.NotContains(t, l.Logs(), "Exception (504) Reason: \"channel/connection is not open\"\n[DEBUG] consumer stopped\n")
-}
-
-func TestConsumeOneAndCloseConsumer(t *testing.T) {
-	defer goleak.VerifyNone(t)
-
-	l := logger2.NewTest()
-
-	conn := amqpextra.Dial([]string{"amqp://guest:guest@rabbitmq:5672/amqpextra"})
-	defer conn.Close()
-
-	conn.SetLogger(l)
-
-	queue := rabbitmq.Queue2(conn)
-	rabbitmq.Publish2(conn, "testbdy", queue)
-
-	var c *amqpextra.Consumer
-	c = conn.Consumer(queue, amqpextra.WorkerFunc(func(ctx context.Context, msg amqp.Delivery) interface{} {
-		l.Printf("[DEBUG] got message %s", msg.Body)
-
-		msg.Ack(false)
-
-		c.Close()
-
-		return nil
-	}))
-
-	c.Run()
-
-	expected := `[DEBUG] connection established
-[DEBUG] consumer starting
-[DEBUG] workers started
-[DEBUG] got message testbdy
-[DEBUG] workers stopped
-[DEBUG] consumer stopped
-`
-	require.Contains(t, l.Logs(), expected)
-}
 
 func TestConcurrentlyPublishConsumeWhileConnectionLost(t *testing.T) {
 	defer goleak.VerifyNone(t)

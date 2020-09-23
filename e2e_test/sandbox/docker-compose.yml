@@ -2,10 +2,14 @@ version: '3.7'
 
 services:
   amqpextra-e2e-test:
-    build: { context: "../..", dockerfile: test/e2e/Dockerfile }
-    entrypoint: [ "./test/e2e/entrypoint.sh", "go", "test", "-mod=vendor", "-race", "-count=1", "-v", "./test/e2e/test/..."]
+    build: { context: "..", dockerfile: sandbox/Dockerfile }
+    entrypoint: [ "./e2e_test/sandbox/entrypoint.sh", "make", "-C", "e2e_test", "test"]
     working_dir: "/amqpextra"
+    tty: true
+    stdin_open: true
     restart: "no"
+    environment:
+      - GOTEST=gotest
     volumes:
       - "../../:/amqpextra"
     depends_on:

@@ -26,40 +26,30 @@ func proxyPublisherConn(
 	connCloseCh chan *amqp.Error,
 	publisherCloseCh <-chan struct{},
 ) {
-	defer close(connCloseCh)
-	defer close(connCh)
+	go func() {
+		defer close(connCh)
 
-	for {
-		select {
-		case conn, ok := <-amqpConnCh:
-			if !ok {
-				return
-			}
-
+		for conn := range amqpConnCh {
 			select {
 			case connCh <- &publisher.AMQP{Conn: conn}:
-			case err := <-amqpConnCloseCh:
-				select {
-				case connCloseCh <- err:
-				default:
-				}
-
 				continue
 			case <-publisherCloseCh:
 				return
 			}
+		}
+	}()
 
+	go func() {
+		defer close(connCloseCh)
+
+		for err := range amqpConnCloseCh {
 			select {
-			case err := <-amqpConnCloseCh:
-				select {
-				case connCloseCh <- err:
-				default:
-				}
+			case connCloseCh <- err:
+				continue
 			case <-publisherCloseCh:
 				return
+			default:
 			}
-		case <-publisherCloseCh:
-			return
 		}
-	}
+	}()
 }

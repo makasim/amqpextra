@@ -60,6 +60,28 @@ func CloseConn(userProvidedName string) bool {
 	return false
 }
 
+func IsOpened(userProvidedName string) bool {
+	defer http.DefaultClient.CloseIdleConnections()
+
+	var data []map[string]interface{}
+	if err := json.Unmarshal([]byte(OpenedConns()), &data); err != nil {
+		panic(err)
+	}
+
+	for _, conn := range data {
+		connUserProvidedName, ok := conn["user_provided_name"].(string)
+		if !ok {
+			continue
+		}
+
+		if connUserProvidedName == userProvidedName {
+			return true
+		}
+	}
+
+	return false
+}
+
 func OpenedConns() string {
 	req, err := http.NewRequest("GET", "http://guest:guest@rabbitmq:15672/api/connections", nil)
 	if err != nil {
