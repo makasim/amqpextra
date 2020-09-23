@@ -45,9 +45,10 @@ func TestCloseChannelOnAlreadyClosedConnection(t *testing.T) {
 
 	expected := `[DEBUG] consumer starting
 [DEBUG] workers started
-[DEBUG] workers stopped
+[DEBUG] workers stopped: context closed
 [DEBUG] consumer stopped
 `
+
 	require.Equal(t, expected, l.Logs())
 
 	require.NotContains(t, l.Logs(), "Exception (504) Reason: \"channel/connection is not open\"\n[DEBUG] consumer stopped\n")
@@ -83,7 +84,7 @@ func TestConsumeOneAndCloseConsumer(t *testing.T) {
 [DEBUG] consumer starting
 [DEBUG] workers started
 [DEBUG] got message testbdy
-[DEBUG] workers stopped
+[DEBUG] workers stopped: context closed
 [DEBUG] consumer stopped
 `
 	require.Contains(t, l.Logs(), expected)
@@ -186,9 +187,10 @@ func TestConcurrentlyPublishConsumeWhileConnectionLost(t *testing.T) {
 	expected := `[DEBUG] connection established
 [DEBUG] consumer starting
 [DEBUG] workers started
-[DEBUG] workers stopped
+[DEBUG] workers stopped: channel closed
+[ERROR] init func: Exception (504) Reason: "channel/connection is not open"
 [DEBUG] connection established
-[DEBUG] consumer starting
+[DEBUG] consumer unready
 [DEBUG] workers started
 `
 	require.Contains(t, l.Logs(), expected)
