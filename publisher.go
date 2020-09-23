@@ -29,10 +29,18 @@ func proxyPublisherConn(
 	go func() {
 		defer close(connCh)
 
-		for conn := range amqpConnCh {
+		for {
 			select {
-			case connCh <- &publisher.AMQP{Conn: conn}:
-				continue
+			case conn, ok := <-amqpConnCh:
+				if !ok {
+					return
+				}
+
+				select {
+				case connCh <- &publisher.AMQP{Conn: conn}:
+				case <-publisherCloseCh:
+					return
+				}
 			case <-publisherCloseCh:
 				return
 			}
@@ -42,13 +50,19 @@ func proxyPublisherConn(
 	go func() {
 		defer close(connCloseCh)
 
-		for err := range amqpConnCloseCh {
+		for {
 			select {
-			case connCloseCh <- err:
-				continue
+			case err, ok := <-amqpConnCloseCh:
+				if !ok {
+					return
+				}
+
+				select {
+				case connCloseCh <- err:
+				default:
+				}
 			case <-publisherCloseCh:
 				return
-			default:
 			}
 		}
 	}()
