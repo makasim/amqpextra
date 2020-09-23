@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	"github.com/streadway/amqp"
-	"github.com/stretchr/testify/require"
 
 	"time"
 
@@ -13,6 +12,7 @@ import (
 	"github.com/makasim/amqpextra/e2e_test/helper/rabbitmq"
 	"github.com/makasim/amqpextra/publisher"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"go.uber.org/goleak"
 )
 
@@ -47,15 +47,15 @@ waitOpened:
 	p := conn.Publisher()
 	assertReady(t, p)
 
-	go func() {
-		time.Sleep(time.Millisecond * 100)
-		require.True(t, rabbitmq.CloseConn(connName))
-	}()
-
 	count := 0
 	errorCount := 0
 	resultCh := make(chan error, 1)
 	for i := 0; i < 1000; i++ {
+		if i == 300 {
+			time.Sleep(time.Millisecond * 100)
+			require.True(t, rabbitmq.CloseConn(connName))
+		}
+
 		p.Publish(publisher.Message{
 			ResultCh:  resultCh,
 			WaitReady: true,
