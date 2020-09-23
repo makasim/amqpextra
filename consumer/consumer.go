@@ -227,12 +227,13 @@ func (c *Consumer) consumeState(ch Channel) error {
 	workerCtx, workerCancelFunc := context.WithCancel(c.ctx)
 	defer workerCancelFunc()
 
+	c.logger.Printf("[DEBUG] consumer ready")
+
 	go func() {
 		defer close(workerDoneCh)
 		c.worker.Serve(workerCtx, c.handler, msgCh)
 	}()
 
-	c.logger.Printf("[DEBUG] consumer ready")
 	var result error
 	for {
 		select {
