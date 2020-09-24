@@ -15,14 +15,14 @@ var errChannelClosed = fmt.Errorf("channel closed")
 type Option func(p *Publisher)
 
 type Message struct {
-	Context    context.Context
-	Exchange   string
-	Key        string
-	Mandatory  bool
-	Immediate  bool
-	WaitReady  bool
-	Publishing amqp.Publishing
-	ResultCh   chan error
+	Context      context.Context
+	Exchange     string
+	Key          string
+	Mandatory    bool
+	Immediate    bool
+	ErrOnUnready bool
+	Publishing   amqp.Publishing
+	ResultCh     chan error
 }
 
 type Publisher struct {
@@ -117,9 +117,9 @@ func (p *Publisher) Publish(msg Message) {
 		msg.Context = context.Background()
 	}
 
-	unreadyCh := p.Unready()
-	if msg.WaitReady {
-		unreadyCh = nil
+	var unreadyCh <-chan struct{}
+	if msg.ErrOnUnready {
+		unreadyCh = p.Unready()
 	}
 
 	select {

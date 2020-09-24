@@ -385,9 +385,9 @@ func TestUnreadyPublisher(main *testing.T) {
 		defer p.Close()
 
 		p.Publish(publisher.Message{
-			WaitReady:  false,
-			Publishing: amqp.Publishing{},
-			ResultCh:   nil,
+			ErrOnUnready: true,
+			Publishing:   amqp.Publishing{},
+			ResultCh:     nil,
 		})
 
 		assertUnready(t, p)
@@ -414,9 +414,9 @@ func TestUnreadyPublisher(main *testing.T) {
 		resultCh := make(chan error, 1)
 
 		p.Publish(publisher.Message{
-			WaitReady:  false,
-			Publishing: amqp.Publishing{},
-			ResultCh:   resultCh,
+			ErrOnUnready: true,
+			Publishing:   amqp.Publishing{},
+			ResultCh:     resultCh,
 		})
 
 		assertUnready(t, p)
@@ -484,7 +484,6 @@ func TestUnreadyPublisher(main *testing.T) {
 
 		p.Publish(publisher.Message{
 			Context:    msgCtx,
-			WaitReady:  true,
 			Publishing: amqp.Publishing{},
 		})
 
@@ -567,7 +566,6 @@ func TestReadyPublisher(main *testing.T) {
 			Key:       "theKey",
 			Mandatory: true,
 			Immediate: true,
-			WaitReady: true,
 			ResultCh:  resultCh,
 			Publishing: amqp.Publishing{
 				Headers: amqp.Table{
@@ -638,7 +636,6 @@ func TestReadyPublisher(main *testing.T) {
 		assertReady(t, p)
 
 		p.Publish(publisher.Message{
-			WaitReady:  true,
 			Publishing: amqp.Publishing{},
 		})
 
@@ -691,7 +688,6 @@ func TestReadyPublisher(main *testing.T) {
 
 		resultCh := make(chan error, 1)
 		p.Publish(publisher.Message{
-			WaitReady:  true,
 			ResultCh:   resultCh,
 			Publishing: amqp.Publishing{},
 		})
@@ -749,7 +745,6 @@ func TestReadyPublisher(main *testing.T) {
 
 		p.Publish(publisher.Message{
 			Context:    msgCtx,
-			WaitReady:  true,
 			Publishing: amqp.Publishing{},
 		})
 
@@ -807,7 +802,6 @@ func TestReadyPublisher(main *testing.T) {
 		resultCh := make(chan error, 1)
 		before := time.Now().UnixNano()
 		p.Publish(publisher.Message{
-			WaitReady:  true,
 			Publishing: amqp.Publishing{},
 			ResultCh:   resultCh,
 		})

@@ -59,8 +59,7 @@ waitOpened:
 		}
 
 		p.Publish(publisher.Message{
-			ResultCh:  resultCh,
-			WaitReady: true,
+			ResultCh: resultCh,
 		})
 
 		res := <-resultCh

@@ -21,8 +21,7 @@ func StandalonePublisherExample() {
 	)
 
 	p.Publish(publisher.Message{
-		Key:       "test_queue",
-		WaitReady: true,
+		Key: "test_queue",
 		Publishing: amqp.Publishing{
 			Body: []byte(`{"foo": "fooVal"}`),
 		},
