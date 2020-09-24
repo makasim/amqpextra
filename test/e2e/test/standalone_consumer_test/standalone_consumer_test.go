@@ -52,7 +52,8 @@ func TestCloseConsumerWhenConnChannelClosed(t *testing.T) {
 
 	expected := `[DEBUG] consumer starting
 [DEBUG] workers started
-[DEBUG] workers stopped
+[DEBUG] workers stopped: connection closed
+[DEBUG] consumer unready
 [DEBUG] consumer stopped
 `
 	require.Equal(t, expected, l.Logs())
@@ -114,20 +115,19 @@ func TestGetNewConsumerOnErrorInCloseCh(t *testing.T) {
 
 	c.Run()
 
-	expected := `[DEBUG] send fresh connection
-[DEBUG] consumer starting
-[DEBUG] workers started
+	expected := `[DEBUG] workers started
 [DEBUG] send connection is closed
-[DEBUG] workers stopped
+[DEBUG] workers stopped: connection closed
+[DEBUG] consumer unready
 [DEBUG] trying reconnect
 [DEBUG] reconnected
-[DEBUG] consumer starting
 [DEBUG] workers started
 [DEBUG] close connection permanently
-[DEBUG] workers stopped
+[DEBUG] workers stopped: connection closed
+[DEBUG] consumer unready
 [DEBUG] consumer stopped
 `
-	require.Equal(t, expected, l.Logs())
+	require.Contains(t, l.Logs(), expected)
 }
 
 func TestCloseConsumerByContext(t *testing.T) {
@@ -167,7 +167,7 @@ func TestCloseConsumerByContext(t *testing.T) {
 	expected := `[DEBUG] consumer starting
 [DEBUG] workers started
 [DEBUG] close context
-[DEBUG] workers stopped
+[DEBUG] workers stopped: context closed
 [DEBUG] consumer stopped
 `
 	require.Equal(t, expected, l.Logs())
@@ -208,10 +208,9 @@ func TestCloseChannelOnAlreadyClosedConnection(t *testing.T) {
 
 	expected := `[DEBUG] consumer starting
 [DEBUG] workers started
-[DEBUG] workers stopped
-[DEBUG] consumer stopped
+[DEBUG] workers stopped: context closed
 `
-	require.Equal(t, expected, l.Logs())
+	require.Contains(t, l.Logs(), expected)
 
 	require.NotContains(t, l.Logs(), "Exception (504) Reason: \"channel/connection is not open\"\n[DEBUG] consumer stopped\n")
 }
@@ -250,7 +249,7 @@ func TestConsumeOneAndCloseConsumer(t *testing.T) {
 	expected := `[DEBUG] consumer starting
 [DEBUG] workers started
 [DEBUG] got message testbdy
-[DEBUG] workers stopped
+[DEBUG] workers stopped: context closed
 [DEBUG] consumer stopped
 `
 	require.Equal(t, expected, l.Logs())
@@ -345,11 +344,11 @@ func TestConcurrentlyPublishConsumeWhileConnectionLost(t *testing.T) {
 	expected := `[DEBUG] consumer starting
 [DEBUG] workers started
 [DEBUG] simulate lost connection
-[DEBUG] workers stopped
+[DEBUG] workers stopped: connection closed
+[DEBUG] consumer unready
 [DEBUG] get new connection
-[DEBUG] consumer starting
 [DEBUG] workers started
-[DEBUG] workers stopped
+[DEBUG] workers stopped: context closed
 [DEBUG] consumer stopped
 `
 	require.Equal(t, expected, l.Logs())
