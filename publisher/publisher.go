@@ -217,6 +217,7 @@ func (p *Publisher) channelState(conn Connection) error {
 
 func (p *Publisher) publishState(ch Channel) error {
 	chCloseCh := ch.NotifyClose(make(chan *amqp.Error, 1))
+	chFlowCh := ch.NotifyFlow(make(chan bool, 1))
 
 	p.logger.Printf("[DEBUG] publisher ready")
 	for {
@@ -229,9 +230,39 @@ func (p *Publisher) publishState(ch Channel) error {
 			return errChannelClosed
 		case err := <-p.connCloseCh:
 			return err
+		case resume := <-chFlowCh:
+			if resume {
+				continue
+			}
+
+			if err := p.pausedState(chFlowCh, chCloseCh); err != nil {
+				return err
+			}
 		case <-p.ctx.Done():
 			p.close(ch)
 			return nil
+		}
+	}
+}
+
+func (p *Publisher) pausedState(chFlowCh <-chan bool, chCloseCh chan *amqp.Error) error {
+	p.logger.Printf("[WARN] publisher flow paused")
+	defer p.logger.Printf("[INFO] publisher flow resumed")
+
+	for {
+		select {
+		case p.unreadyCh <- fmt.Errorf("publisher flow paused"):
+		case resume := <-chFlowCh:
+			if resume {
+				return nil
+			}
+		case <-chCloseCh:
+			p.logger.Printf("[DEBUG] channel closed")
+			return errChannelClosed
+		case err := <-p.connCloseCh:
+			return err
+		case <-p.ctx.Done():
+			return p.ctx.Err()
 		}
 	}
 }

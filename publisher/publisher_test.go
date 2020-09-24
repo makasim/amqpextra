@@ -28,9 +28,12 @@ func TestReconnection(main *testing.T) {
 		ch.
 			EXPECT().
 			NotifyClose(any()).
-			DoAndReturn(func(receiver chan *amqp.Error) chan *amqp.Error {
-				return receiver
-			}).
+			DoAndReturn(notifyCloseStub()).
+			Times(1)
+		ch.
+			EXPECT().
+			NotifyFlow(any()).
+			DoAndReturn(notifyFlowStub()).
 			Times(1)
 		ch.
 			EXPECT().
@@ -121,9 +124,12 @@ func TestReconnection(main *testing.T) {
 		ch.
 			EXPECT().
 			NotifyClose(any()).
-			DoAndReturn(func(receiver chan *amqp.Error) chan *amqp.Error {
-				return receiver
-			}).
+			DoAndReturn(notifyCloseStub()).
+			Times(1)
+		ch.
+			EXPECT().
+			NotifyFlow(any()).
+			DoAndReturn(notifyFlowStub()).
 			Times(1)
 
 		connCh <- conn
@@ -139,9 +145,12 @@ func TestReconnection(main *testing.T) {
 		ch.
 			EXPECT().
 			NotifyClose(any()).
-			DoAndReturn(func(receiver chan *amqp.Error) chan *amqp.Error {
-				return receiver
-			}).
+			DoAndReturn(notifyCloseStub()).
+			Times(1)
+		ch.
+			EXPECT().
+			NotifyFlow(any()).
+			DoAndReturn(notifyFlowStub()).
 			Times(1)
 		ch.
 			EXPECT().
@@ -183,9 +192,12 @@ func TestReconnection(main *testing.T) {
 		ch.
 			EXPECT().
 			NotifyClose(any()).
-			DoAndReturn(func(receiver chan *amqp.Error) chan *amqp.Error {
-				return receiver
-			}).
+			DoAndReturn(notifyCloseStub()).
+			Times(1)
+		ch.
+			EXPECT().
+			NotifyFlow(any()).
+			DoAndReturn(notifyFlowStub()).
 			Times(1)
 
 		connCh <- conn
@@ -226,14 +238,22 @@ func TestReconnection(main *testing.T) {
 				return receiver
 			}).
 			Times(1)
+		ch.
+			EXPECT().
+			NotifyFlow(any()).
+			DoAndReturn(notifyFlowStub()).
+			Times(1)
 
 		newCh := mock_publisher.NewMockChannel(ctrl)
 		newCh.
 			EXPECT().
 			NotifyClose(any()).
-			DoAndReturn(func(receiver chan *amqp.Error) chan *amqp.Error {
-				return receiver
-			}).
+			DoAndReturn(notifyCloseStub()).
+			Times(1)
+		newCh.
+			EXPECT().
+			NotifyFlow(any()).
+			DoAndReturn(notifyFlowStub()).
 			Times(1)
 		newCh.
 			EXPECT().
@@ -290,6 +310,11 @@ func TestReconnection(main *testing.T) {
 				return receiver
 			}).
 			Times(1)
+		ch.
+			EXPECT().
+			NotifyFlow(any()).
+			DoAndReturn(notifyFlowStub()).
+			Times(1)
 
 		first := true
 		conn := mock_publisher.NewMockConnection(ctrl)
@@ -311,9 +336,12 @@ func TestReconnection(main *testing.T) {
 		newCh.
 			EXPECT().
 			NotifyClose(any()).
-			DoAndReturn(func(receiver chan *amqp.Error) chan *amqp.Error {
-				return receiver
-			}).
+			DoAndReturn(notifyCloseStub()).
+			Times(1)
+		newCh.
+			EXPECT().
+			NotifyFlow(any()).
+			DoAndReturn(notifyFlowStub()).
 			Times(1)
 		newCh.
 			EXPECT().
@@ -510,9 +538,12 @@ func TestReadyPublisher(main *testing.T) {
 		ch.
 			EXPECT().
 			NotifyClose(any()).
-			DoAndReturn(func(receiver chan *amqp.Error) chan *amqp.Error {
-				return receiver
-			}).
+			DoAndReturn(notifyCloseStub()).
+			Times(1)
+		ch.
+			EXPECT().
+			NotifyFlow(any()).
+			DoAndReturn(notifyFlowStub()).
 			Times(1)
 		ch.
 			EXPECT().
@@ -610,9 +641,12 @@ func TestReadyPublisher(main *testing.T) {
 		ch.
 			EXPECT().
 			NotifyClose(any()).
-			DoAndReturn(func(receiver chan *amqp.Error) chan *amqp.Error {
-				return receiver
-			}).
+			DoAndReturn(notifyCloseStub()).
+			Times(1)
+		ch.
+			EXPECT().
+			NotifyFlow(any()).
+			DoAndReturn(notifyFlowStub()).
 			Times(1)
 		ch.
 			EXPECT().
@@ -661,9 +695,12 @@ func TestReadyPublisher(main *testing.T) {
 		ch.
 			EXPECT().
 			NotifyClose(any()).
-			DoAndReturn(func(receiver chan *amqp.Error) chan *amqp.Error {
-				return receiver
-			}).
+			DoAndReturn(notifyCloseStub()).
+			Times(1)
+		ch.
+			EXPECT().
+			NotifyFlow(any()).
+			DoAndReturn(notifyFlowStub()).
 			Times(1)
 		ch.
 			EXPECT().
@@ -715,10 +752,13 @@ func TestReadyPublisher(main *testing.T) {
 		ch.
 			EXPECT().
 			NotifyClose(any()).
-			DoAndReturn(func(receiver chan *amqp.Error) chan *amqp.Error {
-				return receiver
-			}).
+			DoAndReturn(notifyCloseStub()).
 			MaxTimes(1)
+		ch.
+			EXPECT().
+			NotifyFlow(any()).
+			DoAndReturn(notifyFlowStub()).
+			Times(1)
 		ch.
 			EXPECT().
 			Publish(any(), any(), any(), any(), any()).
@@ -770,9 +810,12 @@ func TestReadyPublisher(main *testing.T) {
 		ch.
 			EXPECT().
 			NotifyClose(any()).
-			DoAndReturn(func(receiver chan *amqp.Error) chan *amqp.Error {
-				return receiver
-			}).
+			DoAndReturn(notifyCloseStub()).
+			Times(1)
+		ch.
+			EXPECT().
+			NotifyFlow(any()).
+			DoAndReturn(notifyFlowStub()).
 			Times(1)
 		ch.
 			EXPECT().
@@ -934,9 +977,12 @@ func TestClose(main *testing.T) {
 		ch.
 			EXPECT().
 			NotifyClose(any()).
-			DoAndReturn(func(receiver chan *amqp.Error) chan *amqp.Error {
-				return receiver
-			}).
+			DoAndReturn(notifyCloseStub()).
+			Times(1)
+		ch.
+			EXPECT().
+			NotifyFlow(any()).
+			DoAndReturn(notifyFlowStub()).
 			Times(1)
 		ch.
 			EXPECT().
@@ -977,9 +1023,12 @@ func TestClose(main *testing.T) {
 		ch.
 			EXPECT().
 			NotifyClose(any()).
-			DoAndReturn(func(receiver chan *amqp.Error) chan *amqp.Error {
-				return receiver
-			}).
+			DoAndReturn(notifyCloseStub()).
+			Times(1)
+		ch.
+			EXPECT().
+			NotifyFlow(any()).
+			DoAndReturn(notifyFlowStub()).
 			Times(1)
 		ch.
 			EXPECT().
@@ -1018,9 +1067,12 @@ func TestClose(main *testing.T) {
 		ch.
 			EXPECT().
 			NotifyClose(any()).
-			DoAndReturn(func(receiver chan *amqp.Error) chan *amqp.Error {
-				return receiver
-			}).
+			DoAndReturn(notifyCloseStub()).
+			Times(1)
+		ch.
+			EXPECT().
+			NotifyFlow(any()).
+			DoAndReturn(notifyFlowStub()).
 			Times(1)
 		ch.
 			EXPECT().
@@ -1060,9 +1112,12 @@ func TestConcurrency(main *testing.T) {
 		ch.
 			EXPECT().
 			NotifyClose(any()).
-			DoAndReturn(func(receiver chan *amqp.Error) chan *amqp.Error {
-				return receiver
-			}).
+			DoAndReturn(notifyCloseStub()).
+			Times(1)
+		ch.
+			EXPECT().
+			NotifyFlow(any()).
+			DoAndReturn(notifyFlowStub()).
 			Times(1)
 		ch.
 			EXPECT().
@@ -1122,9 +1177,12 @@ func TestConcurrency(main *testing.T) {
 		ch.
 			EXPECT().
 			NotifyClose(any()).
-			DoAndReturn(func(receiver chan *amqp.Error) chan *amqp.Error {
-				return receiver
-			}).
+			DoAndReturn(notifyCloseStub()).
+			Times(1)
+		ch.
+			EXPECT().
+			NotifyFlow(any()).
+			DoAndReturn(notifyFlowStub()).
 			Times(1)
 		ch.
 			EXPECT().
@@ -1168,9 +1226,12 @@ func TestConcurrency(main *testing.T) {
 		newCh.
 			EXPECT().
 			NotifyClose(any()).
-			DoAndReturn(func(receiver chan *amqp.Error) chan *amqp.Error {
-				return receiver
-			}).
+			DoAndReturn(notifyCloseStub()).
+			Times(1)
+		newCh.
+			EXPECT().
+			NotifyFlow(any()).
+			DoAndReturn(notifyFlowStub()).
 			Times(1)
 		newCh.
 			EXPECT().
@@ -1221,6 +1282,11 @@ func TestConcurrency(main *testing.T) {
 			Times(1)
 		ch.
 			EXPECT().
+			NotifyFlow(any()).
+			DoAndReturn(notifyFlowStub()).
+			Times(1)
+		ch.
+			EXPECT().
 			Publish(any(), any(), any(), any(), any()).
 			DoAndReturn(func(exchange, key string, mandatory, immediate bool, msg amqp.Publishing) error {
 				time.Sleep(time.Millisecond * 10)
@@ -1233,9 +1299,12 @@ func TestConcurrency(main *testing.T) {
 		newCh.
 			EXPECT().
 			NotifyClose(any()).
-			DoAndReturn(func(receiver chan *amqp.Error) chan *amqp.Error {
-				return receiver
-			}).
+			DoAndReturn(notifyCloseStub()).
+			Times(1)
+		newCh.
+			EXPECT().
+			NotifyFlow(any()).
+			DoAndReturn(notifyFlowStub()).
 			Times(1)
 		newCh.
 			EXPECT().
@@ -1361,5 +1430,17 @@ func waitResult(resultCh chan error, dur time.Duration) error {
 		return res
 	case <-timer.C:
 		return fmt.Errorf("wait result timeout")
+	}
+}
+
+func notifyCloseStub() func(_ chan *amqp.Error) chan *amqp.Error {
+	return func(ch chan *amqp.Error) chan *amqp.Error {
+		return ch
+	}
+}
+
+func notifyFlowStub() func(_ chan bool) chan bool {
+	return func(ch chan bool) chan bool {
+		return ch
 	}
 }

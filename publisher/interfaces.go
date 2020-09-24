@@ -9,6 +9,7 @@ type Connection interface {
 type Channel interface {
 	Publish(exchange, key string, mandatory, immediate bool, msg amqp.Publishing) error
 	NotifyClose(receiver chan *amqp.Error) chan *amqp.Error
+	NotifyFlow(c chan bool) chan bool
 	Close() error
 }
 
