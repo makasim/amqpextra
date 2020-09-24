@@ -117,9 +117,10 @@ func TestConcurrentlyPublishConsumeWhileConnectionLost(t *testing.T) {
 	expected := `[DEBUG] connection established
 [DEBUG] consumer starting
 [DEBUG] workers started
-[DEBUG] workers stopped
+[DEBUG] workers stopped: channel closed
+[ERROR] init func: Exception (504) Reason: "channel/connection is not open"
 [DEBUG] connection established
-[DEBUG] consumer starting
+[DEBUG] consumer unready
 [DEBUG] workers started
 `
 	require.Contains(t, l.Logs(), expected)
