@@ -194,8 +194,8 @@ func TestReconnection(main *testing.T) {
 		closeCh <- amqp.ErrClosed
 		close(connCh)
 
-		assertUnready(t, p, "permanently closed")
 		assertClosed(t, p)
+		assertUnready(t, p, "permanently closed")
 
 		expected := `[DEBUG] publisher starting
 [DEBUG] publisher ready
