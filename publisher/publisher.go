@@ -37,7 +37,7 @@ type Publisher struct {
 	publishingCh chan Message
 	closeCh      chan struct{}
 	readyCh      chan struct{}
-	unreadyCh    chan struct{}
+	unreadyCh    chan error
 }
 
 func New(
@@ -52,7 +52,7 @@ func New(
 		publishingCh: make(chan Message),
 		closeCh:      make(chan struct{}),
 		readyCh:      make(chan struct{}),
-		unreadyCh:    make(chan struct{}),
+		unreadyCh:    make(chan error),
 	}
 
 	for _, opt := range opts {
@@ -117,7 +117,7 @@ func (p *Publisher) Publish(msg Message) {
 		msg.Context = context.Background()
 	}
 
-	var unreadyCh <-chan struct{}
+	var unreadyCh <-chan error
 	if msg.ErrOnUnready {
 		unreadyCh = p.Unready()
 	}
@@ -149,7 +149,7 @@ func (p *Publisher) Ready() <-chan struct{} {
 	return p.readyCh
 }
 
-func (p *Publisher) Unready() <-chan struct{} {
+func (p *Publisher) Unready() <-chan error {
 	return p.unreadyCh
 }
 
@@ -162,6 +162,8 @@ func (p *Publisher) connectionState() {
 	defer close(p.unreadyCh)
 	defer close(p.closeCh)
 	defer p.logger.Printf("[DEBUG] publisher stopped")
+
+	var connErr error = amqp.ErrClosed
 
 	p.logger.Printf("[DEBUG] publisher starting")
 	for {
@@ -180,12 +182,17 @@ func (p *Publisher) connectionState() {
 			default:
 			}
 
-			if err := p.channelState(conn); err == nil {
-				return
+			err := p.channelState(conn)
+			if err != nil {
+				p.logger.Printf("[DEBUG] publisher unready")
+
+				connErr = err
+				continue
 			}
 
-			p.logger.Printf("[DEBUG] publisher unready")
-		case p.unreadyCh <- struct{}{}:
+			return
+
+		case p.unreadyCh <- connErr:
 		case <-p.ctx.Done():
 			p.close(nil)
 
@@ -267,7 +274,7 @@ func (p *Publisher) retry(err error) error {
 
 	for {
 		select {
-		case p.unreadyCh <- struct{}{}:
+		case p.unreadyCh <- err:
 			continue
 		case <-timer.C:
 			return err

@@ -92,7 +92,7 @@ func TestReconnection(main *testing.T) {
 		connCh <- conn
 
 		time.Sleep(time.Millisecond * 200)
-		assertUnready(t, p)
+		assertUnready(t, p, "the error")
 
 		p.Close()
 		assertClosed(t, p)
@@ -194,7 +194,7 @@ func TestReconnection(main *testing.T) {
 		closeCh <- amqp.ErrClosed
 		close(connCh)
 
-		assertUnready(t, p)
+		assertUnready(t, p, "permanently closed")
 		assertClosed(t, p)
 
 		expected := `[DEBUG] publisher starting
@@ -353,7 +353,7 @@ func TestUnreadyPublisher(main *testing.T) {
 		p := publisher.New(connCh, closeCh, publisher.WithLogger(l))
 		defer p.Close()
 
-		assertUnready(t, p)
+		assertUnready(t, p, amqp.ErrClosed.Error())
 		p.Close()
 		assertClosed(t, p)
 	})
@@ -368,10 +368,10 @@ func TestUnreadyPublisher(main *testing.T) {
 		p := publisher.New(connCh, closeCh, publisher.WithLogger(l))
 		defer p.Close()
 
-		assertUnready(t, p)
+		assertUnready(t, p, amqp.ErrClosed.Error())
 		p.Close()
 		assertClosed(t, p)
-		assertUnready(t, p)
+		assertUnready(t, p, "permanently closed")
 	})
 
 	main.Run("PublishWithNoResultChannel", func(t *testing.T) {
@@ -390,7 +390,7 @@ func TestUnreadyPublisher(main *testing.T) {
 			ResultCh:     nil,
 		})
 
-		assertUnready(t, p)
+		assertUnready(t, p, amqp.ErrClosed.Error())
 		p.Close()
 		assertClosed(t, p)
 
@@ -419,7 +419,7 @@ func TestUnreadyPublisher(main *testing.T) {
 			ResultCh:     resultCh,
 		})
 
-		assertUnready(t, p)
+		assertUnready(t, p, amqp.ErrClosed.Error())
 
 		err := waitResult(resultCh, time.Millisecond*100)
 		require.EqualError(t, err, "publisher not ready")
@@ -474,7 +474,7 @@ func TestUnreadyPublisher(main *testing.T) {
 			connCh <- conn
 		}()
 
-		assertUnready(t, p)
+		assertUnready(t, p, amqp.ErrClosed.Error())
 
 		msgCtx, cancelFunc := context.WithCancel(context.Background())
 		go func() {
@@ -797,7 +797,7 @@ func TestReadyPublisher(main *testing.T) {
 			connCh <- conn
 		}()
 
-		assertUnready(t, p)
+		assertUnready(t, p, amqp.ErrClosed.Error())
 
 		resultCh := make(chan error, 1)
 		before := time.Now().UnixNano()
@@ -870,7 +870,7 @@ func TestClosedPublisher(main *testing.T) {
 			ResultCh:   resultCh,
 		})
 
-		assertUnready(t, p)
+		assertUnready(t, p, "permanently closed")
 
 		err := waitResult(resultCh, time.Millisecond*100)
 		require.EqualError(t, err, `publisher stopped`)
@@ -893,7 +893,7 @@ func TestClose(main *testing.T) {
 		p := publisher.New(connCh, closeCh, publisher.WithLogger(l))
 		defer p.Close()
 
-		assertUnready(t, p)
+		assertUnready(t, p, amqp.ErrClosed.Error())
 
 		p.Close()
 		p.Close()
@@ -913,7 +913,7 @@ func TestClose(main *testing.T) {
 		p := publisher.New(connCh, closeCh, publisher.WithContext(ctx), publisher.WithLogger(l))
 		defer p.Close()
 
-		assertUnready(t, p)
+		assertUnready(t, p, amqp.ErrClosed.Error())
 
 		cancelFunc()
 		assertClosed(t, p)
@@ -1319,12 +1319,18 @@ func assertClosed(t *testing.T, p *publisher.Publisher) {
 	}
 }
 
-func assertUnready(t *testing.T, p *publisher.Publisher) {
+func assertUnready(t *testing.T, p *publisher.Publisher, errString string) {
 	timer := time.NewTimer(time.Millisecond * 100)
 	defer timer.Stop()
 
 	select {
-	case <-p.Unready():
+	case actualErr, ok := <-p.Unready():
+		if !ok {
+			require.Equal(t, "permanently closed", errString)
+			return
+		}
+
+		require.EqualError(t, actualErr, errString)
 	case <-timer.C:
 		t.Fatal("publisher must be unready")
 	}
