@@ -249,9 +249,11 @@ func (p *Publisher) pausedState(chFlowCh <-chan bool, chCloseCh chan *amqp.Error
 	p.logger.Printf("[WARN] publisher flow paused")
 	defer p.logger.Printf("[INFO] publisher flow resumed")
 
+	errFlowPaused := fmt.Errorf("publisher flow paused")
+
 	for {
 		select {
-		case p.unreadyCh <- fmt.Errorf("publisher flow paused"):
+		case p.unreadyCh <- errFlowPaused:
 		case resume := <-chFlowCh:
 			if resume {
 				return nil
