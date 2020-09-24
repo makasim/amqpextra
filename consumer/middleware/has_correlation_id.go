@@ -7,7 +7,7 @@ import (
 	"github.com/makasim/amqpextra/consumer"
 )
 
-func HasCorrelationID() func(next consumer.Handler) consumer.Handler {
+func HasCorrelationID() consumer.Middleware {
 	return wrap(func(ctx context.Context, msg amqp.Delivery, next consumer.Handler) interface{} {
 		if msg.CorrelationId == "" {
 			log(ctx, "[WARN] no correlation id")

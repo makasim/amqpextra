@@ -3,11 +3,11 @@ package middleware
 import (
 	"context"
 
-	"github.com/streadway/amqp"
 	"github.com/makasim/amqpextra/consumer"
+	"github.com/streadway/amqp"
 )
 
-func Recover() func(next consumer.Handler) consumer.Handler {
+func Recover() consumer.Middleware {
 	return wrap(func(ctx context.Context, msg amqp.Delivery, next consumer.Handler) (result interface{}) {
 		defer func() {
 			if e := recover(); e != nil {

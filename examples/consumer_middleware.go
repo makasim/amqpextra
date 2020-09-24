@@ -14,16 +14,17 @@ func ConsumerMiddleware() {
 	connCh := make(<-chan *amqp.Connection)
 	closeCh := make(<-chan *amqp.Error)
 
-	handler := consumer.Use([]consumer.Middleware{
+	handler := consumer.Wrap(
+		consumer.HandlerFunc(func(ctx context.Context, msg amqp.Delivery) interface{} {
+			// process message
+
+			msg.Ack(false)
+
+			return nil
+		}),
 		middleware.HasCorrelationID(),
 		middleware.HasReplyTo(),
-	}, consumer.HandlerFunc(func(ctx context.Context, msg amqp.Delivery) interface{} {
-		// process message
-
-		msg.Ack(false)
-
-		return nil
-	}))
+	)
 
 	c := amqpextra.NewConsumer(
 		"a_queue",

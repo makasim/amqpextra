@@ -466,7 +466,7 @@ func TestConsume(main *testing.T) {
 
 		assert.Equal(t, `[DEBUG] consumer starting
 [DEBUG] consumer ready
-[DEBUG] worker started
+[DEBUG] worker starting
 [DEBUG] worker stopped
 [DEBUG] consumer unready
 [DEBUG] consumer stopped
@@ -513,7 +513,7 @@ func TestConsume(main *testing.T) {
 
 		assert.Equal(t, `[DEBUG] consumer starting
 [DEBUG] consumer ready
-[DEBUG] worker started
+[DEBUG] worker starting
 [DEBUG] worker stopped
 [DEBUG] consumer unready
 [DEBUG] consumer stopped
@@ -563,7 +563,7 @@ func TestConsume(main *testing.T) {
 
 		assert.Equal(t, `[DEBUG] consumer starting
 [DEBUG] consumer ready
-[DEBUG] worker started
+[DEBUG] worker starting
 [DEBUG] worker stopped
 [DEBUG] consumer unready
 [DEBUG] consumer stopped
@@ -611,7 +611,7 @@ func TestConsume(main *testing.T) {
 
 		assert.Equal(t, `[DEBUG] consumer starting
 [DEBUG] consumer ready
-[DEBUG] worker started
+[DEBUG] worker starting
 [DEBUG] worker stopped
 [DEBUG] consumer unready
 [DEBUG] consumer stopped
@@ -673,11 +673,11 @@ func TestConsume(main *testing.T) {
 
 		assert.Equal(t, `[DEBUG] consumer starting
 [DEBUG] consumer ready
-[DEBUG] worker started
+[DEBUG] worker starting
 [DEBUG] channel closed
 [DEBUG] worker stopped
 [DEBUG] consumer ready
-[DEBUG] worker started
+[DEBUG] worker starting
 [DEBUG] worker stopped
 [DEBUG] consumer unready
 [DEBUG] consumer stopped
@@ -726,7 +726,7 @@ func TestConsume(main *testing.T) {
 
 		assert.Equal(t, `[DEBUG] consumer starting
 [DEBUG] consumer ready
-[DEBUG] worker started
+[DEBUG] worker starting
 [DEBUG] worker stopped
 [WARN] channel close: the error
 [DEBUG] consumer unready
@@ -776,7 +776,7 @@ func TestConsume(main *testing.T) {
 
 		assert.Equal(t, `[DEBUG] consumer starting
 [DEBUG] consumer ready
-[DEBUG] worker started
+[DEBUG] worker starting
 [DEBUG] worker stopped
 [DEBUG] consumer unready
 [DEBUG] consumer stopped
@@ -827,7 +827,7 @@ func TestConsume(main *testing.T) {
 
 		assert.Equal(t, `[DEBUG] consumer starting
 [DEBUG] consumer ready
-[DEBUG] worker started
+[DEBUG] worker starting
 [TEST] got message
 [TEST] got message
 [TEST] got message
@@ -909,11 +909,11 @@ func TestConcurrency(main *testing.T) {
 		assert.Equal(t, 100, countConsumed)
 		assert.Equal(t, `[DEBUG] consumer starting
 [DEBUG] consumer ready
-[DEBUG] worker started
+[DEBUG] worker starting
 [DEBUG] worker stopped
 [DEBUG] consumer unready
 [DEBUG] consumer ready
-[DEBUG] worker started
+[DEBUG] worker starting
 [DEBUG] worker stopped
 [DEBUG] consumer unready
 [DEBUG] consumer stopped
@@ -982,7 +982,7 @@ func TestConcurrency(main *testing.T) {
 		assert.Less(t, countConsumed, 40)
 		assert.Equal(t, `[DEBUG] consumer starting
 [DEBUG] consumer ready
-[DEBUG] worker started
+[DEBUG] worker starting
 [DEBUG] worker stopped
 [DEBUG] consumer unready
 [DEBUG] consumer stopped
@@ -1055,11 +1055,11 @@ func TestConcurrency(main *testing.T) {
 		assert.Equal(t, 100, countConsumed)
 		assert.Equal(t, `[DEBUG] consumer starting
 [DEBUG] consumer ready
-[DEBUG] worker started
+[DEBUG] worker starting
 [DEBUG] channel closed
 [DEBUG] worker stopped
 [DEBUG] consumer ready
-[DEBUG] worker started
+[DEBUG] worker starting
 [DEBUG] worker stopped
 [DEBUG] consumer unready
 [DEBUG] consumer stopped

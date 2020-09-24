@@ -12,14 +12,14 @@ type Worker interface {
 	Serve(ctx context.Context, h Handler, msgCh <-chan amqp.Delivery)
 }
 
-type defaultWorker struct {
-	logger logger.Logger
+type DefaultWorker struct {
+	Logger logger.Logger
 }
 
-func (dw *defaultWorker) Serve(ctx context.Context, h Handler, msgCh <-chan amqp.Delivery) {
-	defer dw.logger.Printf("[DEBUG] worker stopped")
+func (dw *DefaultWorker) Serve(ctx context.Context, h Handler, msgCh <-chan amqp.Delivery) {
+	defer dw.Logger.Printf("[DEBUG] worker stopped")
 
-	dw.logger.Printf("[DEBUG] worker started")
+	dw.Logger.Printf("[DEBUG] worker starting")
 	for {
 		select {
 		case msg, ok := <-msgCh:
@@ -28,7 +28,7 @@ func (dw *defaultWorker) Serve(ctx context.Context, h Handler, msgCh <-chan amqp
 			}
 
 			if res := h.Handle(ctx, msg); res != nil {
-				dw.logger.Printf("[ERROR] worker.serveMsg: non nil result: %#v", res)
+				dw.Logger.Printf("[ERROR] handler return non nil result: %#v", res)
 			}
 		case <-ctx.Done():
 			return
@@ -42,6 +42,10 @@ type ParallelWorker struct {
 }
 
 func NewParallelWorker(num int) *ParallelWorker {
+	if num < 1 {
+		panic("num workers must be greater than zero")
+	}
+
 	return &ParallelWorker{
 		Num:    num,
 		Logger: logger.Discard,
@@ -49,7 +53,9 @@ func NewParallelWorker(num int) *ParallelWorker {
 }
 
 func (pw *ParallelWorker) Serve(ctx context.Context, h Handler, msgCh <-chan amqp.Delivery) {
-	defer pw.Logger.Printf("[DEBUG] workers stopped")
+	defer pw.Logger.Printf("[DEBUG] worker stopped")
+
+	pw.Logger.Printf("[DEBUG] worker starting")
 
 	wg := &sync.WaitGroup{}
 	for i := 0; i < pw.Num; i++ {
@@ -65,7 +71,7 @@ func (pw *ParallelWorker) Serve(ctx context.Context, h Handler, msgCh <-chan amq
 					}
 
 					if res := h.Handle(ctx, msg); res != nil {
-						pw.Logger.Printf("[ERROR] worker.serveMsg: non nil result: %#v", res)
+						pw.Logger.Printf("[ERROR] handler return non nil result: %#v", res)
 					}
 				case <-ctx.Done():
 					return
@@ -74,6 +80,5 @@ func (pw *ParallelWorker) Serve(ctx context.Context, h Handler, msgCh <-chan amq
 		}()
 	}
 
-	pw.Logger.Printf("[DEBUG] workers started")
 	wg.Wait()
 }

@@ -12,7 +12,7 @@ const Ack = "ack"
 const Nack = "nack_requeue"
 const Requeue = "requeue"
 
-func AckNack() func(next consumer.Handler) consumer.Handler {
+func AckNack() consumer.Middleware {
 	return func(next consumer.Handler) consumer.Handler {
 		fn := func(ctx context.Context, msg amqp.Delivery) interface{} {
 			result := next.Handle(ctx, msg)

@@ -6,7 +6,7 @@ import (
 	"github.com/streadway/amqp"
 )
 
-type Middleware func(Handler) Handler
+type Middleware func(next Handler) Handler
 
 type Handler interface {
 	Handle(ctx context.Context, msg amqp.Delivery) interface{}
@@ -18,14 +18,14 @@ func (f HandlerFunc) Handle(ctx context.Context, msg amqp.Delivery) interface{} 
 	return f(ctx, msg)
 }
 
-func Use(middlewares []Middleware, endpoint Handler) Handler {
+func Wrap(handler Handler, middlewares ...Middleware) Handler {
 	// Return ahead of time if there aren't any middlewares for the chain
 	if len(middlewares) == 0 {
-		return endpoint
+		return handler
 	}
 
 	// Wrap the end handler with the middleware chain
-	w := middlewares[len(middlewares)-1](endpoint)
+	w := middlewares[len(middlewares)-1](handler)
 	for i := len(middlewares) - 2; i >= 0; i-- {
 		w = middlewares[i](w)
 	}

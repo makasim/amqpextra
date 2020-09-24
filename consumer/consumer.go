@@ -87,7 +87,7 @@ func New(
 	}
 
 	if c.worker == nil {
-		c.worker = &defaultWorker{logger: c.logger}
+		c.worker = &DefaultWorker{Logger: c.logger}
 	}
 
 	return c
