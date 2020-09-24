@@ -5,15 +5,15 @@ import (
 
 	"log"
 
-	"github.com/streadway/amqp"
 	"github.com/makasim/amqpextra"
+	"github.com/streadway/amqp"
 )
 
-func DeclareTempQueue(
+func TempQueue(
 	ctx context.Context,
 	c *amqpextra.Connection,
 ) (amqp.Queue, error) {
-	return DeclareQueue(
+	return Queue(
 		ctx,
 		c,
 		"",
@@ -25,7 +25,7 @@ func DeclareTempQueue(
 	)
 }
 
-func DeclareQueue(
+func Queue(
 	ctx context.Context,
 	c *amqpextra.Connection,
 	name string,
