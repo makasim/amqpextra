@@ -28,7 +28,7 @@ type Consumer struct {
 	logger      logger.Logger
 	closeCh     chan struct{}
 	readyCh     chan struct{}
-	unreadyCh   chan struct{}
+	unreadyCh   chan error
 
 	queue     string
 	consumer  string
@@ -54,7 +54,7 @@ func New(
 
 		closeCh:   make(chan struct{}),
 		readyCh:   make(chan struct{}),
-		unreadyCh: make(chan struct{}),
+		unreadyCh: make(chan error),
 	}
 
 	for _, opt := range opts {
@@ -142,7 +142,7 @@ func (c *Consumer) Ready() <-chan struct{} {
 	return c.readyCh
 }
 
-func (c *Consumer) Unready() <-chan struct{} {
+func (c *Consumer) Unready() <-chan error {
 	return c.unreadyCh
 }
 
@@ -161,6 +161,7 @@ func (c *Consumer) connectionState() {
 	defer c.logger.Printf("[DEBUG] consumer stopped")
 
 	c.logger.Printf("[DEBUG] consumer starting")
+	var connErr error = amqp.ErrClosed
 	for {
 		select {
 		case conn, ok := <-c.connCh:
@@ -176,13 +177,15 @@ func (c *Consumer) connectionState() {
 			default:
 			}
 
-			if err := c.channelState(conn); err == nil {
+			if err := c.channelState(conn); err != nil {
 				c.logger.Printf("[DEBUG] consumer unready")
-				return
+				connErr = err
+				continue
 			}
 
 			c.logger.Printf("[DEBUG] consumer unready")
-		case c.unreadyCh <- struct{}{}:
+			return
+		case c.unreadyCh <- connErr:
 		case <-c.ctx.Done():
 			return
 		}
@@ -269,7 +272,7 @@ func (c *Consumer) waitRetry(err error) error {
 
 	for {
 		select {
-		case c.unreadyCh <- struct{}{}:
+		case c.unreadyCh <- err:
 			continue
 		case <-timer.C:
 			return err

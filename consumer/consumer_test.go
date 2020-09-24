@@ -17,6 +17,7 @@ import (
 	"github.com/makasim/amqpextra/logger"
 	"github.com/streadway/amqp"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"go.uber.org/goleak"
 )
 
@@ -36,7 +37,7 @@ func TestUnready(main *testing.T) {
 		c := consumer.New("foo", h, connCh, connCloseCh, consumer.WithLogger(l))
 		go c.Run()
 
-		assertUnready(t, c)
+		assertUnready(t, c, amqp.ErrClosed.Error())
 		c.Close()
 		assertClosed(t, c)
 
@@ -63,7 +64,7 @@ func TestUnready(main *testing.T) {
 		c := consumer.New("foo", h, connCh, connCloseCh, consumer.WithLogger(l), consumer.WithContext(ctx))
 		go c.Run()
 
-		assertUnready(t, c)
+		assertUnready(t, c, amqp.ErrClosed.Error())
 		cancelFunc()
 		assertClosed(t, c)
 
@@ -87,7 +88,7 @@ func TestUnready(main *testing.T) {
 		c := consumer.New("foo", h, connCh, connCloseCh, consumer.WithLogger(l))
 		go c.Run()
 
-		assertUnready(t, c)
+		assertUnready(t, c, amqp.ErrClosed.Error())
 		close(connCh)
 		assertClosed(t, c)
 
@@ -123,7 +124,7 @@ func TestUnready(main *testing.T) {
 		)
 		go c.Run()
 
-		assertUnready(t, c)
+		assertUnready(t, c, amqp.ErrClosed.Error())
 		connCh <- conn
 		time.Sleep(time.Millisecond * 200)
 		c.Close()
@@ -163,7 +164,7 @@ func TestUnready(main *testing.T) {
 		)
 		go c.Run()
 
-		assertUnready(t, c)
+		assertUnready(t, c, amqp.ErrClosed.Error())
 		connCh <- conn
 		time.Sleep(time.Millisecond * 200)
 		close(connCh)
@@ -204,10 +205,10 @@ func TestUnready(main *testing.T) {
 		)
 		go c.Run()
 
-		assertUnready(t, c)
+		assertUnready(t, c, amqp.ErrClosed.Error())
 		connCh <- conn
 		time.Sleep(time.Millisecond * 200)
-		assertUnready(t, c)
+		assertUnready(t, c, "the error")
 		c.Close()
 		assertClosed(t, c)
 
@@ -245,7 +246,7 @@ func TestUnready(main *testing.T) {
 		)
 		go c.Run()
 
-		assertUnready(t, c)
+		assertUnready(t, c, amqp.ErrClosed.Error())
 		connCh <- conn
 		time.Sleep(time.Millisecond * 200)
 		close(connCh)
@@ -284,7 +285,7 @@ func TestUnready(main *testing.T) {
 		)
 		go c.Run()
 
-		assertUnready(t, c)
+		assertUnready(t, c, amqp.ErrClosed.Error())
 		connCh <- conn
 		time.Sleep(time.Millisecond * 200)
 		c.Close()
@@ -324,7 +325,7 @@ func TestUnready(main *testing.T) {
 		)
 		go c.Run()
 
-		assertUnready(t, c)
+		assertUnready(t, c, amqp.ErrClosed.Error())
 		connCh <- conn
 		time.Sleep(time.Millisecond * 200)
 		close(connCh)
@@ -367,7 +368,7 @@ func TestUnready(main *testing.T) {
 		)
 		go c.Run()
 
-		assertUnready(t, c)
+		assertUnready(t, c, amqp.ErrClosed.Error())
 		connCh <- conn
 		time.Sleep(time.Millisecond * 200)
 		c.Close()
@@ -409,7 +410,7 @@ func TestUnready(main *testing.T) {
 		)
 		go c.Run()
 
-		assertUnready(t, c)
+		assertUnready(t, c, amqp.ErrClosed.Error())
 		connCh <- conn
 		time.Sleep(time.Millisecond * 200)
 		close(connCh)
@@ -1067,12 +1068,18 @@ func TestConcurrency(main *testing.T) {
 	})
 }
 
-func assertUnready(t *testing.T, c *consumer.Consumer) {
+func assertUnready(t *testing.T, c *consumer.Consumer, errString string) {
 	timer := time.NewTimer(time.Millisecond * 100)
 	defer timer.Stop()
 
 	select {
-	case <-c.Unready():
+	case err, ok := <-c.Unready():
+		if !ok {
+			require.Equal(t, "permanently closed", errString)
+			return
+		}
+
+		require.EqualError(t, err, errString)
 	case <-timer.C:
 		t.Fatal("publisher must be unready")
 	}
