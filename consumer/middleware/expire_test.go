@@ -7,11 +7,11 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/makasim/amqpextra"
 	"github.com/makasim/amqpextra/consumer/middleware"
 	"github.com/streadway/amqp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/makasim/amqpextra/consumer"
 )
 
 func TestExpireToTimeoutSetContextTimeout(t *testing.T) {
@@ -22,7 +22,7 @@ func TestExpireToTimeoutSetContextTimeout(t *testing.T) {
 
 	parentCtx := context.Background()
 
-	worker := middleware.ExpireToTimeout(0)(amqpextra.WorkerFunc(func(ctx context.Context, msg amqp.Delivery) interface{} {
+	handler := middleware.ExpireToTimeout(0)(consumer.HandlerFunc(func(ctx context.Context, msg amqp.Delivery) interface{} {
 		require.NotEqual(t, parentCtx, ctx)
 
 		select {
@@ -42,7 +42,7 @@ func TestExpireToTimeoutSetContextTimeout(t *testing.T) {
 		return nil
 	}))
 
-	worker.ServeMsg(parentCtx, msg)
+	handler.Handle(parentCtx, msg)
 }
 
 func TestExpireToTimeoutNoExpirationNoDefault(t *testing.T) {
@@ -50,13 +50,13 @@ func TestExpireToTimeoutNoExpirationNoDefault(t *testing.T) {
 
 	parentCtx := context.Background()
 
-	worker := middleware.ExpireToTimeout(0)(amqpextra.WorkerFunc(func(ctx context.Context, msg amqp.Delivery) interface{} {
+	handler := middleware.ExpireToTimeout(0)(consumer.HandlerFunc(func(ctx context.Context, msg amqp.Delivery) interface{} {
 		require.Same(t, parentCtx, ctx)
 
 		return nil
 	}))
 
-	worker.ServeMsg(parentCtx, msg)
+	handler.Handle(parentCtx, msg)
 }
 
 func TestExpireToTimeoutNoExpirationSetDefault(t *testing.T) {
@@ -64,7 +64,7 @@ func TestExpireToTimeoutNoExpirationSetDefault(t *testing.T) {
 
 	parentCtx := context.Background()
 
-	worker := middleware.ExpireToTimeout(100 * time.Millisecond)(amqpextra.WorkerFunc(func(ctx context.Context, msg amqp.Delivery) interface{} {
+	handler := middleware.ExpireToTimeout(100 * time.Millisecond)(consumer.HandlerFunc(func(ctx context.Context, msg amqp.Delivery) interface{} {
 		require.NotEqual(t, parentCtx, ctx)
 
 		select {
@@ -84,7 +84,7 @@ func TestExpireToTimeoutNoExpirationSetDefault(t *testing.T) {
 		return nil
 	}))
 
-	worker.ServeMsg(parentCtx, msg)
+	handler.Handle(parentCtx, msg)
 }
 
 func TestExpireToTimeoutExpirationInvalidAndNoDefault(t *testing.T) {
@@ -92,13 +92,13 @@ func TestExpireToTimeoutExpirationInvalidAndNoDefault(t *testing.T) {
 
 	parentCtx := context.Background()
 
-	worker := middleware.ExpireToTimeout(0)(amqpextra.WorkerFunc(func(ctx context.Context, msg amqp.Delivery) interface{} {
+	handler := middleware.ExpireToTimeout(0)(consumer.HandlerFunc(func(ctx context.Context, msg amqp.Delivery) interface{} {
 		require.Same(t, parentCtx, ctx)
 
 		return nil
 	}))
 
-	worker.ServeMsg(parentCtx, msg)
+	handler.Handle(parentCtx, msg)
 }
 
 func TestExpireToTimeoutExpirationInvalidAndSetDefault(t *testing.T) {
@@ -107,7 +107,7 @@ func TestExpireToTimeoutExpirationInvalidAndSetDefault(t *testing.T) {
 
 	parentCtx := context.Background()
 
-	worker := middleware.ExpireToTimeout(100 * time.Millisecond)(amqpextra.WorkerFunc(func(ctx context.Context, msg amqp.Delivery) interface{} {
+	handler := middleware.ExpireToTimeout(100 * time.Millisecond)(consumer.HandlerFunc(func(ctx context.Context, msg amqp.Delivery) interface{} {
 		require.NotEqual(t, parentCtx, ctx)
 
 		select {
@@ -127,5 +127,5 @@ func TestExpireToTimeoutExpirationInvalidAndSetDefault(t *testing.T) {
 		return nil
 	}))
 
-	worker.ServeMsg(parentCtx, msg)
+	handler.Handle(parentCtx, msg)
 }

@@ -24,9 +24,9 @@ func TestAckNack(main *testing.T) {
 
 		ctx := context.Background()
 
-		worker := middleware.AckNack()(dummyWorker(nil))
+		handler := middleware.AckNack()(dummyHandler(nil))
 
-		res := worker.ServeMsg(ctx, msg)
+		res := handler.Handle(ctx, msg)
 		assert.Nil(t, res)
 	})
 
@@ -43,9 +43,9 @@ func TestAckNack(main *testing.T) {
 
 		ctx := context.Background()
 
-		worker := middleware.AckNack()(dummyWorker(middleware.Nack))
+		handler := middleware.AckNack()(dummyHandler(middleware.Nack))
 
-		res := worker.ServeMsg(ctx, msg)
+		res := handler.Handle(ctx, msg)
 		assert.Nil(t, res)
 	})
 
@@ -65,9 +65,9 @@ func TestAckNack(main *testing.T) {
 		ctx := context.Background()
 		ctx = middleware.WithLogger(ctx, l)
 
-		worker := middleware.AckNack()(dummyWorker(middleware.Nack))
+		handler := middleware.AckNack()(dummyHandler(middleware.Nack))
 
-		res := worker.ServeMsg(ctx, msg)
+		res := handler.Handle(ctx, msg)
 		assert.Nil(t, res)
 
 		require.Len(t, l.Formats, 1)
@@ -90,9 +90,9 @@ func TestAckNack(main *testing.T) {
 
 		ctx := context.Background()
 
-		worker := middleware.AckNack()(dummyWorker(middleware.Requeue))
+		handler := middleware.AckNack()(dummyHandler(middleware.Requeue))
 
-		res := worker.ServeMsg(ctx, msg)
+		res := handler.Handle(ctx, msg)
 		assert.Nil(t, res)
 	})
 
@@ -112,9 +112,9 @@ func TestAckNack(main *testing.T) {
 		ctx := context.Background()
 		ctx = middleware.WithLogger(ctx, l)
 
-		worker := middleware.AckNack()(dummyWorker(middleware.Requeue))
+		handler := middleware.AckNack()(dummyHandler(middleware.Requeue))
 
-		res := worker.ServeMsg(ctx, msg)
+		res := handler.Handle(ctx, msg)
 		assert.Nil(t, res)
 
 		require.Len(t, l.Formats, 1)
@@ -137,9 +137,9 @@ func TestAckNack(main *testing.T) {
 
 		ctx := context.Background()
 
-		worker := middleware.AckNack()(dummyWorker(middleware.Ack))
+		handler := middleware.AckNack()(dummyHandler(middleware.Ack))
 
-		res := worker.ServeMsg(ctx, msg)
+		res := handler.Handle(ctx, msg)
 		assert.Nil(t, res)
 	})
 
@@ -159,9 +159,9 @@ func TestAckNack(main *testing.T) {
 		ctx := context.Background()
 		ctx = middleware.WithLogger(ctx, l)
 
-		worker := middleware.AckNack()(dummyWorker(middleware.Ack))
+		handler := middleware.AckNack()(dummyHandler(middleware.Ack))
 
-		res := worker.ServeMsg(ctx, msg)
+		res := handler.Handle(ctx, msg)
 		assert.Nil(t, res)
 
 		require.Len(t, l.Formats, 1)
@@ -184,9 +184,9 @@ func TestAckNack(main *testing.T) {
 
 		ctx := context.Background()
 
-		worker := middleware.AckNack()(dummyWorker(expected))
+		handler := middleware.AckNack()(dummyHandler(expected))
 
-		res := worker.ServeMsg(ctx, msg)
+		res := handler.Handle(ctx, msg)
 		assert.Equal(t, expected, res)
 	})
 }

@@ -4,17 +4,17 @@ import (
 	"context"
 	"testing"
 
-	"github.com/makasim/amqpextra"
 	"github.com/makasim/amqpextra/consumer/middleware"
 	"github.com/streadway/amqp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/makasim/amqpextra/consumer"
 )
 
 func TestLoggerMiddleware(t *testing.T) {
 	l := &loggerStub{}
 
-	workerFunc := amqpextra.WorkerFunc(func(ctx context.Context, _ amqp.Delivery) interface{} {
+	handlerFunc := consumer.HandlerFunc(func(ctx context.Context, _ amqp.Delivery) interface{} {
 		ll, ok := middleware.GetLogger(ctx)
 
 		require.True(t, ok)
@@ -25,9 +25,9 @@ func TestLoggerMiddleware(t *testing.T) {
 
 	ctx := context.Background()
 
-	worker := middleware.Logger(l)(workerFunc)
+	handler := middleware.Logger(l)(handlerFunc)
 
-	res := worker.ServeMsg(ctx, amqp.Delivery{})
+	res := handler.Handle(ctx, amqp.Delivery{})
 	assert.Equal(t, "theResult", res)
 }
 
@@ -37,7 +37,7 @@ func TestLoggerWithLogger(t *testing.T) {
 	ctx := context.Background()
 	ctx = middleware.WithLogger(ctx, l)
 
-	worker := amqpextra.WorkerFunc(func(ctx context.Context, _ amqp.Delivery) interface{} {
+	handler := consumer.HandlerFunc(func(ctx context.Context, _ amqp.Delivery) interface{} {
 		ll, ok := middleware.GetLogger(ctx)
 
 		require.True(t, ok)
@@ -46,7 +46,7 @@ func TestLoggerWithLogger(t *testing.T) {
 		return "theResult"
 	})
 
-	res := worker.ServeMsg(ctx, amqp.Delivery{})
+	res := handler.Handle(ctx, amqp.Delivery{})
 	assert.Equal(t, "theResult", res)
 }
 

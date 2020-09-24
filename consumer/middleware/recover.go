@@ -3,15 +3,15 @@ package middleware
 import (
 	"context"
 
-	"github.com/makasim/amqpextra"
 	"github.com/streadway/amqp"
+	"github.com/makasim/amqpextra/consumer"
 )
 
-func Recover() func(next amqpextra.Worker) amqpextra.Worker {
-	return wrap(func(ctx context.Context, msg amqp.Delivery, next amqpextra.Worker) (result interface{}) {
+func Recover() func(next consumer.Handler) consumer.Handler {
+	return wrap(func(ctx context.Context, msg amqp.Delivery, next consumer.Handler) (result interface{}) {
 		defer func() {
 			if e := recover(); e != nil {
-				log(ctx, "[ERROR] worker panicked: %v", e)
+				log(ctx, "[ERROR] handler panicked: %v", e)
 
 				if nackErr := msg.Nack(false, false); nackErr != nil {
 					log(ctx, "[ERROR] msg nack: %v", e)
@@ -19,6 +19,6 @@ func Recover() func(next amqpextra.Worker) amqpextra.Worker {
 			}
 		}()
 
-		return next.ServeMsg(ctx, msg)
+		return next.Handle(ctx, msg)
 	})
 }

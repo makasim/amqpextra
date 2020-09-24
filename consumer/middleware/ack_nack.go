@@ -3,7 +3,7 @@ package middleware
 import (
 	"context"
 
-	"github.com/makasim/amqpextra"
+	"github.com/makasim/amqpextra/consumer"
 	"github.com/makasim/amqpextra/logger"
 	"github.com/streadway/amqp"
 )
@@ -12,10 +12,10 @@ const Ack = "ack"
 const Nack = "nack_requeue"
 const Requeue = "requeue"
 
-func AckNack() func(next amqpextra.Worker) amqpextra.Worker {
-	return func(next amqpextra.Worker) amqpextra.Worker {
+func AckNack() func(next consumer.Handler) consumer.Handler {
+	return func(next consumer.Handler) consumer.Handler {
 		fn := func(ctx context.Context, msg amqp.Delivery) interface{} {
-			result := next.ServeMsg(ctx, msg)
+			result := next.Handle(ctx, msg)
 			if result == nil {
 				return nil
 			}
@@ -61,6 +61,6 @@ func AckNack() func(next amqpextra.Worker) amqpextra.Worker {
 			return result
 		}
 
-		return amqpextra.WorkerFunc(fn)
+		return consumer.HandlerFunc(fn)
 	}
 }

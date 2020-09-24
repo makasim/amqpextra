@@ -3,7 +3,7 @@ package middleware_test
 import (
 	"context"
 
-	"github.com/makasim/amqpextra"
+	"github.com/makasim/amqpextra/consumer"
 	"github.com/streadway/amqp"
 	"github.com/stretchr/testify/mock"
 )
@@ -40,8 +40,8 @@ func (m *acknowledgerMock) Reject(tag uint64, requeue bool) error {
 	return args.Error(0)
 }
 
-func dummyWorker(result interface{}) amqpextra.Worker {
-	return amqpextra.WorkerFunc(func(ctx context.Context, msg amqp.Delivery) interface{} {
+func dummyHandler(result interface{}) consumer.Handler {
+	return consumer.HandlerFunc(func(ctx context.Context, msg amqp.Delivery) interface{} {
 		return result
 	})
 }

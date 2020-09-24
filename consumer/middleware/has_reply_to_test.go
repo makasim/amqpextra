@@ -22,9 +22,9 @@ func TestHasReplyToSet(t *testing.T) {
 
 	ctx := context.Background()
 
-	worker := middleware.HasReplyTo()(dummyWorker(nil))
+	handler := middleware.HasReplyTo()(dummyHandler(nil))
 
-	res := worker.ServeMsg(ctx, msg)
+	res := handler.Handle(ctx, msg)
 	assert.Nil(t, res)
 }
 
@@ -40,9 +40,9 @@ func TestHasReplyToNotSet(t *testing.T) {
 	msg.Acknowledger = &a
 	ctx := context.Background()
 
-	worker := middleware.HasReplyTo()(dummyWorker(nil))
+	handler := middleware.HasReplyTo()(dummyHandler(nil))
 
-	res := worker.ServeMsg(ctx, msg)
+	res := handler.Handle(ctx, msg)
 	assert.Nil(t, res)
 }
 
@@ -62,9 +62,9 @@ func TestHasReplyToNotSetWithLogger(t *testing.T) {
 	ctx := context.Background()
 	ctx = middleware.WithLogger(ctx, l)
 
-	worker := middleware.HasReplyTo()(dummyWorker(nil))
+	handler := middleware.HasReplyTo()(dummyHandler(nil))
 
-	res := worker.ServeMsg(ctx, msg)
+	res := handler.Handle(ctx, msg)
 	assert.Nil(t, res)
 
 	require.Len(t, l.Formats, 1)
@@ -86,9 +86,9 @@ func TestHasReplyToNotSetAndNackErrored(t *testing.T) {
 
 	ctx := context.Background()
 
-	worker := middleware.HasReplyTo()(dummyWorker(nil))
+	handler := middleware.HasReplyTo()(dummyHandler(nil))
 
-	res := worker.ServeMsg(ctx, msg)
+	res := handler.Handle(ctx, msg)
 	assert.Nil(t, res)
 }
 
@@ -110,9 +110,9 @@ func TestHasReplyToNotSetAndNackErroredWithLogger(t *testing.T) {
 	ctx := context.Background()
 	ctx = middleware.WithLogger(ctx, l)
 
-	worker := middleware.HasReplyTo()(dummyWorker(nil))
+	handler := middleware.HasReplyTo()(dummyHandler(nil))
 
-	res := worker.ServeMsg(ctx, msg)
+	res := handler.Handle(ctx, msg)
 	assert.Nil(t, res)
 
 	require.Len(t, l.Formats, 2)

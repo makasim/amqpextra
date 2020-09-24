@@ -7,21 +7,21 @@ import (
 
 	"time"
 
-	"github.com/makasim/amqpextra"
 	"github.com/streadway/amqp"
+	"github.com/makasim/amqpextra/consumer"
 )
 
-func ExpireToTimeout(defaultTimeout time.Duration) func(next amqpextra.Worker) amqpextra.Worker {
-	return wrap(func(ctx context.Context, msg amqp.Delivery, next amqpextra.Worker) (result interface{}) {
+func ExpireToTimeout(defaultTimeout time.Duration) func(next consumer.Handler) consumer.Handler {
+	return wrap(func(ctx context.Context, msg amqp.Delivery, next consumer.Handler) (result interface{}) {
 		if msg.Expiration == "" {
 			if defaultTimeout.Nanoseconds() == 0 {
-				return next.ServeMsg(ctx, msg)
+				return next.Handle(ctx, msg)
 			}
 
 			nextCtx, cancelFunc := context.WithTimeout(ctx, defaultTimeout)
 			defer cancelFunc()
 
-			return next.ServeMsg(nextCtx, msg)
+			return next.Handle(nextCtx, msg)
 		}
 
 		expiration, err := strconv.ParseInt(msg.Expiration, 10, 0)
@@ -32,13 +32,13 @@ func ExpireToTimeout(defaultTimeout time.Duration) func(next amqpextra.Worker) a
 				nextCtx, cancelFunc := context.WithTimeout(ctx, defaultTimeout)
 				defer cancelFunc()
 
-				return next.ServeMsg(nextCtx, msg)
+				return next.Handle(nextCtx, msg)
 			}
 		}
 
 		nextCtx, cancelFunc := context.WithTimeout(ctx, time.Duration(expiration)*time.Millisecond)
 		defer cancelFunc()
 
-		return next.ServeMsg(nextCtx, msg)
+		return next.Handle(nextCtx, msg)
 	})
 }

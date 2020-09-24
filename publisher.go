@@ -19,6 +19,7 @@ func NewPublisher(
 	return p
 }
 
+//nolint:dupl // ignore linter err
 func proxyPublisherConn(
 	amqpConnCh <-chan *amqp.Connection,
 	amqpConnCloseCh <-chan *amqp.Error,

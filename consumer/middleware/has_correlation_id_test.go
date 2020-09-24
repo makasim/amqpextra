@@ -22,9 +22,9 @@ func TestHasCorrelationIDSet(t *testing.T) {
 
 	ctx := context.Background()
 
-	worker := middleware.HasCorrelationID()(dummyWorker(nil))
+	handler := middleware.HasCorrelationID()(dummyHandler(nil))
 
-	res := worker.ServeMsg(ctx, msg)
+	res := handler.Handle(ctx, msg)
 	assert.Nil(t, res)
 }
 
@@ -40,9 +40,9 @@ func TestHasCorrelationIDNotSet(t *testing.T) {
 	msg.Acknowledger = &a
 	ctx := context.Background()
 
-	worker := middleware.HasCorrelationID()(dummyWorker(nil))
+	handler := middleware.HasCorrelationID()(dummyHandler(nil))
 
-	res := worker.ServeMsg(ctx, msg)
+	res := handler.Handle(ctx, msg)
 	assert.Nil(t, res)
 }
 
@@ -62,9 +62,9 @@ func TestHasCorrelationIDNotSetWithLogger(t *testing.T) {
 	ctx := context.Background()
 	ctx = middleware.WithLogger(ctx, l)
 
-	worker := middleware.HasCorrelationID()(dummyWorker(nil))
+	handler := middleware.HasCorrelationID()(dummyHandler(nil))
 
-	res := worker.ServeMsg(ctx, msg)
+	res := handler.Handle(ctx, msg)
 	assert.Nil(t, res)
 
 	require.Len(t, l.Formats, 1)
@@ -86,9 +86,9 @@ func TestHasCorrelationIDNotSetAndNackErrored(t *testing.T) {
 
 	ctx := context.Background()
 
-	worker := middleware.HasCorrelationID()(dummyWorker(nil))
+	handler := middleware.HasCorrelationID()(dummyHandler(nil))
 
-	res := worker.ServeMsg(ctx, msg)
+	res := handler.Handle(ctx, msg)
 	assert.Nil(t, res)
 }
 
@@ -110,9 +110,9 @@ func TestHasCorrelationIDNotSetAndNackErroredWithLogger(t *testing.T) {
 	ctx := context.Background()
 	ctx = middleware.WithLogger(ctx, l)
 
-	worker := middleware.HasCorrelationID()(dummyWorker(nil))
+	handler := middleware.HasCorrelationID()(dummyHandler(nil))
 
-	res := worker.ServeMsg(ctx, msg)
+	res := handler.Handle(ctx, msg)
 	assert.Nil(t, res)
 
 	require.Len(t, l.Formats, 2)

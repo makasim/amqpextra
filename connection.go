@@ -5,6 +5,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/makasim/amqpextra/consumer"
 	"github.com/makasim/amqpextra/logger"
 	"github.com/makasim/amqpextra/publisher"
 	"github.com/streadway/amqp"
@@ -115,14 +116,15 @@ func (c *Connection) Conn() (*amqp.Connection, error) {
 	}
 }
 
-func (c *Connection) Consumer(queue string, worker Worker) *Consumer {
+func (c *Connection) Consumer(queue string, handler consumer.Handler, opts ...consumer.Option) *consumer.Consumer {
 	connCh, closeCh := c.ConnCh()
 
-	consumer := NewConsumer(queue, worker, connCh, closeCh)
-	consumer.SetLogger(c.logger)
-	consumer.SetContext(c.ctx)
+	opts = append([]consumer.Option{
+		consumer.WithLogger(c.logger),
+		consumer.WithContext(c.ctx),
+	}, opts...)
 
-	return consumer
+	return NewConsumer(queue, handler, connCh, closeCh, opts...)
 }
 
 func (c *Connection) Publisher(opts ...publisher.Option) *publisher.Publisher {

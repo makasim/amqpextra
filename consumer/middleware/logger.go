@@ -3,16 +3,16 @@ package middleware
 import (
 	"context"
 
-	"github.com/makasim/amqpextra"
 	"github.com/streadway/amqp"
 	"github.com/makasim/amqpextra/logger"
+	"github.com/makasim/amqpextra/consumer"
 )
 
 var loggerKey = &contextKey{"logger"}
 
-func Logger(l logger.Logger) func(next amqpextra.Worker) amqpextra.Worker {
-	return wrap(func(ctx context.Context, msg amqp.Delivery, next amqpextra.Worker) interface{} {
-		return next.ServeMsg(WithLogger(ctx, l), msg)
+func Logger(l logger.Logger) func(next consumer.Handler) consumer.Handler {
+	return wrap(func(ctx context.Context, msg amqp.Delivery, next consumer.Handler) interface{} {
+		return next.Handle(WithLogger(ctx, l), msg)
 	})
 }
 

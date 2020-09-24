@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/makasim/amqpextra"
+	"github.com/makasim/amqpextra/consumer"
 	"github.com/makasim/amqpextra/consumer/middleware"
 	"github.com/streadway/amqp"
 	"github.com/stretchr/testify/assert"
@@ -16,9 +16,9 @@ func TestRecoverPropagateResultIfNoPanic(t *testing.T) {
 	msg.Body = []byte("original-message")
 	ctx := context.Background()
 
-	worker := middleware.Recover()(dummyWorker("theResult"))
+	handler := middleware.Recover()(dummyHandler("theResult"))
 
-	reply := worker.ServeMsg(ctx, msg)
+	reply := handler.Handle(ctx, msg)
 
 	assert.Equal(t, "theResult", reply)
 }
@@ -35,13 +35,13 @@ func TestRecoverNackOnPanic(t *testing.T) {
 	msg.Acknowledger = &a
 	ctx := context.Background()
 
-	workerFunc := amqpextra.WorkerFunc(func(ctx context.Context, msg amqp.Delivery) interface{} {
+	handlerFunc := consumer.HandlerFunc(func(ctx context.Context, msg amqp.Delivery) interface{} {
 		panic("a panic")
 	})
 
-	worker := middleware.Recover()(workerFunc)
+	handler := middleware.Recover()(handlerFunc)
 
-	reply := worker.ServeMsg(ctx, msg)
+	reply := handler.Handle(ctx, msg)
 	assert.Nil(t, reply)
 }
 
@@ -52,8 +52,8 @@ func TestRecoverNoPanicNoLog(t *testing.T) {
 	msg.Body = []byte("original-message")
 	ctx := middleware.WithLogger(context.Background(), l)
 
-	worker := middleware.Recover()(dummyWorker("aResult"))
-	worker.ServeMsg(ctx, msg)
+	handler := middleware.Recover()(dummyHandler("aResult"))
+	handler.Handle(ctx, msg)
 
 	assert.Equal(t, 0, len(l.Formats))
 }
@@ -72,17 +72,17 @@ func TestRecoverLogOnPanic(t *testing.T) {
 	msg.Acknowledger = &a
 	ctx := middleware.WithLogger(context.Background(), l)
 
-	workerFunc := amqpextra.WorkerFunc(func(ctx context.Context, msg amqp.Delivery) interface{} {
+	handlerFunc := consumer.HandlerFunc(func(ctx context.Context, msg amqp.Delivery) interface{} {
 		panic("a panic")
 	})
 
-	worker := middleware.Recover()(workerFunc)
+	handler := middleware.Recover()(handlerFunc)
 
-	reply := worker.ServeMsg(ctx, msg)
+	reply := handler.Handle(ctx, msg)
 	assert.Nil(t, reply)
 
 	require.Equal(t, 1, len(l.Formats))
-	assert.Equal(t, "[ERROR] worker panicked: %v", l.Formats[0])
+	assert.Equal(t, "[ERROR] handler panicked: %v", l.Formats[0])
 	assert.Equal(t, 1, len(l.Args[0]))
 	assert.Equal(t, "a panic", l.Args[0][0])
 }

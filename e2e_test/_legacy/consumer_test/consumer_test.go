@@ -14,6 +14,7 @@ import (
 
 	"github.com/streadway/amqp"
 
+	"github.com/makasim/amqpextra/consumer"
 	logger2 "github.com/makasim/amqpextra/logger"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -94,14 +95,13 @@ func TestConcurrentlyPublishConsumeWhileConnectionLost(t *testing.T) {
 
 	var countConsumed uint32
 
-	c := conn.Consumer(queue, amqpextra.WorkerFunc(func(ctx context.Context, msg amqp.Delivery) interface{} {
+	c := conn.Consumer(queue, consumer.HandlerFunc(func(ctx context.Context, msg amqp.Delivery) interface{} {
 		atomic.AddUint32(&countConsumed, 1)
 
 		msg.Ack(false)
 
 		return nil
 	}))
-	c.SetWorkerNum(5)
 
 	wg.Add(1)
 	go func() {
