@@ -4,11 +4,12 @@ import (
 	"log"
 
 	"github.com/makasim/amqpextra"
+	"github.com/makasim/amqpextra/logger"
 )
 
 func ConnExample() {
 	conn := amqpextra.Dial([]string{"amqp://guest:guest@localhost:5672/%2f"})
-	conn.SetLogger(amqpextra.LoggerFunc(log.Printf))
+	conn.SetLogger(logger.Std)
 
 	connCh, closeCh := conn.ConnCh()
 

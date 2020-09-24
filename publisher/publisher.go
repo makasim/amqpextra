@@ -6,22 +6,24 @@ import (
 	"strings"
 	"time"
 
-	"github.com/makasim/amqpextra"
+	"github.com/makasim/amqpextra/logger"
 	"github.com/streadway/amqp"
 )
 
-type Connection interface {
-	NotifyClose(receiver chan *amqp.Error) chan *amqp.Error
-	Close() error
-}
-
-type Channel interface {
-	Publish(exchange, key string, mandatory, immediate bool, msg amqp.Publishing) error
-	NotifyClose(receiver chan *amqp.Error) chan *amqp.Error
-	Close() error
-}
+var errChannelClosed = fmt.Errorf("channel closed")
 
 type Option func(p *Publisher)
+
+type Message struct {
+	Context      context.Context
+	Exchange     string
+	Key          string
+	Mandatory    bool
+	Immediate    bool
+	ErrOnUnready bool
+	Publishing   amqp.Publishing
+	ResultCh     chan error
+}
 
 type Publisher struct {
 	connCh      <-chan Connection
@@ -29,28 +31,28 @@ type Publisher struct {
 
 	ctx          context.Context
 	cancelFunc   context.CancelFunc
-	restartSleep time.Duration
+	retryPeriod  time.Duration
 	initFunc     func(conn Connection) (Channel, error)
-	logger       amqpextra.Logger
-	publishingCh chan amqpextra.Publishing
+	logger       logger.Logger
+	publishingCh chan Message
 	closeCh      chan struct{}
 	readyCh      chan struct{}
-	unreadyCh    chan struct{}
+	unreadyCh    chan error
 }
 
 func New(
 	connCh <-chan Connection,
-	closeCh <-chan *amqp.Error,
+	connCloseCh <-chan *amqp.Error,
 	opts ...Option,
 ) *Publisher {
 	p := &Publisher{
 		connCh:      connCh,
-		connCloseCh: closeCh,
+		connCloseCh: connCloseCh,
 
-		publishingCh: make(chan amqpextra.Publishing),
+		publishingCh: make(chan Message),
 		closeCh:      make(chan struct{}),
 		readyCh:      make(chan struct{}),
-		unreadyCh:    make(chan struct{}),
+		unreadyCh:    make(chan error),
 	}
 
 	for _, opt := range opts {
@@ -63,28 +65,28 @@ func New(
 		p.ctx, p.cancelFunc = context.WithCancel(context.Background())
 	}
 
-	if p.restartSleep == 0 {
-		p.restartSleep = time.Second * 5
+	if p.retryPeriod == 0 {
+		p.retryPeriod = time.Second * 5
 	}
 
 	if p.logger == nil {
-		p.logger = amqpextra.LoggerFunc(func(format string, v ...interface{}) {})
+		p.logger = logger.Discard
 	}
 
 	if p.initFunc == nil {
 		p.initFunc = func(conn Connection) (Channel, error) {
-			return conn.(*amqp.Connection).Channel()
+			return conn.Channel()
 		}
 	}
 
-	go p.connect()
+	go p.connectionState()
 
 	return p
 }
 
-func WithLogger(logger amqpextra.Logger) Option {
+func WithLogger(l logger.Logger) Option {
 	return func(p *Publisher) {
-		p.logger = logger
+		p.logger = l
 	}
 }
 
@@ -96,7 +98,7 @@ func WithContext(ctx context.Context) Option {
 
 func WithRestartSleep(dur time.Duration) Option {
 	return func(p *Publisher) {
-		p.restartSleep = dur
+		p.retryPeriod = dur
 	}
 }
 
@@ -106,11 +108,7 @@ func WithInitFunc(f func(conn Connection) (Channel, error)) Option {
 	}
 }
 
-func (p *Publisher) Close() {
-	p.cancelFunc()
-}
-
-func (p *Publisher) Publish(msg amqpextra.Publishing) {
+func (p *Publisher) Publish(msg Message) {
 	if msg.ResultCh != nil && cap(msg.ResultCh) == 0 {
 		panic("amqpextra: resultCh channel is unbuffered")
 	}
@@ -119,9 +117,9 @@ func (p *Publisher) Publish(msg amqpextra.Publishing) {
 		msg.Context = context.Background()
 	}
 
-	unreadyCh := p.Unready()
-	if msg.WaitReady {
-		unreadyCh = nil
+	var unreadyCh <-chan error
+	if msg.ErrOnUnready {
+		unreadyCh = p.Unready()
 	}
 
 	select {
@@ -143,19 +141,15 @@ func (p *Publisher) Publish(msg amqpextra.Publishing) {
 	}
 }
 
-func (p *Publisher) reply(resultCh chan error, result error) {
-	if resultCh != nil {
-		resultCh <- result
-	} else if result != nil {
-		p.logger.Printf("[ERROR] %v", result)
-	}
+func (p *Publisher) Close() {
+	p.cancelFunc()
 }
 
 func (p *Publisher) Ready() <-chan struct{} {
 	return p.readyCh
 }
 
-func (p *Publisher) Unready() <-chan struct{} {
+func (p *Publisher) Unready() <-chan error {
 	return p.unreadyCh
 }
 
@@ -163,15 +157,20 @@ func (p *Publisher) Closed() <-chan struct{} {
 	return p.closeCh
 }
 
-func (p *Publisher) connect() {
+func (p *Publisher) connectionState() {
+	defer p.cancelFunc()
+	defer close(p.unreadyCh)
 	defer close(p.closeCh)
+	defer p.logger.Printf("[DEBUG] publisher stopped")
 
+	var connErr error = amqp.ErrClosed
+
+	p.logger.Printf("[DEBUG] publisher starting")
 	for {
 		select {
 		case conn, ok := <-p.connCh:
 			if !ok {
 				p.close(nil)
-
 				return
 			}
 
@@ -183,11 +182,17 @@ func (p *Publisher) connect() {
 			default:
 			}
 
-			p.logger.Printf("[DEBUG] publisher started")
-			if !p.serve(conn) {
-				return
+			err := p.channelState(conn)
+			if err != nil {
+				p.logger.Printf("[DEBUG] publisher unready")
+
+				connErr = err
+				continue
 			}
-		case p.unreadyCh <- struct{}{}:
+
+			return
+
+		case p.unreadyCh <- connErr:
 		case <-p.ctx.Done():
 			p.close(nil)
 
@@ -196,51 +201,42 @@ func (p *Publisher) connect() {
 	}
 }
 
-func (p *Publisher) serve(conn Connection) bool {
-	ch, err := p.initFunc(conn)
-	if err != nil {
-		p.logger.Printf("[ERROR] init func: %s", err)
+func (p *Publisher) channelState(conn Connection) error {
+	for {
+		ch, err := p.initFunc(conn)
+		if err != nil {
+			p.logger.Printf("[ERROR] init func: %s", err)
+			return p.retry(err)
+		}
 
-		timer := time.NewTimer(p.restartSleep)
-
-		select {
-		case <-timer.C:
-			return true
-		case <-p.ctx.Done():
-			timer.Stop()
-			p.close(nil)
-
-			return false
+		if err := p.publishState(ch); err != errChannelClosed {
+			return err
 		}
 	}
+}
 
-	closeCh := ch.NotifyClose(make(chan *amqp.Error, 1))
+func (p *Publisher) publishState(ch Channel) error {
+	chCloseCh := ch.NotifyClose(make(chan *amqp.Error, 1))
 
 	p.logger.Printf("[DEBUG] publisher ready")
 	for {
 		select {
 		case p.readyCh <- struct{}{}:
-		case <-closeCh:
+		case msg := <-p.publishingCh:
+			p.publish(ch, msg)
+		case <-chCloseCh:
 			p.logger.Printf("[DEBUG] channel closed")
-
-			return true
-		case publishing := <-p.publishingCh:
-			p.publish(ch, publishing)
-		case <-p.connCloseCh:
-			p.logger.Printf("[DEBUG] publisher stopped")
-
-			return true
+			return errChannelClosed
+		case err := <-p.connCloseCh:
+			return err
 		case <-p.ctx.Done():
 			p.close(ch)
-
-			p.logger.Printf("[DEBUG] publisher stopped")
-
-			return false
+			return nil
 		}
 	}
 }
 
-func (p *Publisher) publish(ch Channel, msg amqpextra.Publishing) {
+func (p *Publisher) publish(ch Channel, msg Message) {
 	select {
 	case <-msg.Context.Done():
 		p.reply(msg.ResultCh, fmt.Errorf("message: %v", msg.Context.Err()))
@@ -252,10 +248,40 @@ func (p *Publisher) publish(ch Channel, msg amqpextra.Publishing) {
 		msg.Key,
 		msg.Mandatory,
 		msg.Immediate,
-		msg.Message,
+		msg.Publishing,
 	)
 
 	p.reply(msg.ResultCh, result)
+}
+
+func (p *Publisher) reply(resultCh chan error, result error) {
+	if resultCh != nil {
+		resultCh <- result
+	} else if result != nil {
+		p.logger.Printf("[ERROR] %v", result)
+	}
+}
+
+func (p *Publisher) retry(err error) error {
+	timer := time.NewTimer(p.retryPeriod)
+	defer func() {
+		timer.Stop()
+		select {
+		case <-timer.C:
+		default:
+		}
+	}()
+
+	for {
+		select {
+		case p.unreadyCh <- err:
+			continue
+		case <-timer.C:
+			return err
+		case <-p.ctx.Done():
+			return nil
+		}
+	}
 }
 
 func (p *Publisher) close(ch Channel) {
@@ -264,6 +290,4 @@ func (p *Publisher) close(ch Channel) {
 			p.logger.Printf("[WARN] publisher: channel close: %s", err)
 		}
 	}
-
-	close(p.unreadyCh)
 }

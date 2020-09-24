@@ -36,15 +36,20 @@ See an [example](examples/consumer_middleware.go).
 
 Some built-in middlewares:
 
-* [HasCorrelationID](middleware/has_correlation_id.go) - Nack message if has no correlation id
-* [HasReplyTo](middleware/has_reply_to.go) - Nack message if has no reply to.
-* [Logger](middleware/logger.go) - Context with logger.
-* [Recover](middleware/recover.go) - Recover worker from panic, nack message.
-* [Expire](middleware/expire.go) - Convert Message expiration to context with timeout.
-* [AckNack](middleware/ack_nack.go) - Return middleware.Ack to ack message.
+* [HasCorrelationID](consumer/middleware/has_correlation_id.go) - Nack message if has no correlation id
+* [HasReplyTo](consumer/middleware/has_reply_to.go) - Nack message if has no reply to.
+* [Logger](consumer/middleware/logger.go) - Context with logger.
+* [Recover](consumer/middleware/recover.go) - Recover worker from panic, nack message.
+* [Expire](consumer/middleware/expire.go) - Convert Message expiration to context with timeout.
+* [AckNack](consumer/middleware/ack_nack.go) - Return middleware.Ack to ack message.
 
 ## Publisher.
 
-The package provides a handy publisher. It is aware of `<-chan *amqp.Connection` and `<-chan *amqp.Error` and can work with them respectively.  
+The package provides a handy publisher. 
+* Handles re-connection, channel close.
+* Context aware.
+* Wait between re-connections.
+* Provides ready\unready\closed status channels.
+* An easy configuration (WithXXX). 
 
 See an [example](examples/publisher_example.go).

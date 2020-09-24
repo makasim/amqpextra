@@ -4,6 +4,8 @@ import (
 	"log"
 
 	"github.com/makasim/amqpextra"
+	"github.com/makasim/amqpextra/logger"
+	"github.com/makasim/amqpextra/publisher"
 	"github.com/streadway/amqp"
 )
 
@@ -12,16 +14,15 @@ func StandalonePublisherExample() {
 	connCh := make(<-chan *amqp.Connection)
 	closeCh := make(<-chan *amqp.Error)
 
-	publisher := amqpextra.NewPublisher(
+	p := amqpextra.NewPublisher(
 		connCh,
 		closeCh,
+		publisher.WithLogger(logger.Std),
 	)
-	publisher.SetLogger(amqpextra.LoggerFunc(log.Printf))
 
-	publisher.Publish(amqpextra.Publishing{
-		Key:       "test_queue",
-		WaitReady: true,
-		Message: amqp.Publishing{
+	p.Publish(publisher.Message{
+		Key: "test_queue",
+		Publishing: amqp.Publishing{
 			Body: []byte(`{"foo": "fooVal"}`),
 		},
 		ResultCh: resultCh,

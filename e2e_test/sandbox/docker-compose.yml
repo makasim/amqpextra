@@ -1,0 +1,33 @@
+version: '3.7'
+
+services:
+  amqpextra-e2e-test:
+    build: { context: "..", dockerfile: sandbox/Dockerfile }
+    entrypoint: [ "./e2e_test/sandbox/entrypoint.sh", "make", "-C", "e2e_test", "test"]
+    working_dir: "/amqpextra"
+    tty: true
+    stdin_open: true
+    restart: "no"
+    environment:
+      - GOTEST=gotest
+    volumes:
+      - "../../:/amqpextra"
+    depends_on:
+      - rabbitmq
+      - rabbitmq2
+
+  rabbitmq:
+    image: "rabbitmq:3.8.0-management"
+    restart: "unless-stopped"
+    environment:
+      - RABBITMQ_DEFAULT_USER=guest
+      - RABBITMQ_DEFAULT_PASS=guest
+      - RABBITMQ_DEFAULT_VHOST=amqpextra
+
+  rabbitmq2:
+    image: "rabbitmq:3.8.0-management"
+    restart: "unless-stopped"
+    environment:
+      - RABBITMQ_DEFAULT_USER=guest
+      - RABBITMQ_DEFAULT_PASS=guest
+      - RABBITMQ_DEFAULT_VHOST=amqpextra

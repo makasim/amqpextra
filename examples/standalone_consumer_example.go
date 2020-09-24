@@ -2,9 +2,10 @@ package examples
 
 import (
 	"context"
-	"log"
 
 	"github.com/makasim/amqpextra"
+	"github.com/makasim/amqpextra/consumer"
+	"github.com/makasim/amqpextra/logger"
 	"github.com/streadway/amqp"
 )
 
@@ -12,9 +13,7 @@ func StandaloneConsumerExample() {
 	connCh := make(<-chan *amqp.Connection)
 	closeCh := make(<-chan *amqp.Error)
 
-	// usually it equals to pre_fetch_count
-	workersNum := 5
-	worker := amqpextra.WorkerFunc(func(ctx context.Context, msg amqp.Delivery) interface{} {
+	handler := consumer.HandlerFunc(func(ctx context.Context, msg amqp.Delivery) interface{} {
 		// process message
 
 		msg.Ack(false)
@@ -22,9 +21,13 @@ func StandaloneConsumerExample() {
 		return nil
 	})
 
-	consumer := amqpextra.NewConsumer("some_queue", worker, connCh, closeCh)
-	consumer.SetLogger(amqpextra.LoggerFunc(log.Printf))
-	consumer.SetWorkerNum(workersNum)
+	c := amqpextra.NewConsumer(
+		"some_queue",
+		handler,
+		connCh,
+		closeCh,
+		consumer.WithLogger(logger.Std),
+	)
 
-	consumer.Run()
+	c.Run()
 }

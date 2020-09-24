@@ -5,22 +5,38 @@ language: go
 
 matrix:
   include:
+    # linter
     - go: 1.13.x
       sudo: false
-      env: LINTER=true GOFLAGS=-mod=vendor GO111MODULE=on
+      env: LINTER=true GOFLAGS=-mod=vendor GO111MODULE=auto
+   
+    # unit tests
     - go: 1.13.x
+      sudo: false
+      env: UNIT_TESTS=true NOMOCKGEN=1 GOFLAGS=-mod=vendor GO111MODULE=auto GOTEST=gotest
+    - go: 1.14.x
+      sudo: false
+      env: UNIT_TESTS=true NOMOCKGEN=1 GOFLAGS=-mod=vendor GO111MODULE=auto GOTEST=gotest
+    - go: 1.15.x
+      sudo: false
+      env: UNIT_TESTS=true NOMOCKGEN=1 GOFLAGS=-mod=vendor GO111MODULE=auto GOTEST=gotest
+    
+    # e2e tests
+    - go: 1.15.x
       sudo: required
       services: docker
-      env: TESTS=true GOFLAGS=-mod=vendor GO111MODULE=on
+      env: E2E_TESTS=true GOFLAGS=-mod=vendor GO111MODULE=auto
 
 install:
   - go mod tidy
   - go mod vendor
+  - (cd / && go get -u github.com/golang/mock/mockgen)
+  - (cd / && go get -u github.com/rakyll/gotest)
 
 before_script:
   - if [ "$LINTER" = true ]; then curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $GOPATH/bin v1.23.1; fi
 
 script:
   - if [ "$LINTER" = true ]; then golangci-lint version && make lint; fi
-  - if [ "$TESTS" = true ]; then make unit-test; fi
-  - if [ "$TESTS" = true ]; then make e2e-test; fi
+  - if [ "$UNIT_TESTS" = true ]; then make unit-test; fi
+  - if [ "$E2E_TESTS" = true ]; then make e2e-test; fi
