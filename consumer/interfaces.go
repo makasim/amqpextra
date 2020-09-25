@@ -9,6 +9,7 @@ type Connection interface {
 type Channel interface {
 	Consume(queue, consumer string, autoAck, exclusive, noLocal, noWait bool, args amqp.Table) (<-chan amqp.Delivery, error)
 	NotifyClose(receiver chan *amqp.Error) chan *amqp.Error
+	NotifyCancel(c chan string) chan string
 	Close() error
 }
 

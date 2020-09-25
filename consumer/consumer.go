@@ -225,6 +225,7 @@ func (c *Consumer) consumeState(ch Channel) error {
 	}
 
 	chCloseCh := ch.NotifyClose(make(chan *amqp.Error, 1))
+	cancelCh := ch.NotifyCancel(make(chan string, 1))
 
 	workerDoneCh := make(chan struct{})
 	workerCtx, workerCancelFunc := context.WithCancel(c.ctx)
@@ -242,6 +243,9 @@ func (c *Consumer) consumeState(ch Channel) error {
 		select {
 		case c.readyCh <- struct{}{}:
 			continue
+		case <-cancelCh:
+			c.logger.Printf("[DEBUG] consumption cancelled")
+			result = fmt.Errorf("consumption cancelled")
 		case <-chCloseCh:
 			c.logger.Printf("[DEBUG] channel closed")
 			result = errChannelClosed
