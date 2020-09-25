@@ -877,7 +877,7 @@ func TestConsume(main *testing.T) {
 		assert.Equal(t, `[DEBUG] consumer starting
 [DEBUG] consumer ready
 [DEBUG] worker starting
-[DEBUG] consumption cancelled
+[DEBUG] consumption canceled
 [DEBUG] worker stopped
 [DEBUG] consumer unready
 [DEBUG] consumer ready
