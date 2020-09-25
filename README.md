@@ -50,6 +50,7 @@ The package provides a handy publisher.
 * Context aware.
 * Wait between re-connections.
 * Provides ready\unready\closed status channels.
-* An easy configuration (WithXXX). 
+* An easy configuration (WithXXX).
+* Support [flow control](https://www.rabbitmq.com/flow-control.html). 
 
 See an [example](examples/publisher_example.go).

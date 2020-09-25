@@ -28,9 +28,12 @@ func TestReconnection(main *testing.T) {
 		ch.
 			EXPECT().
 			NotifyClose(any()).
-			DoAndReturn(func(receiver chan *amqp.Error) chan *amqp.Error {
-				return receiver
-			}).
+			DoAndReturn(notifyCloseStub()).
+			Times(1)
+		ch.
+			EXPECT().
+			NotifyFlow(any()).
+			DoAndReturn(notifyFlowStub()).
 			Times(1)
 		ch.
 			EXPECT().
@@ -121,9 +124,17 @@ func TestReconnection(main *testing.T) {
 		ch.
 			EXPECT().
 			NotifyClose(any()).
-			DoAndReturn(func(receiver chan *amqp.Error) chan *amqp.Error {
-				return receiver
-			}).
+			DoAndReturn(notifyCloseStub()).
+			Times(1)
+		ch.
+			EXPECT().
+			NotifyFlow(any()).
+			DoAndReturn(notifyFlowStub()).
+			Times(1)
+		ch.
+			EXPECT().
+			Close().
+			Return(amqp.ErrClosed).
 			Times(1)
 
 		connCh <- conn
@@ -139,9 +150,12 @@ func TestReconnection(main *testing.T) {
 		ch.
 			EXPECT().
 			NotifyClose(any()).
-			DoAndReturn(func(receiver chan *amqp.Error) chan *amqp.Error {
-				return receiver
-			}).
+			DoAndReturn(notifyCloseStub()).
+			Times(1)
+		ch.
+			EXPECT().
+			NotifyFlow(any()).
+			DoAndReturn(notifyFlowStub()).
 			Times(1)
 		ch.
 			EXPECT().
@@ -183,9 +197,17 @@ func TestReconnection(main *testing.T) {
 		ch.
 			EXPECT().
 			NotifyClose(any()).
-			DoAndReturn(func(receiver chan *amqp.Error) chan *amqp.Error {
-				return receiver
-			}).
+			DoAndReturn(notifyCloseStub()).
+			Times(1)
+		ch.
+			EXPECT().
+			NotifyFlow(any()).
+			DoAndReturn(notifyFlowStub()).
+			Times(1)
+		ch.
+			EXPECT().
+			Close().
+			Return(nil).
 			Times(1)
 
 		connCh <- conn
@@ -226,14 +248,22 @@ func TestReconnection(main *testing.T) {
 				return receiver
 			}).
 			Times(1)
+		ch.
+			EXPECT().
+			NotifyFlow(any()).
+			DoAndReturn(notifyFlowStub()).
+			Times(1)
 
 		newCh := mock_publisher.NewMockChannel(ctrl)
 		newCh.
 			EXPECT().
 			NotifyClose(any()).
-			DoAndReturn(func(receiver chan *amqp.Error) chan *amqp.Error {
-				return receiver
-			}).
+			DoAndReturn(notifyCloseStub()).
+			Times(1)
+		newCh.
+			EXPECT().
+			NotifyFlow(any()).
+			DoAndReturn(notifyFlowStub()).
 			Times(1)
 		newCh.
 			EXPECT().
@@ -290,6 +320,11 @@ func TestReconnection(main *testing.T) {
 				return receiver
 			}).
 			Times(1)
+		ch.
+			EXPECT().
+			NotifyFlow(any()).
+			DoAndReturn(notifyFlowStub()).
+			Times(1)
 
 		first := true
 		conn := mock_publisher.NewMockConnection(ctrl)
@@ -311,9 +346,12 @@ func TestReconnection(main *testing.T) {
 		newCh.
 			EXPECT().
 			NotifyClose(any()).
-			DoAndReturn(func(receiver chan *amqp.Error) chan *amqp.Error {
-				return receiver
-			}).
+			DoAndReturn(notifyCloseStub()).
+			Times(1)
+		newCh.
+			EXPECT().
+			NotifyFlow(any()).
+			DoAndReturn(notifyFlowStub()).
 			Times(1)
 		newCh.
 			EXPECT().
@@ -510,9 +548,12 @@ func TestReadyPublisher(main *testing.T) {
 		ch.
 			EXPECT().
 			NotifyClose(any()).
-			DoAndReturn(func(receiver chan *amqp.Error) chan *amqp.Error {
-				return receiver
-			}).
+			DoAndReturn(notifyCloseStub()).
+			Times(1)
+		ch.
+			EXPECT().
+			NotifyFlow(any()).
+			DoAndReturn(notifyFlowStub()).
 			Times(1)
 		ch.
 			EXPECT().
@@ -610,9 +651,12 @@ func TestReadyPublisher(main *testing.T) {
 		ch.
 			EXPECT().
 			NotifyClose(any()).
-			DoAndReturn(func(receiver chan *amqp.Error) chan *amqp.Error {
-				return receiver
-			}).
+			DoAndReturn(notifyCloseStub()).
+			Times(1)
+		ch.
+			EXPECT().
+			NotifyFlow(any()).
+			DoAndReturn(notifyFlowStub()).
 			Times(1)
 		ch.
 			EXPECT().
@@ -661,9 +705,12 @@ func TestReadyPublisher(main *testing.T) {
 		ch.
 			EXPECT().
 			NotifyClose(any()).
-			DoAndReturn(func(receiver chan *amqp.Error) chan *amqp.Error {
-				return receiver
-			}).
+			DoAndReturn(notifyCloseStub()).
+			Times(1)
+		ch.
+			EXPECT().
+			NotifyFlow(any()).
+			DoAndReturn(notifyFlowStub()).
 			Times(1)
 		ch.
 			EXPECT().
@@ -715,10 +762,13 @@ func TestReadyPublisher(main *testing.T) {
 		ch.
 			EXPECT().
 			NotifyClose(any()).
-			DoAndReturn(func(receiver chan *amqp.Error) chan *amqp.Error {
-				return receiver
-			}).
+			DoAndReturn(notifyCloseStub()).
 			MaxTimes(1)
+		ch.
+			EXPECT().
+			NotifyFlow(any()).
+			DoAndReturn(notifyFlowStub()).
+			Times(1)
 		ch.
 			EXPECT().
 			Publish(any(), any(), any(), any(), any()).
@@ -770,9 +820,12 @@ func TestReadyPublisher(main *testing.T) {
 		ch.
 			EXPECT().
 			NotifyClose(any()).
-			DoAndReturn(func(receiver chan *amqp.Error) chan *amqp.Error {
-				return receiver
-			}).
+			DoAndReturn(notifyCloseStub()).
+			Times(1)
+		ch.
+			EXPECT().
+			NotifyFlow(any()).
+			DoAndReturn(notifyFlowStub()).
 			Times(1)
 		ch.
 			EXPECT().
@@ -934,9 +987,12 @@ func TestClose(main *testing.T) {
 		ch.
 			EXPECT().
 			NotifyClose(any()).
-			DoAndReturn(func(receiver chan *amqp.Error) chan *amqp.Error {
-				return receiver
-			}).
+			DoAndReturn(notifyCloseStub()).
+			Times(1)
+		ch.
+			EXPECT().
+			NotifyFlow(any()).
+			DoAndReturn(notifyFlowStub()).
 			Times(1)
 		ch.
 			EXPECT().
@@ -977,9 +1033,12 @@ func TestClose(main *testing.T) {
 		ch.
 			EXPECT().
 			NotifyClose(any()).
-			DoAndReturn(func(receiver chan *amqp.Error) chan *amqp.Error {
-				return receiver
-			}).
+			DoAndReturn(notifyCloseStub()).
+			Times(1)
+		ch.
+			EXPECT().
+			NotifyFlow(any()).
+			DoAndReturn(notifyFlowStub()).
 			Times(1)
 		ch.
 			EXPECT().
@@ -1018,9 +1077,12 @@ func TestClose(main *testing.T) {
 		ch.
 			EXPECT().
 			NotifyClose(any()).
-			DoAndReturn(func(receiver chan *amqp.Error) chan *amqp.Error {
-				return receiver
-			}).
+			DoAndReturn(notifyCloseStub()).
+			Times(1)
+		ch.
+			EXPECT().
+			NotifyFlow(any()).
+			DoAndReturn(notifyFlowStub()).
 			Times(1)
 		ch.
 			EXPECT().
@@ -1060,9 +1122,12 @@ func TestConcurrency(main *testing.T) {
 		ch.
 			EXPECT().
 			NotifyClose(any()).
-			DoAndReturn(func(receiver chan *amqp.Error) chan *amqp.Error {
-				return receiver
-			}).
+			DoAndReturn(notifyCloseStub()).
+			Times(1)
+		ch.
+			EXPECT().
+			NotifyFlow(any()).
+			DoAndReturn(notifyFlowStub()).
 			Times(1)
 		ch.
 			EXPECT().
@@ -1122,9 +1187,12 @@ func TestConcurrency(main *testing.T) {
 		ch.
 			EXPECT().
 			NotifyClose(any()).
-			DoAndReturn(func(receiver chan *amqp.Error) chan *amqp.Error {
-				return receiver
-			}).
+			DoAndReturn(notifyCloseStub()).
+			Times(1)
+		ch.
+			EXPECT().
+			NotifyFlow(any()).
+			DoAndReturn(notifyFlowStub()).
 			Times(1)
 		ch.
 			EXPECT().
@@ -1135,6 +1203,11 @@ func TestConcurrency(main *testing.T) {
 			}).
 			MinTimes(10).
 			MaxTimes(40)
+		ch.
+			EXPECT().
+			Close().
+			Return(amqp.ErrClosed).
+			Times(1)
 
 		connCh, closeCh, l, p := newPublisher()
 		defer p.Close()
@@ -1168,9 +1241,12 @@ func TestConcurrency(main *testing.T) {
 		newCh.
 			EXPECT().
 			NotifyClose(any()).
-			DoAndReturn(func(receiver chan *amqp.Error) chan *amqp.Error {
-				return receiver
-			}).
+			DoAndReturn(notifyCloseStub()).
+			Times(1)
+		newCh.
+			EXPECT().
+			NotifyFlow(any()).
+			DoAndReturn(notifyFlowStub()).
 			Times(1)
 		newCh.
 			EXPECT().
@@ -1221,6 +1297,11 @@ func TestConcurrency(main *testing.T) {
 			Times(1)
 		ch.
 			EXPECT().
+			NotifyFlow(any()).
+			DoAndReturn(notifyFlowStub()).
+			Times(1)
+		ch.
+			EXPECT().
 			Publish(any(), any(), any(), any(), any()).
 			DoAndReturn(func(exchange, key string, mandatory, immediate bool, msg amqp.Publishing) error {
 				time.Sleep(time.Millisecond * 10)
@@ -1233,9 +1314,12 @@ func TestConcurrency(main *testing.T) {
 		newCh.
 			EXPECT().
 			NotifyClose(any()).
-			DoAndReturn(func(receiver chan *amqp.Error) chan *amqp.Error {
-				return receiver
-			}).
+			DoAndReturn(notifyCloseStub()).
+			Times(1)
+		newCh.
+			EXPECT().
+			NotifyFlow(any()).
+			DoAndReturn(notifyFlowStub()).
 			Times(1)
 		newCh.
 			EXPECT().
@@ -1294,6 +1378,410 @@ func TestConcurrency(main *testing.T) {
 [DEBUG] publisher stopped
 `
 		require.Equal(t, expected, l.Logs())
+	})
+}
+
+func TestFlowControl(main *testing.T) {
+	main.Run("FlowPausedResumedWithResultChannel", func(t *testing.T) {
+		defer goleak.VerifyNone(t)
+
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		var chFlowCh chan bool
+
+		ch := mock_publisher.NewMockChannel(ctrl)
+		ch.
+			EXPECT().
+			NotifyClose(any()).
+			DoAndReturn(notifyCloseStub()).
+			Times(1)
+		ch.
+			EXPECT().
+			NotifyFlow(any()).
+			DoAndReturn(func(ch chan bool) chan bool {
+				chFlowCh = ch
+				return ch
+			}).
+			Times(1)
+		ch.
+			EXPECT().
+			Publish(any(), any(), any(), any(), any()).
+			Return(nil).
+			Times(3)
+		ch.
+			EXPECT().
+			Close().
+			Return(nil).
+			Times(1)
+
+		connCh, _, l, p := newPublisher()
+		defer p.Close()
+
+		conn := mock_publisher.NewMockConnection(ctrl)
+		conn.EXPECT().Channel().Return(ch, nil).Times(1)
+
+		connCh <- conn
+
+		assertReady(t, p)
+
+		resultCh := make(chan error, 1)
+
+		p.Publish(publisher.Message{ResultCh: resultCh})
+		require.NoError(t, waitResult(resultCh, time.Millisecond*50))
+
+		chFlowCh <- false
+		assertUnready(t, p, "publisher flow paused")
+
+		go p.Publish(publisher.Message{ResultCh: resultCh})
+		require.EqualError(t, waitResult(resultCh, time.Millisecond*100), "wait result timeout")
+
+		chFlowCh <- true
+		assertReady(t, p)
+
+		require.NoError(t, waitResult(resultCh, time.Millisecond*50))
+
+		p.Publish(publisher.Message{ResultCh: resultCh})
+		require.NoError(t, waitResult(resultCh, time.Millisecond*50))
+
+		p.Close()
+		assertClosed(t, p)
+
+		expected := `[DEBUG] publisher starting
+[DEBUG] publisher ready
+[WARN] publisher flow paused
+[INFO] publisher flow resumed
+[DEBUG] publisher stopped
+`
+		require.Equal(t, expected, l.Logs())
+	})
+
+	main.Run("FlowPausedResumedWithResultChannelErrOnUnready", func(t *testing.T) {
+		defer goleak.VerifyNone(t)
+
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		var chFlowCh chan bool
+
+		ch := mock_publisher.NewMockChannel(ctrl)
+		ch.
+			EXPECT().
+			NotifyClose(any()).
+			DoAndReturn(notifyCloseStub()).
+			Times(1)
+		ch.
+			EXPECT().
+			NotifyFlow(any()).
+			DoAndReturn(func(ch chan bool) chan bool {
+				chFlowCh = ch
+				return ch
+			}).
+			Times(1)
+		ch.
+			EXPECT().
+			Publish(any(), any(), any(), any(), any()).
+			Return(nil).
+			Times(2)
+		ch.
+			EXPECT().
+			Close().
+			Return(nil).
+			Times(1)
+
+		connCh, _, l, p := newPublisher()
+		defer p.Close()
+
+		conn := mock_publisher.NewMockConnection(ctrl)
+		conn.EXPECT().Channel().Return(ch, nil).Times(1)
+
+		connCh <- conn
+
+		assertReady(t, p)
+
+		resultCh := make(chan error, 1)
+
+		p.Publish(publisher.Message{
+			ResultCh:     resultCh,
+			ErrOnUnready: true,
+		})
+		require.NoError(t, waitResult(resultCh, time.Millisecond*50))
+
+		chFlowCh <- false
+		assertUnready(t, p, "publisher flow paused")
+
+		go p.Publish(publisher.Message{
+			ResultCh:     resultCh,
+			ErrOnUnready: true,
+		})
+		require.EqualError(t, waitResult(resultCh, time.Millisecond*100), "publisher not ready")
+
+		chFlowCh <- true
+		assertReady(t, p)
+
+		p.Publish(publisher.Message{
+			ResultCh:     resultCh,
+			ErrOnUnready: true,
+		})
+		require.NoError(t, waitResult(resultCh, time.Millisecond*50))
+
+		p.Close()
+		assertClosed(t, p)
+
+		expected := `[DEBUG] publisher starting
+[DEBUG] publisher ready
+[WARN] publisher flow paused
+[INFO] publisher flow resumed
+[DEBUG] publisher stopped
+`
+		require.Equal(t, expected, l.Logs())
+	})
+
+	main.Run("FlowPausedResumedNoResultChannel", func(t *testing.T) {
+		defer goleak.VerifyNone(t)
+
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		var chFlowCh chan bool
+
+		ch := mock_publisher.NewMockChannel(ctrl)
+		ch.
+			EXPECT().
+			NotifyClose(any()).
+			DoAndReturn(notifyCloseStub()).
+			Times(1)
+		ch.
+			EXPECT().
+			NotifyFlow(any()).
+			DoAndReturn(func(ch chan bool) chan bool {
+				chFlowCh = ch
+				return ch
+			}).
+			Times(1)
+		ch.
+			EXPECT().
+			Publish(any(), any(), any(), any(), any()).
+			Return(nil).
+			Times(3)
+		ch.
+			EXPECT().
+			Close().
+			Return(nil).
+			Times(1)
+
+		connCh, _, l, p := newPublisher()
+		defer p.Close()
+
+		conn := mock_publisher.NewMockConnection(ctrl)
+		conn.EXPECT().Channel().Return(ch, nil).Times(1)
+
+		connCh <- conn
+
+		assertReady(t, p)
+
+		p.Publish(publisher.Message{})
+
+		chFlowCh <- false
+		assertUnready(t, p, "publisher flow paused")
+
+		waitResult := make(chan struct{})
+		go func() {
+			defer close(waitResult)
+			p.Publish(publisher.Message{})
+		}()
+
+		chFlowCh <- true
+		assertReady(t, p)
+
+		<-waitResult
+
+		p.Publish(publisher.Message{})
+
+		p.Close()
+		assertClosed(t, p)
+
+		logs := l.Logs()
+		require.Contains(t, logs, `[DEBUG] publisher starting
+[DEBUG] publisher ready
+[WARN] publisher flow paused
+[INFO] publisher flow resumed
+`)
+
+		require.Contains(t, logs, `[DEBUG] publisher stopped`)
+	})
+
+	main.Run("ClosedWhileFlowPaused", func(t *testing.T) {
+		defer goleak.VerifyNone(t)
+
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		var chFlowCh chan bool
+
+		ch := mock_publisher.NewMockChannel(ctrl)
+		ch.
+			EXPECT().
+			NotifyClose(any()).
+			DoAndReturn(notifyCloseStub()).
+			Times(1)
+		ch.
+			EXPECT().
+			NotifyFlow(any()).
+			DoAndReturn(func(ch chan bool) chan bool {
+				chFlowCh = ch
+				return ch
+			}).
+			Times(1)
+		ch.
+			EXPECT().
+			Close().
+			Return(nil).
+			Times(1)
+
+		connCh, _, l, p := newPublisher()
+		defer p.Close()
+
+		conn := mock_publisher.NewMockConnection(ctrl)
+		conn.EXPECT().Channel().Return(ch, nil).Times(1)
+
+		connCh <- conn
+		assertReady(t, p)
+
+		chFlowCh <- false
+		assertUnready(t, p, "publisher flow paused")
+
+		p.Close()
+		assertClosed(t, p)
+
+		logs := l.Logs()
+		require.Equal(t, `[DEBUG] publisher starting
+[DEBUG] publisher ready
+[WARN] publisher flow paused
+[DEBUG] publisher unready
+[DEBUG] publisher stopped
+`, logs)
+	})
+
+	main.Run("ChannelClosedWhileFlowPaused", func(t *testing.T) {
+		defer goleak.VerifyNone(t)
+
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		var chFlowCh chan bool
+		var chCloseCh chan *amqp.Error
+
+		ch := mock_publisher.NewMockChannel(ctrl)
+		ch.
+			EXPECT().
+			NotifyClose(any()).
+			DoAndReturn(func(receiver chan *amqp.Error) chan *amqp.Error {
+				chCloseCh = receiver
+				return receiver
+			}).
+			Times(2)
+		ch.
+			EXPECT().
+			NotifyFlow(any()).
+			DoAndReturn(func(ch chan bool) chan bool {
+				chFlowCh = ch
+				return ch
+			}).
+			Times(2)
+		ch.
+			EXPECT().
+			Close().
+			Return(nil).
+			Times(1)
+
+		connCh, _, l, p := newPublisher(publisher.WithRestartSleep(time.Millisecond))
+		defer p.Close()
+
+		conn := mock_publisher.NewMockConnection(ctrl)
+		conn.EXPECT().Channel().Return(ch, nil).Times(2)
+
+		connCh <- conn
+		assertReady(t, p)
+
+		chFlowCh <- false
+		assertUnready(t, p, "publisher flow paused")
+
+		chCloseCh <- amqp.ErrClosed
+		assertReady(t, p)
+
+		p.Close()
+		assertClosed(t, p)
+
+		logs := l.Logs()
+		require.Equal(t, `[DEBUG] publisher starting
+[DEBUG] publisher ready
+[WARN] publisher flow paused
+[DEBUG] channel closed
+[DEBUG] publisher ready
+[DEBUG] publisher stopped
+`, logs)
+
+		require.Contains(t, logs, ``)
+	})
+
+	main.Run("ConnClosedWhileFlowPaused", func(t *testing.T) {
+		defer goleak.VerifyNone(t)
+
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		var chFlowCh chan bool
+
+		ch := mock_publisher.NewMockChannel(ctrl)
+		ch.
+			EXPECT().
+			NotifyClose(any()).
+			DoAndReturn(notifyCloseStub()).
+			Times(2)
+		ch.
+			EXPECT().
+			NotifyFlow(any()).
+			DoAndReturn(func(ch chan bool) chan bool {
+				chFlowCh = ch
+				return ch
+			}).
+			Times(2)
+		ch.
+			EXPECT().
+			Close().
+			Return(nil).
+			Times(2)
+
+		connCh, connCloseCh, l, p := newPublisher(publisher.WithRestartSleep(time.Millisecond))
+		defer p.Close()
+
+		conn := mock_publisher.NewMockConnection(ctrl)
+		conn.EXPECT().Channel().Return(ch, nil).Times(2)
+
+		connCh <- conn
+		assertReady(t, p)
+
+		chFlowCh <- false
+		assertUnready(t, p, "publisher flow paused")
+
+		connCloseCh <- amqp.ErrClosed
+		connCh <- conn
+		assertReady(t, p)
+
+		p.Close()
+		assertClosed(t, p)
+
+		logs := l.Logs()
+		require.Equal(t, `[DEBUG] publisher starting
+[DEBUG] publisher ready
+[WARN] publisher flow paused
+[DEBUG] publisher unready
+[DEBUG] publisher ready
+[DEBUG] publisher stopped
+`, logs)
+
+		require.Contains(t, logs, ``)
 	})
 }
 
@@ -1361,5 +1849,17 @@ func waitResult(resultCh chan error, dur time.Duration) error {
 		return res
 	case <-timer.C:
 		return fmt.Errorf("wait result timeout")
+	}
+}
+
+func notifyCloseStub() func(_ chan *amqp.Error) chan *amqp.Error {
+	return func(ch chan *amqp.Error) chan *amqp.Error {
+		return ch
+	}
+}
+
+func notifyFlowStub() func(_ chan bool) chan bool {
+	return func(ch chan bool) chan bool {
+		return ch
 	}
 }
