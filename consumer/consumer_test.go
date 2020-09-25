@@ -850,7 +850,7 @@ func TestConsume(main *testing.T) {
 		assertReady(t, c)
 		time.Sleep(time.Millisecond * 50)
 		cancelCh <- "aTag"
-		assertUnready(t, c, "consumption cancelled")
+		assertUnready(t, c, "consumption canceled")
 
 		newChCloseCh := make(chan *amqp.Error)
 		newCancelCh := make(chan string)

@@ -244,8 +244,8 @@ func (c *Consumer) consumeState(ch Channel) error {
 		case c.readyCh <- struct{}{}:
 			continue
 		case <-cancelCh:
-			c.logger.Printf("[DEBUG] consumption cancelled")
-			result = fmt.Errorf("consumption cancelled")
+			c.logger.Printf("[DEBUG] consumption canceled")
+			result = fmt.Errorf("consumption canceled")
 		case <-chCloseCh:
 			c.logger.Printf("[DEBUG] channel closed")
 			result = errChannelClosed
