@@ -341,6 +341,7 @@ func TestReconnection(main *testing.T) {
 		assertReady(t, p)
 
 		chCloseCh <- amqp.ErrClosed
+		assertUnready(t, p, "init func errored")
 
 		newCh := mock_publisher.NewMockChannel(ctrl)
 		newCh.
@@ -363,6 +364,7 @@ func TestReconnection(main *testing.T) {
 		newConn.EXPECT().Channel().Return(newCh, nil).Times(1)
 
 		connCh <- newConn
+
 		assertReady(t, p)
 
 		p.Close()

@@ -102,6 +102,20 @@ func (mr *MockChannelMockRecorder) NotifyClose(receiver interface{}) *gomock.Cal
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NotifyClose", reflect.TypeOf((*MockChannel)(nil).NotifyClose), receiver)
 }
 
+// NotifyCancel mocks base method.
+func (m *MockChannel) NotifyCancel(c chan string) chan string {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "NotifyCancel", c)
+	ret0, _ := ret[0].(chan string)
+	return ret0
+}
+
+// NotifyCancel indicates an expected call of NotifyCancel.
+func (mr *MockChannelMockRecorder) NotifyCancel(c interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NotifyCancel", reflect.TypeOf((*MockChannel)(nil).NotifyCancel), c)
+}
+
 // Close mocks base method.
 func (m *MockChannel) Close() error {
 	m.ctrl.T.Helper()
