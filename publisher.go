@@ -6,39 +6,37 @@ import (
 )
 
 func NewPublisher(
-	amqpConnCh <-chan *amqp.Connection,
-	amqpConnCloseCh <-chan *amqp.Error,
+	connCh <-chan Connection,
 	opts ...publisher.Option,
 ) *publisher.Publisher {
-	connCh := make(chan publisher.Connection)
-	connCloseCh := make(chan *amqp.Error, 1)
+	pubConnCh := make(chan publisher.Connection)
+	pubConnCloseCh := make(chan *amqp.Error, 1)
 
-	p := publisher.New(connCh, connCloseCh, opts...)
-	go proxyPublisherConn(amqpConnCh, amqpConnCloseCh, connCh, connCloseCh, p.Closed())
+	p := publisher.New(pubConnCh, pubConnCloseCh, opts...)
+	go proxyPublisherConn(connCh, pubConnCh, pubConnCloseCh, p.Closed())
 
 	return p
 }
 
 //nolint:dupl // ignore linter err
 func proxyPublisherConn(
-	amqpConnCh <-chan *amqp.Connection,
-	amqpConnCloseCh <-chan *amqp.Error,
-	connCh chan publisher.Connection,
-	connCloseCh chan *amqp.Error,
+	connCh <-chan Connection,
+	pubConnCh chan publisher.Connection,
+	pubConnCloseCh chan *amqp.Error,
 	publisherCloseCh <-chan struct{},
 ) {
 	go func() {
-		defer close(connCh)
+		defer close(pubConnCh)
 
 		for {
 			select {
-			case conn, ok := <-amqpConnCh:
+			case conn, ok := <-connCh:
 				if !ok {
 					return
 				}
 
 				select {
-				case connCh <- &publisher.AMQP{Conn: conn}:
+				case pubConnCh <- &publisher.AMQP{Conn: conn.AMQPConnection()}:
 				case <-publisherCloseCh:
 					return
 				}
@@ -49,18 +47,27 @@ func proxyPublisherConn(
 	}()
 
 	go func() {
-		defer close(connCloseCh)
+		defer close(pubConnCloseCh)
 
 		for {
 			select {
-			case err, ok := <-amqpConnCloseCh:
+			case conn, ok := <-connCh:
 				if !ok {
 					return
 				}
 
 				select {
-				case connCloseCh <- err:
-				default:
+				case err, ok := <-conn.NotifyClose():
+					if !ok {
+						err = amqp.ErrClosed
+					}
+
+					select {
+					case pubConnCloseCh <- err:
+					default:
+					}
+				case <-publisherCloseCh:
+					return
 				}
 			case <-publisherCloseCh:
 				return

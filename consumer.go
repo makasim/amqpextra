@@ -8,39 +8,37 @@ import (
 func NewConsumer(
 	queue string,
 	handler consumer.Handler,
-	amqpConnCh <-chan *amqp.Connection,
-	amqpConnCloseCh <-chan *amqp.Error,
+	connCh <-chan Connection,
 	opts ...consumer.Option,
 ) *consumer.Consumer {
-	connCh := make(chan consumer.Connection)
-	connCloseCh := make(chan *amqp.Error, 1)
+	consConnCh := make(chan consumer.Connection)
+	consConnCloseCh := make(chan *amqp.Error, 1)
 
-	c := consumer.New(queue, handler, connCh, connCloseCh, opts...)
-	go proxyConsumerConn(amqpConnCh, amqpConnCloseCh, connCh, connCloseCh, c.Closed())
+	c := consumer.New(queue, handler, consConnCh, consConnCloseCh, opts...)
+	go proxyConsumerConn(connCh, consConnCh, consConnCloseCh, c.Closed())
 
 	return c
 }
 
 //nolint:dupl // ignore linter err
 func proxyConsumerConn(
-	amqpConnCh <-chan *amqp.Connection,
-	amqpConnCloseCh <-chan *amqp.Error,
-	connCh chan consumer.Connection,
-	connCloseCh chan *amqp.Error,
+	connCh <-chan Connection,
+	consConnCh chan consumer.Connection,
+	consConnCloseCh chan *amqp.Error,
 	consumerCloseCh <-chan struct{},
 ) {
 	go func() {
-		defer close(connCh)
+		defer close(consConnCh)
 
 		for {
 			select {
-			case conn, ok := <-amqpConnCh:
+			case conn, ok := <-connCh:
 				if !ok {
 					return
 				}
 
 				select {
-				case connCh <- &consumer.AMQP{Conn: conn}:
+				case consConnCh <- &consumer.AMQP{Conn: conn.AMQPConnection()}:
 				case <-consumerCloseCh:
 					return
 				}
@@ -51,18 +49,27 @@ func proxyConsumerConn(
 	}()
 
 	go func() {
-		defer close(connCloseCh)
+		defer close(consConnCloseCh)
 
 		for {
 			select {
-			case err, ok := <-amqpConnCloseCh:
+			case conn, ok := <-connCh:
 				if !ok {
 					return
 				}
 
 				select {
-				case connCloseCh <- err:
-				default:
+				case err, ok := <-conn.NotifyClose():
+					if !ok {
+						err = amqp.ErrClosed
+					}
+
+					select {
+					case consConnCloseCh <- err:
+					default:
+					}
+				case <-consumerCloseCh:
+					return
 				}
 			case <-consumerCloseCh:
 				return

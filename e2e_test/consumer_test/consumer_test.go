@@ -39,7 +39,7 @@ func TestConsumeWhileConnectionClosed(t *testing.T) {
 		},
 	})
 	defer conn.Close()
-	conn.Start()
+
 	ticker := time.NewTicker(time.Millisecond * 100)
 	defer ticker.Stop()
 	timer := time.NewTicker(time.Second * 5)

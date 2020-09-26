@@ -125,7 +125,7 @@ func Queue(conn *amqp.Connection) string {
 	return q.Name
 }
 
-func Queue2(conn *amqpextra.Connection) string {
+func Queue2(conn *amqpextra.Connector) string {
 	connCh, _ := conn.ConnCh()
 
 	realconn, ok := <-connCh
@@ -150,7 +150,7 @@ func Publish(conn *amqp.Connection, body, queue string) {
 	}
 }
 
-func Publish2(conn *amqpextra.Connection, body, queue string) {
+func Publish2(conn *amqpextra.Connector, body, queue string) {
 	connCh, _ := conn.ConnCh()
 
 	realconn, ok := <-connCh
@@ -162,7 +162,7 @@ func Publish2(conn *amqpextra.Connection, body, queue string) {
 }
 
 func PublishTimerReconnect(
-	extraconn *amqpextra.Connection,
+	extraconn *amqpextra.Connector,
 	timer *time.Timer,
 	ticker *time.Ticker,
 	queue string,
@@ -240,7 +240,7 @@ func PublishTimer(
 }
 
 func ConsumeTimerReconnect(
-	extraconn *amqpextra.Connection,
+	extraconn *amqpextra.Connector,
 	timer *time.Timer,
 	queue string,
 	count *uint32,

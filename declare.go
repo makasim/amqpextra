@@ -10,7 +10,7 @@ import (
 
 func DeclareTempQueue(
 	ctx context.Context,
-	c *Connection,
+	c *Connector,
 ) (amqp.Queue, error) {
 	return DeclareQueue(
 		ctx,
@@ -26,7 +26,7 @@ func DeclareTempQueue(
 
 func DeclareQueue(
 	ctx context.Context,
-	c *Connection,
+	c *Connector,
 	name string,
 	durable,
 	autDelete,

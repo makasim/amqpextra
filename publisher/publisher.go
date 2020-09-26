@@ -206,7 +206,7 @@ func (p *Publisher) channelState(conn Connection) error {
 		ch, err := p.initFunc(conn)
 		if err != nil {
 			p.logger.Printf("[ERROR] init func: %s", err)
-			return p.retry(err)
+			return p.waitRetry(err)
 		}
 
 		err = p.publishState(ch)
@@ -297,7 +297,7 @@ func (p *Publisher) reply(resultCh chan error, result error) {
 	}
 }
 
-func (p *Publisher) retry(err error) error {
+func (p *Publisher) waitRetry(err error) error {
 	timer := time.NewTimer(p.retryPeriod)
 	defer func() {
 		timer.Stop()
