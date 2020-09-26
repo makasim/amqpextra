@@ -9,6 +9,7 @@ import (
 	"github.com/streadway/amqp"
 )
 
+// nolint:gosimple // the purpose of select case is to stress the connCh close case.
 func ExampleConnection_ConnCh() {
 	conn := amqpextra.Dial([]string{"amqp://guest:guest@localhost:5672/%2f"})
 
