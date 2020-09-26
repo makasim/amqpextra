@@ -4,12 +4,49 @@ import (
 	"context"
 	"testing"
 
+	"github.com/makasim/amqpextra"
 	"github.com/makasim/amqpextra/consumer"
+	"github.com/makasim/amqpextra/consumer/middleware"
 	"github.com/makasim/amqpextra/logger"
 	"github.com/streadway/amqp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+func ExampleWrap() {
+	// you can get connCh and closeCh from conn.ConnCh() method
+	connCh := make(<-chan *amqp.Connection)
+	closeCh := make(<-chan *amqp.Error)
+
+	// wrap a handler by some middlewares
+	handler := consumer.Wrap(
+		consumer.HandlerFunc(func(ctx context.Context, msg amqp.Delivery) interface{} {
+			// process message
+
+			msg.Ack(false)
+
+			return nil
+		}),
+		middleware.HasCorrelationID(),
+		middleware.HasReplyTo(),
+	)
+
+	// pass wrapped handler to a consumer
+	c := amqpextra.NewConsumer(
+		"a_queue",
+		handler,
+		connCh,
+		closeCh,
+	)
+
+	go c.Run()
+
+	// close consumer
+	c.Close()
+	<-c.Closed()
+
+	// Output:
+}
 
 func TestWrap(t *testing.T) {
 	l := logger.NewTest()

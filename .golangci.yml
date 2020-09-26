@@ -60,7 +60,6 @@ run:
   modules-download-mode: vendor
   skip-dirs:
     - vendor
-    - examples
   skip-files:
     - ".*\\.my\\.go$"
     - lib/bad.go
