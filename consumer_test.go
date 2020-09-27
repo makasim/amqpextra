@@ -5,14 +5,16 @@ import (
 
 	"github.com/makasim/amqpextra"
 	"github.com/makasim/amqpextra/consumer"
-	"github.com/makasim/amqpextra/logger"
 	"github.com/streadway/amqp"
+	"log"
 )
 
 func ExampleConnector_Consumer() {
 	// open connection
-	conn := amqpextra.Dial([]string{"amqp://guest:guest@localhost:5672/%2f"})
-	conn.SetLogger(logger.Discard)
+	conn, err := amqpextra.Dial([]string{"amqp://guest:guest@localhost:5672/%2f"})
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	// create consumer
 	c := conn.Consumer(

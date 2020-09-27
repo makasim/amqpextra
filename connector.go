@@ -10,6 +10,8 @@ import (
 	"github.com/streadway/amqp"
 )
 
+type Option func(c *Connector)
+
 type Connection interface {
 	NotifyClose(chan *amqp.Error) chan *amqp.Error
 	Close() error
@@ -31,47 +33,64 @@ func (c *Established) NotifyClose() <-chan struct{} {
 type Connector struct {
 	dialer Dialer
 
-	logger         logger.Logger
-	reconnectSleep time.Duration
-	ctx            context.Context
-	cancelFunc     context.CancelFunc
+	logger      logger.Logger
+	retryPeriod time.Duration
+	ctx         context.Context
+	cancelFunc  context.CancelFunc
 
 	readyCh   chan Established
 	unreadyCh chan error
 	closedCh  chan struct{}
 }
 
-func New(dialer Dialer) *Connector {
-	ctx, cancelFunc := context.WithCancel(context.Background())
-
+func New(dialer Dialer, opts ...Option) (*Connector, error) {
 	c := &Connector{
 		dialer: dialer,
-
-		ctx:            ctx,
-		cancelFunc:     cancelFunc,
-		logger:         logger.Discard,
-		reconnectSleep: time.Second * 5,
 
 		readyCh:   make(chan Established),
 		unreadyCh: make(chan error),
 		closedCh:  make(chan struct{}),
 	}
 
+	for _, opt := range opts {
+		opt(c)
+	}
+
+	if c.ctx != nil {
+		c.ctx, c.cancelFunc = context.WithCancel(c.ctx)
+	} else {
+		c.ctx, c.cancelFunc = context.WithCancel(context.Background())
+	}
+
+	if c.retryPeriod == 0 {
+		c.retryPeriod = time.Second * 5
+	}
+
+	if c.logger == nil {
+		c.logger = logger.Discard
+	}
+
 	go c.connectState()
 
-	return c
+	return c, nil
 }
 
-func (c *Connector) SetLogger(l logger.Logger) {
-	c.logger = l
+func WithLogger(l logger.Logger) Option {
+	return func(c *Connector) {
+		c.logger = l
+	}
 }
 
-func (c *Connector) SetContext(ctx context.Context) {
-	c.ctx, c.cancelFunc = context.WithCancel(ctx)
+func WithContext(ctx context.Context) Option {
+	return func(c *Connector) {
+		c.ctx = ctx
+	}
 }
 
-func (c *Connector) SetReconnectSleep(d time.Duration) {
-	c.reconnectSleep = d
+func WithRetryPeriod(dur time.Duration) Option {
+	return func(c *Connector) {
+		c.retryPeriod = dur
+	}
 }
 
 func (c *Connector) Ready() <-chan Established {
@@ -131,7 +150,9 @@ func (c *Connector) Publisher(opts ...publisher.Option) *publisher.Publisher {
 }
 
 func (c *Connector) connectState() {
-	defer c.close()
+	defer close(c.closedCh)
+	defer close(c.unreadyCh)
+	defer c.cancelFunc()
 
 	for {
 		select {
@@ -146,7 +167,6 @@ func (c *Connector) connectState() {
 			continue
 		}
 
-		c.logger.Printf("[DEBUG] connection established")
 		if err := c.connectedState(conn); err != nil {
 			continue
 		}
@@ -156,6 +176,7 @@ func (c *Connector) connectState() {
 }
 
 func (c *Connector) connectedState(conn Connection) error {
+	defer c.logger.Printf("[DEBUG] connection closed")
 	defer c.closeConn(conn)
 
 	closeCh := make(chan struct{})
@@ -163,6 +184,7 @@ func (c *Connector) connectedState(conn Connection) error {
 
 	internalCloseCh := conn.NotifyClose(make(chan *amqp.Error, 1))
 
+	c.logger.Printf("[DEBUG] connection established")
 	for {
 		select {
 		case c.readyCh <- Established{conn: conn, closeCh: closeCh}:
@@ -180,7 +202,7 @@ func (c *Connector) connectedState(conn Connection) error {
 }
 
 func (c *Connector) waitRetry(err error) {
-	timer := time.NewTimer(c.reconnectSleep)
+	timer := time.NewTimer(c.retryPeriod)
 	defer func() {
 		timer.Stop()
 		select {
@@ -207,10 +229,4 @@ func (c *Connector) closeConn(conn Connection) {
 	} else if err != nil {
 		c.logger.Printf("[ERROR] %s", err)
 	}
-}
-
-func (c *Connector) close() {
-	c.cancelFunc()
-	close(c.unreadyCh)
-	close(c.closedCh)
 }

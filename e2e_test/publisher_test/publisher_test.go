@@ -22,11 +22,12 @@ func TestPublishWhileConnectionClosed(t *testing.T) {
 	defer goleak.VerifyNone(t)
 
 	connName := fmt.Sprintf("amqpextra-test-%d-%d", time.Now().UnixNano(), rand.Int63n(10000000))
-	conn := amqpextra.DialConfig([]string{"amqp://guest:guest@rabbitmq:5672/amqpextra"}, amqp.Config{
+	conn, err := amqpextra.DialConfig([]string{"amqp://guest:guest@rabbitmq:5672/amqpextra"}, amqp.Config{
 		Properties: amqp.Table{
 			"connection_name": connName,
 		},
 	})
+	require.NoError(t, err)
 	defer conn.Close()
 
 	ticker := time.NewTicker(time.Millisecond * 100)
