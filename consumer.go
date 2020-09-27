@@ -8,7 +8,7 @@ import (
 func NewConsumer(
 	queue string,
 	handler consumer.Handler,
-	connCh <-chan Connection,
+	connCh <-chan Established,
 	opts ...consumer.Option,
 ) *consumer.Consumer {
 	consConnCh := make(chan consumer.Connection)
@@ -22,13 +22,13 @@ func NewConsumer(
 
 //nolint:dupl // ignore linter err
 func proxyConsumerConn(
-	connCh <-chan Connection,
-	consConnCh chan consumer.Connection,
-	consConnCloseCh chan *amqp.Error,
+	connCh <-chan Established,
+	consumerConnCh chan consumer.Connection,
+	consumerConnCloseCh chan *amqp.Error,
 	consumerCloseCh <-chan struct{},
 ) {
 	go func() {
-		defer close(consConnCh)
+		defer close(consumerConnCh)
 
 		for {
 			select {
@@ -38,7 +38,7 @@ func proxyConsumerConn(
 				}
 
 				select {
-				case consConnCh <- &consumer.AMQP{Conn: conn.AMQPConnection()}:
+				case consumerConnCh <- &consumer.AMQP{Conn: conn.Conn()}:
 				case <-consumerCloseCh:
 					return
 				}
@@ -49,7 +49,7 @@ func proxyConsumerConn(
 	}()
 
 	go func() {
-		defer close(consConnCloseCh)
+		defer close(consumerConnCloseCh)
 
 		for {
 			select {
@@ -59,13 +59,9 @@ func proxyConsumerConn(
 				}
 
 				select {
-				case err, ok := <-conn.NotifyClose():
-					if !ok {
-						err = amqp.ErrClosed
-					}
-
+				case <-conn.NotifyClose():
 					select {
-					case consConnCloseCh <- err:
+					case consumerConnCloseCh <- amqp.ErrClosed:
 					default:
 					}
 				case <-consumerCloseCh:

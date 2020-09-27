@@ -13,15 +13,7 @@ type Dialer interface {
 
 func NewDialer(url string, config amqp.Config) Dialer {
 	return DialerFunc(func() (Connection, error) {
-		amqpConn, err := amqp.DialConfig(url, config)
-		if err != nil {
-			return nil, err
-		}
-
-		return &connection{
-			amqpConn: amqpConn,
-			closeCh:  amqpConn.NotifyClose(make(chan *amqp.Error, 1)),
-		}, nil
+		return amqp.DialConfig(url, config)
 	})
 }
 
@@ -44,15 +36,7 @@ func Dial(urls []string) *Connector {
 
 		i = (i + 1) % l
 
-		amqpConn, err := amqp.Dial(url)
-		if err != nil {
-			return nil, err
-		}
-
-		return &connection{
-			amqpConn: amqpConn,
-			closeCh:  amqpConn.NotifyClose(make(chan *amqp.Error, 1)),
-		}, nil
+		return amqp.Dial(url)
 	}))
 }
 
@@ -69,15 +53,7 @@ func DialTLS(urls []string, amqps *tls.Config) *Connector {
 
 		i = (i + 1) % l
 
-		amqpConn, err := amqp.DialTLS(url, amqps)
-		if err != nil {
-			return nil, err
-		}
-
-		return &connection{
-			amqpConn: amqpConn,
-			closeCh:  amqpConn.NotifyClose(make(chan *amqp.Error, 1)),
-		}, nil
+		return amqp.DialTLS(url, amqps)
 	}))
 }
 
@@ -94,14 +70,6 @@ func DialConfig(urls []string, config amqp.Config) *Connector {
 
 		i = (i + 1) % l
 
-		amqpConn, err := amqp.DialConfig(url, config)
-		if err != nil {
-			return nil, err
-		}
-
-		return &connection{
-			amqpConn: amqpConn,
-			closeCh:  amqpConn.NotifyClose(make(chan *amqp.Error, 1)),
-		}, nil
+		return amqp.DialConfig(url, config)
 	}))
 }

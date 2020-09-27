@@ -10,23 +10,22 @@ import (
 )
 
 // nolint:gosimple // the purpose of select case is to stress the connCh close case.
-func ExampleConnection_ConnCh() {
+func ExampleConnector_Ready() {
 	conn := amqpextra.Dial([]string{"amqp://guest:guest@localhost:5672/%2f"})
 
-	connCh, closeCh := conn.ConnCh()
-
+	estCh := conn.Ready()
 	go func() {
 	L1:
 
 		for {
 			select {
-			case conn, ok := <-connCh:
+			case est, ok := <-estCh:
 				if !ok {
 					// connection permanently closed
 					return
 				}
 
-				ch, err := conn.Channel()
+				ch, err := est.Conn().Channel()
 				if err != nil {
 					return
 				}
@@ -42,7 +41,7 @@ func ExampleConnection_ConnCh() {
 						if err != nil {
 							log.Print(err)
 						}
-					case <-closeCh:
+					case <-est.NotifyClose():
 						// connection is lost. let`s get new one
 						continue L1
 					}

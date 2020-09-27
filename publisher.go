@@ -6,7 +6,7 @@ import (
 )
 
 func NewPublisher(
-	connCh <-chan Connection,
+	connCh <-chan Established,
 	opts ...publisher.Option,
 ) *publisher.Publisher {
 	pubConnCh := make(chan publisher.Connection)
@@ -20,7 +20,7 @@ func NewPublisher(
 
 //nolint:dupl // ignore linter err
 func proxyPublisherConn(
-	connCh <-chan Connection,
+	connCh <-chan Established,
 	pubConnCh chan publisher.Connection,
 	pubConnCloseCh chan *amqp.Error,
 	publisherCloseCh <-chan struct{},
@@ -36,7 +36,7 @@ func proxyPublisherConn(
 				}
 
 				select {
-				case pubConnCh <- &publisher.AMQP{Conn: conn.AMQPConnection()}:
+				case pubConnCh <- &publisher.AMQP{Conn: conn.Conn()}:
 				case <-publisherCloseCh:
 					return
 				}
@@ -57,13 +57,9 @@ func proxyPublisherConn(
 				}
 
 				select {
-				case err, ok := <-conn.NotifyClose():
-					if !ok {
-						err = amqp.ErrClosed
-					}
-
+				case <-conn.NotifyClose():
 					select {
-					case pubConnCloseCh <- err:
+					case pubConnCloseCh <- amqp.ErrClosed:
 					default:
 					}
 				case <-publisherCloseCh:

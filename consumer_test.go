@@ -9,7 +9,7 @@ import (
 	"github.com/streadway/amqp"
 )
 
-func ExampleConnection_Consumer() {
+func ExampleConnector_Consumer() {
 	// open connection
 	conn := amqpextra.Dial([]string{"amqp://guest:guest@localhost:5672/%2f"})
 	conn.SetLogger(logger.Discard)
@@ -39,9 +39,8 @@ func ExampleConnection_Consumer() {
 }
 
 func ExampleNewConsumer() {
-	// you can get connCh and closeCh from conn.ConnCh() method
-	var connCh chan *amqp.Connection
-	var closeCh chan *amqp.Error
+	// you can get estCh (established connections channel) conn.Ready() method
+	var estCh chan amqpextra.Established
 
 	// create consumer
 	c := amqpextra.NewConsumer(
@@ -53,8 +52,7 @@ func ExampleNewConsumer() {
 
 			return nil
 		}),
-		connCh,
-		closeCh,
+		estCh,
 	)
 	// run consumer
 	go c.Run()

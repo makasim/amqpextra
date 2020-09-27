@@ -11,26 +11,21 @@ import (
 )
 
 type Connection interface {
-	AMQPConnection() *amqp.Connection
-	NotifyClose() <-chan *amqp.Error
+	NotifyClose(chan *amqp.Error) chan *amqp.Error
 	Close() error
 }
 
-type connection struct {
-	amqpConn *amqp.Connection
-	closeCh  <-chan *amqp.Error
+type Established struct {
+	conn    Connection
+	closeCh chan struct{}
 }
 
-func (c *connection) AMQPConnection() *amqp.Connection {
-	return c.amqpConn
+func (c *Established) Conn() *amqp.Connection {
+	return c.conn.(*amqp.Connection)
 }
 
-func (c *connection) NotifyClose() <-chan *amqp.Error {
+func (c *Established) NotifyClose() <-chan struct{} {
 	return c.closeCh
-}
-
-func (c *connection) Close() error {
-	return c.amqpConn.Close()
 }
 
 type Connector struct {
@@ -41,8 +36,7 @@ type Connector struct {
 	ctx            context.Context
 	cancelFunc     context.CancelFunc
 
-	connCh    chan Connection
-	readyCh   chan struct{}
+	readyCh   chan Established
 	unreadyCh chan error
 	closedCh  chan struct{}
 }
@@ -58,8 +52,7 @@ func New(dialer Dialer) *Connector {
 		logger:         logger.Discard,
 		reconnectSleep: time.Second * 5,
 
-		connCh:    make(chan Connection),
-		readyCh:   make(chan struct{}),
+		readyCh:   make(chan Established),
 		unreadyCh: make(chan error),
 		closedCh:  make(chan struct{}),
 	}
@@ -81,8 +74,15 @@ func (c *Connector) SetReconnectSleep(d time.Duration) {
 	c.reconnectSleep = d
 }
 
-func (c *Connector) Ready() <-chan struct{} {
-	return c.readyCh
+func (c *Connector) Ready() <-chan Established {
+	select {
+	case <-c.ctx.Done():
+		estCh := make(chan Established)
+		close(estCh)
+		return estCh
+	default:
+		return c.readyCh
+	}
 }
 
 func (c *Connector) Unready() <-chan error {
@@ -97,29 +97,18 @@ func (c *Connector) Close() {
 	c.cancelFunc()
 }
 
-func (c *Connector) ConnCh() (connCh <-chan Connection) {
-	select {
-	case <-c.ctx.Done():
-		connCh := make(chan Connection)
-		close(connCh)
-		return connCh
-	default:
-		return c.connCh
-	}
-}
-
-func (c *Connector) Conn(ctx context.Context) (Connection, error) {
+func (c *Connector) Connection(ctx context.Context) (*amqp.Connection, error) {
 	select {
 	case <-c.ctx.Done():
 		return nil, c.ctx.Err()
 	case <-ctx.Done():
 		return nil, ctx.Err()
-	case conn, ok := <-c.connCh:
+	case est, ok := <-c.readyCh:
 		if !ok {
 			return nil, amqp.ErrClosed
 		}
 
-		return conn, nil
+		return est.Conn(), nil
 	}
 }
 
@@ -129,7 +118,7 @@ func (c *Connector) Consumer(queue string, handler consumer.Handler, opts ...con
 		consumer.WithContext(c.ctx),
 	}, opts...)
 
-	return NewConsumer(queue, handler, c.ConnCh(), opts...)
+	return NewConsumer(queue, handler, c.Ready(), opts...)
 }
 
 func (c *Connector) Publisher(opts ...publisher.Option) *publisher.Publisher {
@@ -138,29 +127,23 @@ func (c *Connector) Publisher(opts ...publisher.Option) *publisher.Publisher {
 		publisher.WithContext(c.ctx),
 	}, opts...)
 
-	return NewPublisher(c.ConnCh(), opts...)
+	return NewPublisher(c.Ready(), opts...)
 }
 
 func (c *Connector) connectState() {
 	defer c.close()
 
-	connErr := amqp.ErrClosed
 	for {
 		select {
 		case <-c.ctx.Done():
 			return
-		case c.unreadyCh <- connErr:
-			continue
 		default:
 		}
 
 		conn, err := c.dialer.Dial()
 		if err != nil {
-			if err := c.waitRetry(err); err != nil {
-				continue
-			}
-
-			return
+			c.waitRetry(err)
+			continue
 		}
 
 		c.logger.Printf("[DEBUG] connection established")
@@ -175,25 +158,28 @@ func (c *Connector) connectState() {
 func (c *Connector) connectedState(conn Connection) error {
 	defer c.closeConn(conn)
 
+	closeCh := make(chan struct{})
+	defer close(closeCh)
+
+	internalCloseCh := conn.NotifyClose(make(chan *amqp.Error, 1))
+
 	for {
 		select {
-		case c.connCh <- conn:
+		case c.readyCh <- Established{conn: conn, closeCh: closeCh}:
 			continue
-		case err, ok := <-conn.NotifyClose():
+		case err, ok := <-internalCloseCh:
 			if !ok {
 				err = amqp.ErrClosed
 			}
 
 			return err
-		case c.readyCh <- struct{}{}:
-			continue
 		case <-c.ctx.Done():
 			return nil
 		}
 	}
 }
 
-func (c *Connector) waitRetry(err error) error {
+func (c *Connector) waitRetry(err error) {
 	timer := time.NewTimer(c.reconnectSleep)
 	defer func() {
 		timer.Stop()
@@ -208,9 +194,9 @@ func (c *Connector) waitRetry(err error) error {
 		case c.unreadyCh <- err:
 			continue
 		case <-timer.C:
-			return err
+			return
 		case <-c.ctx.Done():
-			return nil
+			return
 		}
 	}
 }
@@ -219,7 +205,7 @@ func (c *Connector) closeConn(conn Connection) {
 	if err := conn.Close(); err == amqp.ErrClosed {
 		return
 	} else if err != nil {
-		// TODO log
+		c.logger.Printf("[ERROR] %s", err)
 	}
 }
 
