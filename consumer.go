@@ -8,7 +8,7 @@ import (
 func NewConsumer(
 	queue string,
 	handler consumer.Handler,
-	connCh <-chan Established,
+	connCh <-chan Ready,
 	opts ...consumer.Option,
 ) *consumer.Consumer {
 	consConnCh := make(chan consumer.Connection)
@@ -22,7 +22,7 @@ func NewConsumer(
 
 //nolint:dupl // ignore linter err
 func proxyConsumerConn(
-	connCh <-chan Established,
+	connCh <-chan Ready,
 	consumerConnCh chan consumer.Connection,
 	consumerConnCloseCh chan *amqp.Error,
 	consumerCloseCh <-chan struct{},

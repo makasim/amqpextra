@@ -8,9 +8,9 @@ import (
 	"github.com/streadway/amqp"
 )
 
-func ExampleConnector_Publisher() {
+func ExampleDialer_Publisher() {
 	// open connection
-	conn, err := amqpextra.Dial([]string{"amqp://guest:guest@localhost:5672/%2f"})
+	conn, err := amqpextra.Dial(amqpextra.WithURL("amqp://guest:guest@localhost:5672/%2f"))
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -38,7 +38,7 @@ func ExampleConnector_Publisher() {
 
 func ExampleNewPublisher() {
 	// you can get estCh (established connections channel) conn.Ready() method
-	var estCh chan amqpextra.Established
+	var estCh chan amqpextra.Ready
 
 	// create publisher
 	p := amqpextra.NewPublisher(estCh)

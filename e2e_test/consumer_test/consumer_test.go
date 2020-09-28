@@ -33,11 +33,12 @@ func TestConsumeWhileConnectionClosed(t *testing.T) {
 	}
 	rabbitmq.Publish(amqpConn, `Last!`, q)
 	connName := fmt.Sprintf("amqpextra-test-%d-%d", time.Now().UnixNano(), rand.Int63n(10000000))
-	conn, err := amqpextra.DialConfig([]string{"amqp://guest:guest@rabbitmq:5672/amqpextra"}, amqp.Config{
-		Properties: amqp.Table{
+	conn, err := amqpextra.Dial(
+		amqpextra.WithURL("amqp://guest:guest@rabbitmq:5672/amqpextra"),
+		amqpextra.WithConnectionProperties(amqp.Table{
 			"connection_name": connName,
-		},
-	})
+		}),
+	)
 	require.NoError(t, err)
 	defer conn.Close()
 

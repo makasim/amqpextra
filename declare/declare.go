@@ -11,7 +11,7 @@ import (
 
 func TempQueue(
 	ctx context.Context,
-	c *amqpextra.Connector,
+	c *amqpextra.Dialer,
 ) (amqp.Queue, error) {
 	return Queue(
 		ctx,
@@ -27,7 +27,7 @@ func TempQueue(
 
 func Queue(
 	ctx context.Context,
-	c *amqpextra.Connector,
+	c *amqpextra.Dialer,
 	name string,
 	durable,
 	autDelete,

@@ -3,15 +3,16 @@ package amqpextra_test
 import (
 	"context"
 
+	"log"
+
 	"github.com/makasim/amqpextra"
 	"github.com/makasim/amqpextra/consumer"
 	"github.com/streadway/amqp"
-	"log"
 )
 
-func ExampleConnector_Consumer() {
+func ExampleDialer_Consumer() {
 	// open connection
-	conn, err := amqpextra.Dial([]string{"amqp://guest:guest@localhost:5672/%2f"})
+	conn, err := amqpextra.Dial(amqpextra.WithURL("amqp://guest:guest@localhost:5672/%2f"))
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -42,7 +43,7 @@ func ExampleConnector_Consumer() {
 
 func ExampleNewConsumer() {
 	// you can get estCh (established connections channel) conn.Ready() method
-	var estCh chan amqpextra.Established
+	var estCh chan amqpextra.Ready
 
 	// create consumer
 	c := amqpextra.NewConsumer(

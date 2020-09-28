@@ -10,8 +10,8 @@ import (
 )
 
 // nolint:gosimple // the purpose of select case is to stress the connCh close case.
-func ExampleConnector_Ready() {
-	conn, err := amqpextra.Dial([]string{"amqp://guest:guest@localhost:5672/%2f"})
+func ExampleDialer_Ready() {
+	conn, err := amqpextra.Dial(amqpextra.WithURL("amqp://guest:guest@localhost:5672/%2f"))
 	if err != nil {
 		log.Fatal(err)
 	}
