@@ -40,11 +40,13 @@ type config struct {
 	logger      logger.Logger
 	retryPeriod time.Duration
 	ctx         context.Context
-	cancelFunc  context.CancelFunc
 }
 
 type Dialer struct {
 	config
+
+	ctx        context.Context
+	cancelFunc context.CancelFunc
 
 	readyCh   chan Ready
 	unreadyCh chan error
@@ -81,9 +83,9 @@ func Dial(opts ...Option) (*Dialer, error) {
 	}
 
 	if c.config.ctx != nil {
-		c.config.ctx, c.config.cancelFunc = context.WithCancel(c.config.ctx)
+		c.ctx, c.cancelFunc = context.WithCancel(c.config.ctx)
 	} else {
-		c.config.ctx, c.config.cancelFunc = context.WithCancel(context.Background())
+		c.ctx, c.cancelFunc = context.WithCancel(context.Background())
 	}
 
 	if c.retryPeriod <= 0 {
