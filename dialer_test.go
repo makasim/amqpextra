@@ -10,25 +10,25 @@ import (
 )
 
 // nolint:gosimple // the purpose of select case is to stress the connCh close case.
-func ExampleDialer_Ready() {
-	conn, err := amqpextra.Dial(amqpextra.WithURL("amqp://guest:guest@localhost:5672/%2f"))
+func ExampleDialer_NotifyReady() {
+	conn, err := amqpextra.New(amqpextra.WithURL("amqp://guest:guest@localhost:5672/%2f"))
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	estCh := conn.Ready()
+	readyCh := conn.NotifyReady()
 	go func() {
 	L1:
 
 		for {
 			select {
-			case est, ok := <-estCh:
+			case ready, ok := <-readyCh:
 				if !ok {
 					// connection permanently closed
 					return
 				}
 
-				ch, err := est.Conn().Channel()
+				ch, err := ready.Conn().Channel()
 				if err != nil {
 					return
 				}
@@ -44,7 +44,7 @@ func ExampleDialer_Ready() {
 						if err != nil {
 							log.Print(err)
 						}
-					case <-est.NotifyClose():
+					case <-ready.NotifyClose():
 						// connection is lost. let`s get new one
 						continue L1
 					}

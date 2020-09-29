@@ -12,6 +12,57 @@ import (
 	amqp "github.com/streadway/amqp"
 )
 
+// MockConnectionReady is a mock of ConnectionReady interface.
+type MockConnectionReady struct {
+	ctrl     *gomock.Controller
+	recorder *MockConnectionReadyMockRecorder
+}
+
+// MockConnectionReadyMockRecorder is the mock recorder for MockConnectionReady.
+type MockConnectionReadyMockRecorder struct {
+	mock *MockConnectionReady
+}
+
+// NewMockConnectionReady creates a new mock instance.
+func NewMockConnectionReady(ctrl *gomock.Controller) *MockConnectionReady {
+	mock := &MockConnectionReady{ctrl: ctrl}
+	mock.recorder = &MockConnectionReadyMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockConnectionReady) EXPECT() *MockConnectionReadyMockRecorder {
+	return m.recorder
+}
+
+// Conn mocks base method.
+func (m *MockConnectionReady) Conn() consumer.Connection {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Conn")
+	ret0, _ := ret[0].(consumer.Connection)
+	return ret0
+}
+
+// Conn indicates an expected call of Conn.
+func (mr *MockConnectionReadyMockRecorder) Conn() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Conn", reflect.TypeOf((*MockConnectionReady)(nil).Conn))
+}
+
+// NotifyClose mocks base method.
+func (m *MockConnectionReady) NotifyClose() chan struct{} {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "NotifyClose")
+	ret0, _ := ret[0].(chan struct{})
+	return ret0
+}
+
+// NotifyClose indicates an expected call of NotifyClose.
+func (mr *MockConnectionReadyMockRecorder) NotifyClose() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NotifyClose", reflect.TypeOf((*MockConnectionReady)(nil).NotifyClose))
+}
+
 // MockConnection is a mock of Connection interface.
 type MockConnection struct {
 	ctrl     *gomock.Controller
@@ -33,21 +84,6 @@ func NewMockConnection(ctrl *gomock.Controller) *MockConnection {
 // EXPECT returns an object that allows the caller to indicate expected use.
 func (m *MockConnection) EXPECT() *MockConnectionMockRecorder {
 	return m.recorder
-}
-
-// Channel mocks base method.
-func (m *MockConnection) Channel() (consumer.Channel, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Channel")
-	ret0, _ := ret[0].(consumer.Channel)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// Channel indicates an expected call of Channel.
-func (mr *MockConnectionMockRecorder) Channel() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Channel", reflect.TypeOf((*MockConnection)(nil).Channel))
 }
 
 // MockChannel is a mock of Channel interface.

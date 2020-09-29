@@ -124,7 +124,7 @@ func Queue(conn *amqp.Connection) string {
 }
 
 func Queue2(conn *amqpextra.Dialer) string {
-	est, ok := <-conn.Ready()
+	est, ok := <-conn.NotifyReady()
 	if !ok {
 		panic("connection is closed")
 	}
@@ -147,7 +147,7 @@ func Publish(conn *amqp.Connection, body, queue string) {
 }
 
 func Publish2(conn *amqpextra.Dialer, body, queue string) {
-	est, ok := <-conn.Ready()
+	est, ok := <-conn.NotifyReady()
 	if !ok {
 		panic("connection is closed")
 	}

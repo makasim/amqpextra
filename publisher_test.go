@@ -10,13 +10,13 @@ import (
 
 func ExampleDialer_Publisher() {
 	// open connection
-	conn, err := amqpextra.Dial(amqpextra.WithURL("amqp://guest:guest@localhost:5672/%2f"))
+	dialer, err := amqpextra.New(amqpextra.WithURL("amqp://guest:guest@localhost:5672/%2f"))
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	// create publisher
-	p := conn.Publisher()
+	p := dialer.Publisher()
 
 	// publish a message
 	go p.Publish(publisher.Message{
@@ -31,17 +31,17 @@ func ExampleDialer_Publisher() {
 	<-p.Closed()
 
 	// close connection
-	conn.Close()
+	dialer.Close()
 
 	// Output:
 }
 
 func ExampleNewPublisher() {
-	// you can get estCh (established connections channel) conn.Ready() method
-	var estCh chan amqpextra.Ready
+	// you can get readyCh from dialer.NotifyReady() method
+	var readyCh chan amqpextra.Ready
 
 	// create publisher
-	p := amqpextra.NewPublisher(estCh)
+	p := amqpextra.NewPublisher(readyCh)
 
 	// publish a message
 	go p.Publish(publisher.Message{

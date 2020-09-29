@@ -1,28 +1,39 @@
-package publisher_test_test
+package e2e_test
 
 import (
 	"fmt"
 	"testing"
 
 	"github.com/streadway/amqp"
+	"go.uber.org/goleak"
 
 	"time"
+
+	"context"
 
 	"math/rand"
 
 	"github.com/makasim/amqpextra"
+	"github.com/makasim/amqpextra/consumer"
 	"github.com/makasim/amqpextra/e2e_test/helper/rabbitmq"
-	"github.com/makasim/amqpextra/publisher"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"go.uber.org/goleak"
 )
 
-func TestPublishWhileConnectionClosed(t *testing.T) {
+func TestConsumeWhileConnectionClosed(t *testing.T) {
 	defer goleak.VerifyNone(t)
 
+	amqpConn, err := amqp.Dial("amqp://guest:guest@rabbitmq:5672/amqpextra")
+	require.NoError(t, err)
+	defer amqpConn.Close()
+
+	q := rabbitmq.Queue(amqpConn)
+	for i := 0; i < 999; i++ {
+		rabbitmq.Publish(amqpConn, `Hello!`, q)
+	}
+	rabbitmq.Publish(amqpConn, `Last!`, q)
 	connName := fmt.Sprintf("amqpextra-test-%d-%d", time.Now().UnixNano(), rand.Int63n(10000000))
-	conn, err := amqpextra.Dial(
+	conn, err := amqpextra.New(
 		amqpextra.WithURL("amqp://guest:guest@rabbitmq:5672/amqpextra"),
 		amqpextra.WithConnectionProperties(amqp.Table{
 			"connection_name": connName,
@@ -35,7 +46,6 @@ func TestPublishWhileConnectionClosed(t *testing.T) {
 	defer ticker.Stop()
 	timer := time.NewTicker(time.Second * 5)
 	defer timer.Stop()
-
 waitOpened:
 	for {
 		select {
@@ -47,43 +57,51 @@ waitOpened:
 			t.Fatalf("connection %s is not opened", connName)
 		}
 	}
-	p := conn.Publisher()
-	assertReady(t, p)
+
+	resultCh := make(chan error, 1)
+	c := conn.Consumer(q, consumer.HandlerFunc(func(ctx context.Context, msg amqp.Delivery) interface{} {
+		resultCh <- msg.Ack(false)
+
+		if string(msg.Body) == "Last!" {
+			close(resultCh)
+		}
+
+		return nil
+	}))
+	go c.Run()
+
+	assertConsumerReady(t, c)
 
 	count := 0
 	errorCount := 0
-	resultCh := make(chan error, 1)
-	for i := 0; i < 1000; i++ {
-		if i == 300 {
-			time.Sleep(time.Millisecond * 100)
-			require.True(t, rabbitmq.CloseConn(connName))
-		}
-
-		p.Publish(publisher.Message{
-			ResultCh: resultCh,
-		})
-
-		res := <-resultCh
+	for res := range resultCh {
 		if res == nil {
 			count++
 		} else {
 			errorCount++
+		}
+
+		if (count + errorCount) == 300 {
+			time.Sleep(time.Millisecond * 100)
+			require.True(t, rabbitmq.CloseConn(connName))
 		}
 	}
 
 	assert.GreaterOrEqual(t, count, 995)
 
 	conn.Close()
-	<-p.Closed()
+	<-c.Closed()
+	//
+	time.Sleep(time.Millisecond * 100)
 }
 
-func assertReady(t *testing.T, p *publisher.Publisher) {
+func assertConsumerReady(t *testing.T, p *consumer.Consumer) {
 	timer := time.NewTimer(time.Millisecond * 2000)
 	defer timer.Stop()
 
 	select {
 	case <-p.Ready():
 	case <-timer.C:
-		t.Fatal("publisher must be ready")
+		t.Fatal("consumer must be ready")
 	}
 }

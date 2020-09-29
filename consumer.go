@@ -2,7 +2,6 @@ package amqpextra
 
 import (
 	"github.com/makasim/amqpextra/consumer"
-	"github.com/streadway/amqp"
 )
 
 func NewConsumer(
@@ -11,11 +10,10 @@ func NewConsumer(
 	connCh <-chan Ready,
 	opts ...consumer.Option,
 ) *consumer.Consumer {
-	consConnCh := make(chan consumer.Connection)
-	consConnCloseCh := make(chan *amqp.Error, 1)
+	consConnCh := make(chan consumer.ConnectionReady)
 
-	c := consumer.New(queue, handler, consConnCh, consConnCloseCh, opts...)
-	go proxyConsumerConn(connCh, consConnCh, consConnCloseCh, c.Closed())
+	c := consumer.New(queue, handler, consConnCh, opts...)
+	go proxyConsumerConn(connCh, consConnCh, c.Closed())
 
 	return c
 }
@@ -23,8 +21,7 @@ func NewConsumer(
 //nolint:dupl // ignore linter err
 func proxyConsumerConn(
 	connCh <-chan Ready,
-	consumerConnCh chan consumer.Connection,
-	consumerConnCloseCh chan *amqp.Error,
+	consumerConnCh chan consumer.ConnectionReady,
 	consumerCloseCh <-chan struct{},
 ) {
 	go func() {
@@ -32,38 +29,17 @@ func proxyConsumerConn(
 
 		for {
 			select {
-			case conn, ok := <-connCh:
+			case connReady, ok := <-connCh:
 				if !ok {
 					return
 				}
 
-				select {
-				case consumerConnCh <- &consumer.AMQP{Conn: conn.Conn()}:
-				case <-consumerCloseCh:
-					return
-				}
-			case <-consumerCloseCh:
-				return
-			}
-		}
-	}()
-
-	go func() {
-		defer close(consumerConnCloseCh)
-
-		for {
-			select {
-			case conn, ok := <-connCh:
-				if !ok {
-					return
-				}
+				consumerConnReady := consumer.NewConnectionReady(connReady.Conn())
 
 				select {
-				case <-conn.NotifyClose():
-					select {
-					case consumerConnCloseCh <- amqp.ErrClosed:
-					default:
-					}
+				case consumerConnCh <- consumerConnReady:
+				case <-connReady.NotifyClose():
+
 				case <-consumerCloseCh:
 					return
 				}

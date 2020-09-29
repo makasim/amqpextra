@@ -53,7 +53,19 @@ type Dialer struct {
 	closedCh  chan struct{}
 }
 
-func Dial(opts ...Option) (*Dialer, error) {
+func Dial(opts ...Option) (*amqp.Connection, error) {
+	d, err := New(opts...)
+	if err != nil {
+		return nil, err
+	}
+
+	ctx, cancelFunc := context.WithTimeout(context.Background(), time.Second*30)
+	defer cancelFunc()
+
+	return d.Connection(ctx)
+}
+
+func New(opts ...Option) (*Dialer, error) {
 	c := &Dialer{
 		config: config{
 			amqpUrls: make([]string, 0, 1),
@@ -97,9 +109,10 @@ func Dial(opts ...Option) (*Dialer, error) {
 	return c, nil
 }
 
-func WithURL(url ...string) Option {
+func WithURL(url string, urls ...string) Option {
 	return func(c *Dialer) {
-		c.amqpUrls = append(c.amqpUrls, url...)
+		c.amqpUrls = append(c.amqpUrls, url)
+		c.amqpUrls = append(c.amqpUrls, urls...)
 	}
 }
 
@@ -133,22 +146,22 @@ func WithConnectionProperties(props amqp.Table) Option {
 	}
 }
 
-func (c *Dialer) Ready() <-chan Ready {
+func (c *Dialer) NotifyReady() <-chan Ready {
 	select {
 	case <-c.ctx.Done():
-		estCh := make(chan Ready)
-		close(estCh)
-		return estCh
+		readyCh := make(chan Ready)
+		close(readyCh)
+		return readyCh
 	default:
 		return c.readyCh
 	}
 }
 
-func (c *Dialer) Unready() <-chan error {
+func (c *Dialer) NotifyUnready() <-chan error {
 	return c.unreadyCh
 }
 
-func (c *Dialer) Closed() <-chan struct{} {
+func (c *Dialer) NotifyClosed() <-chan struct{} {
 	return c.closedCh
 }
 
@@ -177,7 +190,7 @@ func (c *Dialer) Consumer(queue string, handler consumer.Handler, opts ...consum
 		consumer.WithContext(c.ctx),
 	}, opts...)
 
-	return NewConsumer(queue, handler, c.Ready(), opts...)
+	return NewConsumer(queue, handler, c.NotifyReady(), opts...)
 }
 
 func (c *Dialer) Publisher(opts ...publisher.Option) *publisher.Publisher {
@@ -186,7 +199,7 @@ func (c *Dialer) Publisher(opts ...publisher.Option) *publisher.Publisher {
 		publisher.WithContext(c.ctx),
 	}, opts...)
 
-	return NewPublisher(c.Ready(), opts...)
+	return NewPublisher(c.NotifyReady(), opts...)
 }
 
 func (c *Dialer) connectState() {
@@ -197,27 +210,48 @@ func (c *Dialer) connectState() {
 	i := 0
 	l := len(c.amqpUrls)
 
+loop0:
 	for {
 		url := c.amqpUrls[i]
 		i = (i + 1) % l
 
-		select {
-		case <-c.ctx.Done():
-			return
-		default:
-		}
+		connCh := make(chan Connection)
+		errorCh := make(chan error)
 
-		conn, err := c.amqpDial(url, c.amqpConfig)
-		if err != nil {
-			c.waitRetry(err)
-			continue
-		}
+		go func() {
+			if conn, err := c.amqpDial(url, c.amqpConfig); err != nil {
+				select {
+				case errorCh <- err:
+				case <-c.ctx.Done():
+					return
+				}
+			} else {
+				select {
+				case connCh <- conn:
+				case <-c.ctx.Done():
+					conn.Close()
+					return
+				}
+			}
+		}()
 
-		if err := c.connectedState(conn); err != nil {
-			continue
-		}
+		for {
+			select {
+			case c.unreadyCh <- amqp.ErrClosed:
+				continue
+			case conn := <-connCh:
+				if err := c.connectedState(conn); err != nil {
+					continue loop0
+				}
 
-		return
+				return
+			case err := <-errorCh:
+				c.waitRetry(err)
+				continue loop0
+			case <-c.ctx.Done():
+				return
+			}
+		}
 	}
 }
 
