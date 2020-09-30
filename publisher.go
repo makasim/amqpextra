@@ -2,18 +2,16 @@ package amqpextra
 
 import (
 	"github.com/makasim/amqpextra/publisher"
-	"github.com/streadway/amqp"
 )
 
 func NewPublisher(
 	connCh <-chan Ready,
 	opts ...publisher.Option,
 ) *publisher.Publisher {
-	pubConnCh := make(chan publisher.Connection)
-	pubConnCloseCh := make(chan *amqp.Error, 1)
+	pubConnCh := make(chan publisher.ConnectionReady)
 
-	p := publisher.New(pubConnCh, pubConnCloseCh, opts...)
-	go proxyPublisherConn(connCh, pubConnCh, pubConnCloseCh, p.Closed())
+	p := publisher.New(pubConnCh, opts...)
+	go proxyPublisherConn(connCh, pubConnCh, p.Closed())
 
 	return p
 }
@@ -21,47 +19,25 @@ func NewPublisher(
 //nolint:dupl // ignore linter err
 func proxyPublisherConn(
 	connCh <-chan Ready,
-	pubConnCh chan publisher.Connection,
-	pubConnCloseCh chan *amqp.Error,
+	publisherConnCh chan publisher.ConnectionReady,
 	publisherCloseCh <-chan struct{},
 ) {
 	go func() {
-		defer close(pubConnCh)
+		defer close(publisherConnCh)
 
 		for {
 			select {
-			case conn, ok := <-connCh:
+			case connReady, ok := <-connCh:
 				if !ok {
 					return
 				}
 
-				select {
-				case pubConnCh <- &publisher.AMQP{Conn: conn.Conn()}:
-				case <-publisherCloseCh:
-					return
-				}
-			case <-publisherCloseCh:
-				return
-			}
-		}
-	}()
-
-	go func() {
-		defer close(pubConnCloseCh)
-
-		for {
-			select {
-			case conn, ok := <-connCh:
-				if !ok {
-					return
-				}
+				publisherConnReady := publisher.NewConnectionReady(connReady.Conn())
 
 				select {
-				case <-conn.NotifyClose():
-					select {
-					case pubConnCloseCh <- amqp.ErrClosed:
-					default:
-					}
+				case publisherConnCh <- publisherConnReady:
+				case <-connReady.NotifyClose():
+
 				case <-publisherCloseCh:
 					return
 				}

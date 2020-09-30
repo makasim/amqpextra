@@ -212,8 +212,8 @@ func (c *Dialer) connectState() {
 
 loop0:
 	for {
-		url := c.amqpUrls[i]
 		i = (i + 1) % l
+		url := c.amqpUrls[i]
 
 		connCh := make(chan Connection)
 		errorCh := make(chan error)
@@ -241,13 +241,13 @@ loop0:
 				continue
 			case conn := <-connCh:
 				if err := c.connectedState(conn); err != nil {
-					continue loop0
+					break loop0
 				}
 
 				return
 			case err := <-errorCh:
 				c.waitRetry(err)
-				continue loop0
+				break loop0
 			case <-c.ctx.Done():
 				return
 			}

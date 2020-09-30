@@ -10,9 +10,8 @@ lint:
 ## unit-test: run unit  tests
 unit-test:
 ifndef NOMOCKGEN
-	mockgen -source=publisher/interfaces.go > publisher/mock_publisher/mock_publisher.go
-	mockgen -source=consumer/interfaces.go > consumer/mock_consumer/mock_consumer.go
-	mockgen -source=consumer/handler.go > consumer/mock_consumer/mock_handler.go
+	mockgen github.com/makasim/amqpextra/publisher Connection,ConnectionReady,Channel > publisher/mock_publisher/mocks.go
+	mockgen github.com/makasim/amqpextra/consumer Connection,ConnectionReady,Channel > consumer/mock_consumer/mocks.go
 endif
 	
 	$(GOTEST) -race -v -cover -run $(RUNTEST) ./ ./publisher/... ./consumer/...
