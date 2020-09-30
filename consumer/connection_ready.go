@@ -1,20 +1,8 @@
 package consumer
 
-import "github.com/streadway/amqp"
-
 type ConnectionReady interface {
 	Conn() Connection
 	NotifyClose() chan struct{}
-}
-
-type Connection interface {
-}
-
-type Channel interface {
-	Consume(queue, consumer string, autoAck, exclusive, noLocal, noWait bool, args amqp.Table) (<-chan amqp.Delivery, error)
-	NotifyClose(receiver chan *amqp.Error) chan *amqp.Error
-	NotifyCancel(c chan string) chan string
-	Close() error
 }
 
 func NewConnectionReady(conn Connection) ConnectionReady {
