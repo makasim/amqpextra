@@ -32,12 +32,12 @@ func proxyPublisherConn(
 					return
 				}
 
-				publisherConnReady := publisher.NewConnectionReady(connReady.Conn())
+				publisherConnReady := publisher.NewConnectionReady(connReady.Conn(), connReady.NotifyClose())
 
 				select {
 				case publisherConnCh <- publisherConnReady:
 				case <-connReady.NotifyClose():
-
+					continue
 				case <-publisherCloseCh:
 					return
 				}

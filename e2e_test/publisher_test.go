@@ -12,6 +12,7 @@ import (
 
 	"github.com/makasim/amqpextra"
 	"github.com/makasim/amqpextra/e2e_test/helper/rabbitmq"
+	"github.com/makasim/amqpextra/logger"
 	"github.com/makasim/amqpextra/publisher"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -27,6 +28,7 @@ func TestPublishWhileConnectionClosed(t *testing.T) {
 		amqpextra.WithConnectionProperties(amqp.Table{
 			"connection_name": connName,
 		}),
+		amqpextra.WithLogger(logger.Std),
 	)
 	require.NoError(t, err)
 	defer conn.Close()

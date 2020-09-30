@@ -28,7 +28,7 @@ func (c *Ready) Conn() *amqp.Connection {
 	return c.conn.(*amqp.Connection)
 }
 
-func (c *Ready) NotifyClose() <-chan struct{} {
+func (c *Ready) NotifyClose() chan struct{} {
 	return c.closeCh
 }
 
@@ -210,7 +210,6 @@ func (c *Dialer) connectState() {
 	i := 0
 	l := len(c.amqpUrls)
 
-loop0:
 	for {
 		i = (i + 1) % l
 		url := c.amqpUrls[i]
@@ -235,19 +234,20 @@ loop0:
 			}
 		}()
 
+	loop2:
 		for {
 			select {
 			case c.unreadyCh <- amqp.ErrClosed:
 				continue
 			case conn := <-connCh:
 				if err := c.connectedState(conn); err != nil {
-					break loop0
+					break loop2
 				}
 
 				return
 			case err := <-errorCh:
 				c.waitRetry(err)
-				break loop0
+				break loop2
 			case <-c.ctx.Done():
 				return
 			}

@@ -34,12 +34,12 @@ func proxyConsumerConn(
 					return
 				}
 
-				consumerConnReady := consumer.NewConnectionReady(connReady.Conn())
+				consumerConnReady := consumer.NewConnectionReady(connReady.Conn(), connReady.NotifyClose())
 
 				select {
 				case consumerConnCh <- consumerConnReady:
 				case <-connReady.NotifyClose():
-
+					continue
 				case <-consumerCloseCh:
 					return
 				}

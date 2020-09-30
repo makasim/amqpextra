@@ -5,10 +5,10 @@ type ConnectionReady interface {
 	NotifyClose() chan struct{}
 }
 
-func NewConnectionReady(conn Connection) ConnectionReady {
+func NewConnectionReady(conn Connection, closeCh chan struct{}) ConnectionReady {
 	return &connectionReady{
 		conn:        conn,
-		notifyClose: make(chan struct{}),
+		notifyClose: closeCh,
 	}
 }
 
