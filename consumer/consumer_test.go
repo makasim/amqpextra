@@ -1180,6 +1180,17 @@ func assertReady(t *testing.T, c *consumer.Consumer) {
 	}
 }
 
+func assertClosed(t *testing.T, c *consumer.Consumer) {
+	timer := time.NewTimer(time.Millisecond * 100)
+	defer timer.Stop()
+
+	select {
+	case <-c.Closed():
+	case <-timer.C:
+		t.Fatal("consumer close timeout")
+	}
+}
+
 func any() gomock.Matcher {
 	return gomock.Any()
 }
@@ -1197,17 +1208,6 @@ func handlerCounter(counter *int) consumer.Handler {
 		*counter++
 		return nil
 	})
-}
-
-func assertClosed(t *testing.T, c *consumer.Consumer) {
-	timer := time.NewTimer(time.Millisecond * 100)
-	defer timer.Stop()
-
-	select {
-	case <-c.Closed():
-	case <-timer.C:
-		t.Fatal("consumer close timeout")
-	}
 }
 
 func initFuncStub(chs ...consumer.Channel) func(consumer.Connection) (consumer.Channel, error) {
