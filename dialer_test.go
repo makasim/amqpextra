@@ -9,6 +9,8 @@ import (
 
 	"fmt"
 
+	"context"
+
 	"github.com/golang/mock/gomock"
 	"github.com/makasim/amqpextra"
 	"github.com/makasim/amqpextra/logger"
@@ -38,7 +40,7 @@ func ExampleDialer_NotifyReady() {
 					return
 				}
 
-				ch, err := ready.Conn().Channel()
+				ch, err := ready.AMQPConnection().Channel()
 				if err != nil {
 					return
 				}
@@ -109,7 +111,7 @@ func TestUnready(main *testing.T) {
 
 		closeCh := make(chan *amqp.Error)
 
-		conn := mock_amqpextra.NewMockConnection(ctrl)
+		conn := mock_amqpextra.NewMockAMQPConnection(ctrl)
 		conn.EXPECT().Close().Return(nil)
 		conn.EXPECT().NotifyClose(any()).Return(closeCh)
 
@@ -174,7 +176,7 @@ func TestUnready(main *testing.T) {
 
 		closeCh := make(chan *amqp.Error)
 
-		conn := mock_amqpextra.NewMockConnection(ctrl)
+		conn := mock_amqpextra.NewMockAMQPConnection(ctrl)
 		conn.EXPECT().Close().Return(nil)
 		conn.EXPECT().NotifyClose(any()).Return(closeCh)
 
@@ -202,6 +204,134 @@ func TestUnready(main *testing.T) {
 [DEBUG] connection closed
 `, l.Logs())
 	})
+
+	main.Run("GetConnectionContextTimeout", func(t *testing.T) {
+		defer goleak.VerifyNone(t)
+
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		l := logger.NewTest()
+
+		dialer, err := amqpextra.New(
+			amqpextra.WithURL("amqp://rabbitmq.host"),
+			amqpextra.WithAMQPDial(amqpDialStub(time.Millisecond*75, fmt.Errorf("the error"))),
+			amqpextra.WithLogger(l),
+		)
+		require.NoError(t, err)
+
+		ctx, cancelFunc := context.WithTimeout(context.Background(), time.Millisecond*50)
+		defer cancelFunc()
+		_, err = dialer.Connection(ctx)
+		require.EqualError(t, err, "context deadline exceeded")
+
+		dialer.Close()
+		assertClosed(t, dialer)
+	})
+
+	main.Run("GetConnectionDialerClosed", func(t *testing.T) {
+		defer goleak.VerifyNone(t)
+
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		l := logger.NewTest()
+
+		dialer, err := amqpextra.New(
+			amqpextra.WithURL("amqp://rabbitmq.host"),
+			amqpextra.WithAMQPDial(amqpDialStub(time.Millisecond*75, fmt.Errorf("the error"))),
+			amqpextra.WithLogger(l),
+		)
+		require.NoError(t, err)
+
+		dialer.Close()
+		assertClosed(t, dialer)
+
+		_, err = dialer.Connection(context.Background())
+		require.EqualError(t, err, "connection closed")
+	})
+}
+
+func TestOptions(main *testing.T) {
+	main.Run("NoURL", func(t *testing.T) {
+		defer goleak.VerifyNone(t)
+
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		_, err := amqpextra.New()
+		require.EqualError(t, err, "url(s) must be set")
+	})
+
+	main.Run("ZeroRetryPeriod", func(t *testing.T) {
+		defer goleak.VerifyNone(t)
+
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		_, err := amqpextra.New(
+			amqpextra.WithURL("URL"),
+			amqpextra.WithRetryPeriod(time.Duration(0)),
+		)
+		require.EqualError(t, err, "retryPeriod must be greater then zero")
+	})
+
+	main.Run("NegativeRetryPeriod", func(t *testing.T) {
+		defer goleak.VerifyNone(t)
+
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		_, err := amqpextra.New(
+			amqpextra.WithURL("URL"),
+			amqpextra.WithRetryPeriod(time.Duration(-1)),
+		)
+		require.EqualError(t, err, "retryPeriod must be greater then zero")
+	})
+}
+
+func TestClose(main *testing.T) {
+	main.Run("CloseTwice", func(t *testing.T) {
+		defer goleak.VerifyNone(t)
+
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		l := logger.NewTest()
+
+		dialer, err := amqpextra.New(
+			amqpextra.WithURL("amqp://rabbitmq.host"),
+			amqpextra.WithAMQPDial(amqpDialStub(time.Millisecond*20, fmt.Errorf("the error"))),
+			amqpextra.WithLogger(l),
+		)
+		require.NoError(t, err)
+
+		dialer.Close()
+		dialer.Close()
+	})
+
+	main.Run("CloseByContext", func(t *testing.T) {
+		defer goleak.VerifyNone(t)
+
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		ctx, cancelFunc := context.WithCancel(context.Background())
+		defer cancelFunc()
+
+		l := logger.NewTest()
+
+		dialer, err := amqpextra.New(
+			amqpextra.WithURL("amqp://rabbitmq.host"),
+			amqpextra.WithAMQPDial(amqpDialStub(time.Millisecond*20, fmt.Errorf("the error"))),
+			amqpextra.WithContext(ctx),
+			amqpextra.WithLogger(l),
+		)
+		require.NoError(t, err)
+
+		cancelFunc()
+		assertClosed(t, dialer)
+	})
 }
 
 func assertUnready(t *testing.T, c *amqpextra.Dialer, errString string) {
@@ -226,7 +356,10 @@ func assertReady(t *testing.T, c *amqpextra.Dialer) {
 	defer timer.Stop()
 
 	select {
-	case <-c.NotifyReady():
+	case _, ok := <-c.NotifyReady():
+		if !ok {
+			t.Fatal("dialer notify ready closed")
+		}
 	case <-timer.C:
 		t.Fatal("dialer must be ready")
 	}
@@ -247,16 +380,16 @@ func any() gomock.Matcher {
 	return gomock.Any()
 }
 
-func amqpDialStub(conns ...interface{}) func(url string, config amqp.Config) (amqpextra.Connection, error) {
+func amqpDialStub(conns ...interface{}) func(url string, config amqp.Config) (amqpextra.AMQPConnection, error) {
 	index := 0
-	return func(url string, config amqp.Config) (amqpextra.Connection, error) {
+	return func(url string, config amqp.Config) (amqpextra.AMQPConnection, error) {
 		if dur, ok := conns[index].(time.Duration); ok {
 			time.Sleep(dur)
 			index++
 		}
 
 		switch curr := conns[index].(type) {
-		case amqpextra.Connection:
+		case amqpextra.AMQPConnection:
 			index++
 			return curr, nil
 		case error:

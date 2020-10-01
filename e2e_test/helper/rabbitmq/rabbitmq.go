@@ -129,7 +129,7 @@ func Queue2(conn *amqpextra.Dialer) string {
 		panic("connection is closed")
 	}
 
-	return Queue(est.Conn())
+	return Queue(est.AMQPConnection())
 }
 
 func Publish(conn *amqp.Connection, body, queue string) {
@@ -152,5 +152,5 @@ func Publish2(conn *amqpextra.Dialer, body, queue string) {
 		panic("connection is closed")
 	}
 
-	Publish(est.Conn(), body, queue)
+	Publish(est.AMQPConnection(), body, queue)
 }

@@ -14,27 +14,32 @@ import (
 
 type Option func(c *Dialer)
 
-type Connection interface {
+type AMQPConnection interface {
 	NotifyClose(chan *amqp.Error) chan *amqp.Error
 	Close() error
 }
 
-type Ready struct {
-	conn    Connection
-	closeCh chan struct{}
+type Connection struct {
+	amqpConn AMQPConnection
+	lostCh   chan struct{}
+	closeCh  chan struct{}
 }
 
-func (c *Ready) Conn() *amqp.Connection {
-	return c.conn.(*amqp.Connection)
+func (c *Connection) AMQPConnection() *amqp.Connection {
+	return c.amqpConn.(*amqp.Connection)
 }
 
-func (c *Ready) NotifyClose() chan struct{} {
+func (c *Connection) NotifyLost() chan struct{} {
+	return c.closeCh
+}
+
+func (c *Connection) NotifyClose() chan struct{} {
 	return c.closeCh
 }
 
 type config struct {
 	amqpUrls   []string
-	amqpDial   func(url string, c amqp.Config) (Connection, error)
+	amqpDial   func(url string, c amqp.Config) (AMQPConnection, error)
 	amqpConfig amqp.Config
 
 	logger      logger.Logger
@@ -48,7 +53,7 @@ type Dialer struct {
 	ctx        context.Context
 	cancelFunc context.CancelFunc
 
-	readyCh   chan Ready
+	readyCh   chan *Connection
 	unreadyCh chan error
 	closedCh  chan struct{}
 }
@@ -69,7 +74,7 @@ func New(opts ...Option) (*Dialer, error) {
 	c := &Dialer{
 		config: config{
 			amqpUrls: make([]string, 0, 1),
-			amqpDial: func(url string, c amqp.Config) (Connection, error) {
+			amqpDial: func(url string, c amqp.Config) (AMQPConnection, error) {
 				return amqp.DialConfig(url, c)
 			},
 			amqpConfig: amqp.Config{
@@ -81,7 +86,7 @@ func New(opts ...Option) (*Dialer, error) {
 			logger:      logger.Discard,
 		},
 
-		readyCh:   make(chan Ready),
+		readyCh:   make(chan *Connection),
 		unreadyCh: make(chan error),
 		closedCh:  make(chan struct{}),
 	}
@@ -101,7 +106,7 @@ func New(opts ...Option) (*Dialer, error) {
 	}
 
 	if c.retryPeriod <= 0 {
-		return nil, fmt.Errorf("retryPeriod must be gerater then zero")
+		return nil, fmt.Errorf("retryPeriod must be greater then zero")
 	}
 
 	go c.connectState()
@@ -116,7 +121,7 @@ func WithURL(url string, urls ...string) Option {
 	}
 }
 
-func WithAMQPDial(dial func(url string, c amqp.Config) (Connection, error)) Option {
+func WithAMQPDial(dial func(url string, c amqp.Config) (AMQPConnection, error)) Option {
 	return func(c *Dialer) {
 		c.amqpDial = dial
 	}
@@ -130,7 +135,7 @@ func WithLogger(l logger.Logger) Option {
 
 func WithContext(ctx context.Context) Option {
 	return func(c *Dialer) {
-		c.ctx = ctx
+		c.config.ctx = ctx
 	}
 }
 
@@ -146,15 +151,8 @@ func WithConnectionProperties(props amqp.Table) Option {
 	}
 }
 
-func (c *Dialer) NotifyReady() <-chan Ready {
-	select {
-	case <-c.ctx.Done():
-		readyCh := make(chan Ready)
-		close(readyCh)
-		return readyCh
-	default:
-		return c.readyCh
-	}
+func (c *Dialer) NotifyReady() <-chan *Connection {
+	return c.readyCh
 }
 
 func (c *Dialer) NotifyUnready() <-chan error {
@@ -172,15 +170,11 @@ func (c *Dialer) Close() {
 func (c *Dialer) Connection(ctx context.Context) (*amqp.Connection, error) {
 	select {
 	case <-c.ctx.Done():
-		return nil, c.ctx.Err()
+		return nil, fmt.Errorf("connection closed")
 	case <-ctx.Done():
 		return nil, ctx.Err()
-	case est, ok := <-c.readyCh:
-		if !ok {
-			return nil, amqp.ErrClosed
-		}
-
-		return est.Conn(), nil
+	case conn := <-c.readyCh:
+		return conn.AMQPConnection(), nil
 	}
 }
 
@@ -223,7 +217,7 @@ func (c *Dialer) connectState() {
 		i = (i + 1) % l
 		url := c.amqpUrls[i]
 
-		connCh := make(chan Connection)
+		connCh := make(chan AMQPConnection)
 		errorCh := make(chan error)
 
 		go func() {
@@ -257,18 +251,20 @@ func (c *Dialer) connectState() {
 	}
 }
 
-func (c *Dialer) connectedState(conn Connection) error {
-	defer c.closeConn(conn)
+func (c *Dialer) connectedState(amqpConn AMQPConnection) error {
+	defer c.closeConn(amqpConn)
 
-	closeCh := make(chan struct{})
-	defer close(closeCh)
+	lostCh := make(chan struct{})
+	defer close(lostCh)
 
-	internalCloseCh := conn.NotifyClose(make(chan *amqp.Error, 1))
+	internalCloseCh := amqpConn.NotifyClose(make(chan *amqp.Error, 1))
+
+	conn := &Connection{amqpConn: amqpConn, lostCh: lostCh, closeCh: c.closedCh}
 
 	c.logger.Printf("[DEBUG] connection ready")
 	for {
 		select {
-		case c.readyCh <- Ready{conn: conn, closeCh: closeCh}:
+		case c.readyCh <- conn:
 			continue
 		case err, ok := <-internalCloseCh:
 			if !ok {
@@ -304,7 +300,7 @@ func (c *Dialer) waitRetry(err error) {
 	}
 }
 
-func (c *Dialer) closeConn(conn Connection) {
+func (c *Dialer) closeConn(conn AMQPConnection) {
 	if err := conn.Close(); err == amqp.ErrClosed {
 		return
 	} else if err != nil {

@@ -38,7 +38,7 @@ func ExampleDialer_Publisher() {
 
 func ExampleNewPublisher() {
 	// you can get readyCh from dialer.NotifyReady() method
-	var readyCh chan amqpextra.Ready
+	var readyCh chan *amqpextra.Connection
 
 	// create publisher
 	p := amqpextra.NewPublisher(readyCh)

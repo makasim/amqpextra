@@ -43,7 +43,7 @@ func ExampleDialer_Consumer() {
 
 func ExampleNewConsumer() {
 	// you can get readyCh from dialer.NotifyReady() method
-	var readyCh chan amqpextra.Ready
+	var readyCh chan *amqpextra.Connection
 
 	// create consumer
 	c := amqpextra.NewConsumer(

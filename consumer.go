@@ -7,7 +7,7 @@ import (
 func NewConsumer(
 	queue string,
 	handler consumer.Handler,
-	connCh <-chan Ready,
+	connCh <-chan *Connection,
 	opts ...consumer.Option,
 ) *consumer.Consumer {
 	consConnCh := make(chan consumer.ConnectionReady)
@@ -20,7 +20,7 @@ func NewConsumer(
 
 //nolint:dupl // ignore linter err
 func proxyConsumerConn(
-	connCh <-chan Ready,
+	connCh <-chan *Connection,
 	consumerConnCh chan consumer.ConnectionReady,
 	consumerCloseCh <-chan struct{},
 ) {
@@ -34,7 +34,7 @@ func proxyConsumerConn(
 					return
 				}
 
-				consumerConnReady := consumer.NewConnectionReady(connReady.Conn(), connReady.NotifyClose())
+				consumerConnReady := consumer.NewConnectionReady(connReady.AMQPConnection(), connReady.NotifyClose())
 
 				select {
 				case consumerConnCh <- consumerConnReady:

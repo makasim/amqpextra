@@ -12,7 +12,7 @@ unit-test:
 ifndef NOMOCKGEN
 	mockgen github.com/makasim/amqpextra/publisher Connection,ConnectionReady,Channel > publisher/mock_publisher/mocks.go
 	mockgen github.com/makasim/amqpextra/consumer Connection,ConnectionReady,Channel > consumer/mock_consumer/mocks.go
-	mockgen github.com/makasim/amqpextra Connection > mock_amqpextra/mocks.go
+	mockgen github.com/makasim/amqpextra AMQPConnection > mock_amqpextra/mocks.go
 endif
 	
 	$(GOTEST) -race -v -cover -run $(RUNTEST) ./ ./publisher/... ./consumer/...

@@ -9,7 +9,6 @@ import (
 
 	"github.com/makasim/amqpextra"
 	"github.com/makasim/amqpextra/e2e_test/helper/rabbitmq"
-	"github.com/makasim/amqpextra/logger"
 	"github.com/streadway/amqp"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/goleak"
@@ -20,7 +19,6 @@ func TestDialerReconnectWhenClosedByClient(t *testing.T) {
 
 	dialer, err := amqpextra.New(
 		amqpextra.WithURL("amqp://guest:guest@rabbitmq:5672/amqpextra"),
-		amqpextra.WithLogger(logger.Std),
 	)
 	require.NoError(t, err)
 	defer dialer.Close()
@@ -30,7 +28,7 @@ func TestDialerReconnectWhenClosedByClient(t *testing.T) {
 
 	go func() {
 		time.Sleep(time.Millisecond * 100)
-		require.NoError(t, ready.Conn().Close())
+		require.NoError(t, ready.AMQPConnection().Close())
 	}()
 	assertConnectionUnready(t, dialer)
 
@@ -43,7 +41,6 @@ func TestDialerReconnectWhenClosedByServer(t *testing.T) {
 	connName := fmt.Sprintf("amqpextra-test-%d-%d", time.Now().UnixNano(), rand.Int63n(10000000))
 	dialer, err := amqpextra.New(
 		amqpextra.WithURL("amqp://guest:guest@rabbitmq:5672/amqpextra"),
-		amqpextra.WithLogger(logger.Std),
 		amqpextra.WithConnectionProperties(amqp.Table{
 			"connection_name": connName,
 		}),
