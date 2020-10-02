@@ -30,7 +30,7 @@ func (c *Connection) AMQPConnection() *amqp.Connection {
 }
 
 func (c *Connection) NotifyLost() chan struct{} {
-	return c.closeCh
+	return c.lostCh
 }
 
 func (c *Connection) NotifyClose() chan struct{} {
@@ -235,6 +235,13 @@ func (c *Dialer) connectState() {
 			case c.unreadyCh <- connErr:
 				continue
 			case conn := <-connCh:
+				select {
+				case <-c.ctx.Done():
+					c.closeConn(conn)
+					return
+				default:
+				}
+
 				if err := c.connectedState(conn); err != nil {
 					c.logger.Printf("[DEBUG] connection unready")
 					break loop2
@@ -243,9 +250,12 @@ func (c *Dialer) connectState() {
 				return
 			case err := <-errorCh:
 				c.logger.Printf("[DEBUG] connection unready: %v", err)
-				connErr = err
-				c.waitRetry(err)
-				break loop2
+				if retryErr := c.waitRetry(err); retryErr != nil {
+					connErr = retryErr
+					break loop2
+				}
+
+				return
 			}
 		}
 	}
@@ -278,7 +288,7 @@ func (c *Dialer) connectedState(amqpConn AMQPConnection) error {
 	}
 }
 
-func (c *Dialer) waitRetry(err error) {
+func (c *Dialer) waitRetry(err error) error {
 	timer := time.NewTimer(c.retryPeriod)
 	defer func() {
 		timer.Stop()
@@ -293,9 +303,9 @@ func (c *Dialer) waitRetry(err error) {
 		case c.unreadyCh <- err:
 			continue
 		case <-timer.C:
-			return
+			return err
 		case <-c.ctx.Done():
-			return
+			return nil
 		}
 	}
 }
