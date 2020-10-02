@@ -6,8 +6,6 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/http/httputil"
-	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/makasim/amqpextra"
@@ -125,15 +123,13 @@ func Queue(conn *amqp.Connection) string {
 	return q.Name
 }
 
-func Queue2(conn *amqpextra.Connection) string {
-	connCh, _ := conn.ConnCh()
-
-	realconn, ok := <-connCh
+func Queue2(conn *amqpextra.Dialer) string {
+	est, ok := <-conn.NotifyReady()
 	if !ok {
 		panic("connection is closed")
 	}
 
-	return Queue(realconn)
+	return Queue(est.AMQPConnection())
 }
 
 func Publish(conn *amqp.Connection, body, queue string) {
@@ -150,179 +146,11 @@ func Publish(conn *amqp.Connection, body, queue string) {
 	}
 }
 
-func Publish2(conn *amqpextra.Connection, body, queue string) {
-	connCh, _ := conn.ConnCh()
-
-	realconn, ok := <-connCh
+func Publish2(conn *amqpextra.Dialer, body, queue string) {
+	est, ok := <-conn.NotifyReady()
 	if !ok {
 		panic("connection is closed")
 	}
 
-	Publish(realconn, body, queue)
-}
-
-func PublishTimerReconnect(
-	extraconn *amqpextra.Connection,
-	timer *time.Timer,
-	ticker *time.Ticker,
-	queue string,
-	count *uint32,
-	wg *sync.WaitGroup,
-) {
-	defer wg.Done()
-	defer timer.Stop()
-	defer ticker.Stop()
-
-	connCh, closeCh := extraconn.ConnCh()
-
-	for conn := range connCh {
-		ch, err := conn.Channel()
-		if err != nil {
-			panic(err)
-		}
-
-		_, err = ch.QueueDeclare(queue, true, false, false, false, nil)
-		if err != nil {
-			panic(err)
-		}
-
-		for {
-			select {
-			case <-ticker.C:
-				err := ch.Publish("", queue, false, false, amqp.Publishing{})
-
-				if err == nil {
-					atomic.AddUint32(count, 1)
-				}
-			case <-closeCh:
-				break
-			case <-timer.C:
-				return
-			}
-		}
-	}
-}
-
-func PublishTimer(
-	conn *amqp.Connection,
-	timer *time.Timer,
-	ticker *time.Ticker,
-	queue string,
-	count *uint32,
-	wg *sync.WaitGroup,
-) {
-	defer wg.Done()
-	defer timer.Stop()
-	defer ticker.Stop()
-
-	ch, err := conn.Channel()
-	if err != nil {
-		panic(err)
-	}
-
-	_, err = ch.QueueDeclare(queue, true, false, false, false, nil)
-	if err != nil {
-		panic(err)
-	}
-
-	for {
-		select {
-		case <-ticker.C:
-			err := ch.Publish("", queue, false, false, amqp.Publishing{})
-
-			if err == nil {
-				atomic.AddUint32(count, 1)
-			}
-		case <-timer.C:
-			return
-		}
-	}
-}
-
-func ConsumeTimerReconnect(
-	extraconn *amqpextra.Connection,
-	timer *time.Timer,
-	queue string,
-	count *uint32,
-	wg *sync.WaitGroup,
-) {
-	defer wg.Done()
-	defer timer.Stop()
-
-	connCh, closeCh := extraconn.ConnCh()
-
-	for conn := range connCh {
-		ch, err := conn.Channel()
-		if err != nil {
-			panic(err)
-		}
-
-		_, err = ch.QueueDeclare(queue, true, false, false, false, nil)
-		if err != nil {
-			panic(err)
-		}
-
-		msgCh, err := ch.Consume(queue, "", false, false, false, false, nil)
-		if err != nil {
-			panic(err)
-		}
-
-		for {
-			select {
-			case msg, ok := <-msgCh:
-				if !ok {
-					break
-				}
-
-				msg.Ack(false)
-
-				atomic.AddUint32(count, 1)
-			case <-closeCh:
-				break
-			case <-timer.C:
-				return
-			}
-		}
-	}
-}
-
-func ConsumeReconnect(
-	conn *amqp.Connection,
-	timer *time.Timer,
-	queue string,
-	count *uint32,
-	wg *sync.WaitGroup,
-) {
-	defer wg.Done()
-	defer timer.Stop()
-
-	ch, err := conn.Channel()
-	if err != nil {
-		panic(err)
-	}
-
-	_, err = ch.QueueDeclare(queue, true, false, false, false, nil)
-	if err != nil {
-		panic(err)
-	}
-
-	msgCh, err := ch.Consume(queue, "", false, false, false, false, nil)
-	if err != nil {
-		panic(err)
-	}
-
-	for {
-		select {
-		case msg, ok := <-msgCh:
-			if !ok {
-				break
-			}
-
-			msg.Ack(false)
-
-			atomic.AddUint32(count, 1)
-		case <-timer.C:
-			return
-		}
-	}
+	Publish(est.AMQPConnection(), body, queue)
 }

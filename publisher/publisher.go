@@ -12,6 +12,16 @@ import (
 
 var errChannelClosed = fmt.Errorf("channel closed")
 
+type Connection interface {
+}
+
+type Channel interface {
+	Publish(exchange, key string, mandatory, immediate bool, msg amqp.Publishing) error
+	NotifyClose(receiver chan *amqp.Error) chan *amqp.Error
+	NotifyFlow(c chan bool) chan bool
+	Close() error
+}
+
 type Option func(p *Publisher)
 
 type Message struct {
@@ -26,14 +36,14 @@ type Message struct {
 }
 
 type Publisher struct {
-	connCh      <-chan Connection
-	connCloseCh <-chan *amqp.Error
+	connReadyCh <-chan ConnectionReady
 
-	ctx          context.Context
-	cancelFunc   context.CancelFunc
-	retryPeriod  time.Duration
-	initFunc     func(conn Connection) (Channel, error)
-	logger       logger.Logger
+	ctx         context.Context
+	cancelFunc  context.CancelFunc
+	retryPeriod time.Duration
+	initFunc    func(conn Connection) (Channel, error)
+	logger      logger.Logger
+
 	publishingCh chan Message
 	closeCh      chan struct{}
 	readyCh      chan struct{}
@@ -41,13 +51,11 @@ type Publisher struct {
 }
 
 func New(
-	connCh <-chan Connection,
-	connCloseCh <-chan *amqp.Error,
+	connReadyCh <-chan ConnectionReady,
 	opts ...Option,
 ) *Publisher {
 	p := &Publisher{
-		connCh:      connCh,
-		connCloseCh: connCloseCh,
+		connReadyCh: connReadyCh,
 
 		publishingCh: make(chan Message),
 		closeCh:      make(chan struct{}),
@@ -75,7 +83,7 @@ func New(
 
 	if p.initFunc == nil {
 		p.initFunc = func(conn Connection) (Channel, error) {
-			return conn.Channel()
+			return conn.(*amqp.Connection).Channel()
 		}
 	}
 
@@ -168,21 +176,21 @@ func (p *Publisher) connectionState() {
 	p.logger.Printf("[DEBUG] publisher starting")
 	for {
 		select {
-		case conn, ok := <-p.connCh:
+		case connReady, ok := <-p.connReadyCh:
 			if !ok {
 				p.close(nil)
 				return
 			}
 
 			select {
-			case <-p.connCloseCh:
+			case <-connReady.NotifyClose():
 				continue
 			case <-p.ctx.Done():
 				return
 			default:
 			}
 
-			err := p.channelState(conn)
+			err := p.channelState(connReady.Conn(), connReady.NotifyClose())
 			if err != nil {
 				p.logger.Printf("[DEBUG] publisher unready")
 
@@ -201,15 +209,15 @@ func (p *Publisher) connectionState() {
 	}
 }
 
-func (p *Publisher) channelState(conn Connection) error {
+func (p *Publisher) channelState(conn Connection, connCloseCh <-chan struct{}) error {
 	for {
 		ch, err := p.initFunc(conn)
 		if err != nil {
 			p.logger.Printf("[ERROR] init func: %s", err)
-			return p.retry(err)
+			return p.waitRetry(err)
 		}
 
-		err = p.publishState(ch)
+		err = p.publishState(ch, connCloseCh)
 		if err == errChannelClosed {
 			continue
 		}
@@ -219,7 +227,7 @@ func (p *Publisher) channelState(conn Connection) error {
 	}
 }
 
-func (p *Publisher) publishState(ch Channel) error {
+func (p *Publisher) publishState(ch Channel, connCloseCh <-chan struct{}) error {
 	chCloseCh := ch.NotifyClose(make(chan *amqp.Error, 1))
 	chFlowCh := ch.NotifyFlow(make(chan bool, 1))
 
@@ -232,14 +240,14 @@ func (p *Publisher) publishState(ch Channel) error {
 		case <-chCloseCh:
 			p.logger.Printf("[DEBUG] channel closed")
 			return errChannelClosed
-		case err := <-p.connCloseCh:
-			return err
+		case <-connCloseCh:
+			return amqp.ErrClosed
 		case resume := <-chFlowCh:
 			if resume {
 				continue
 			}
 
-			if err := p.pausedState(chFlowCh, chCloseCh); err != nil {
+			if err := p.pausedState(chFlowCh, connCloseCh, chCloseCh); err != nil {
 				return err
 			}
 		case <-p.ctx.Done():
@@ -248,7 +256,7 @@ func (p *Publisher) publishState(ch Channel) error {
 	}
 }
 
-func (p *Publisher) pausedState(chFlowCh <-chan bool, chCloseCh chan *amqp.Error) error {
+func (p *Publisher) pausedState(chFlowCh <-chan bool, connCloseCh <-chan struct{}, chCloseCh chan *amqp.Error) error {
 	p.logger.Printf("[WARN] publisher flow paused")
 	errFlowPaused := fmt.Errorf("publisher flow paused")
 
@@ -263,8 +271,8 @@ func (p *Publisher) pausedState(chFlowCh <-chan bool, chCloseCh chan *amqp.Error
 		case <-chCloseCh:
 			p.logger.Printf("[DEBUG] channel closed")
 			return errChannelClosed
-		case err := <-p.connCloseCh:
-			return err
+		case <-connCloseCh:
+			return amqp.ErrClosed
 		case <-p.ctx.Done():
 			return p.ctx.Err()
 		}
@@ -297,7 +305,7 @@ func (p *Publisher) reply(resultCh chan error, result error) {
 	}
 }
 
-func (p *Publisher) retry(err error) error {
+func (p *Publisher) waitRetry(err error) error {
 	timer := time.NewTimer(p.retryPeriod)
 	defer func() {
 		timer.Stop()

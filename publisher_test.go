@@ -1,19 +1,22 @@
 package amqpextra_test
 
 import (
+	"log"
+
 	"github.com/makasim/amqpextra"
-	"github.com/makasim/amqpextra/logger"
 	"github.com/makasim/amqpextra/publisher"
 	"github.com/streadway/amqp"
 )
 
-func ExampleConnection_Publisher() {
+func ExampleDialer_Publisher() {
 	// open connection
-	conn := amqpextra.Dial([]string{"amqp://guest:guest@localhost:5672/%2f"})
-	conn.SetLogger(logger.Discard)
+	dialer, err := amqpextra.New(amqpextra.WithURL("amqp://guest:guest@localhost:5672/%2f"))
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	// create publisher
-	p := conn.Publisher()
+	p := dialer.Publisher()
 
 	// publish a message
 	go p.Publish(publisher.Message{
@@ -28,18 +31,17 @@ func ExampleConnection_Publisher() {
 	<-p.Closed()
 
 	// close connection
-	conn.Close()
+	dialer.Close()
 
 	// Output:
 }
 
 func ExampleNewPublisher() {
-	// you can get connCh and closeCh from conn.ConnCh() method
-	var connCh chan *amqp.Connection
-	var closeCh chan *amqp.Error
+	// you can get readyCh from dialer.NotifyReady() method
+	var readyCh chan *amqpextra.Connection
 
 	// create publisher
-	p := amqpextra.NewPublisher(connCh, closeCh)
+	p := amqpextra.NewPublisher(readyCh)
 
 	// publish a message
 	go p.Publish(publisher.Message{

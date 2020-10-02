@@ -1,4 +1,4 @@
-package publisher_test_test
+package e2e_test
 
 import (
 	"fmt"
@@ -22,13 +22,14 @@ func TestPublishWhileConnectionClosed(t *testing.T) {
 	defer goleak.VerifyNone(t)
 
 	connName := fmt.Sprintf("amqpextra-test-%d-%d", time.Now().UnixNano(), rand.Int63n(10000000))
-	conn := amqpextra.DialConfig([]string{"amqp://guest:guest@rabbitmq:5672/amqpextra"}, amqp.Config{
-		Properties: amqp.Table{
+	conn, err := amqpextra.New(
+		amqpextra.WithURL("amqp://guest:guest@rabbitmq:5672/amqpextra"),
+		amqpextra.WithConnectionProperties(amqp.Table{
 			"connection_name": connName,
-		},
-	})
+		}),
+	)
+	require.NoError(t, err)
 	defer conn.Close()
-	conn.Start()
 
 	ticker := time.NewTicker(time.Millisecond * 100)
 	defer ticker.Stop()
@@ -47,7 +48,7 @@ waitOpened:
 		}
 	}
 	p := conn.Publisher()
-	assertReady(t, p)
+	assertPublisherReady(t, p)
 
 	count := 0
 	errorCount := 0
@@ -76,7 +77,7 @@ waitOpened:
 	<-p.Closed()
 }
 
-func assertReady(t *testing.T, p *publisher.Publisher) {
+func assertPublisherReady(t *testing.T, p *publisher.Publisher) {
 	timer := time.NewTimer(time.Millisecond * 2000)
 	defer timer.Stop()
 

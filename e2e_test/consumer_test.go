@@ -1,4 +1,4 @@
-package consumer_test_test
+package e2e_test
 
 import (
 	"fmt"
@@ -33,13 +33,15 @@ func TestConsumeWhileConnectionClosed(t *testing.T) {
 	}
 	rabbitmq.Publish(amqpConn, `Last!`, q)
 	connName := fmt.Sprintf("amqpextra-test-%d-%d", time.Now().UnixNano(), rand.Int63n(10000000))
-	conn := amqpextra.DialConfig([]string{"amqp://guest:guest@rabbitmq:5672/amqpextra"}, amqp.Config{
-		Properties: amqp.Table{
+	conn, err := amqpextra.New(
+		amqpextra.WithURL("amqp://guest:guest@rabbitmq:5672/amqpextra"),
+		amqpextra.WithConnectionProperties(amqp.Table{
 			"connection_name": connName,
-		},
-	})
+		}),
+	)
+	require.NoError(t, err)
 	defer conn.Close()
-	conn.Start()
+
 	ticker := time.NewTicker(time.Millisecond * 100)
 	defer ticker.Stop()
 	timer := time.NewTicker(time.Second * 5)
@@ -68,7 +70,7 @@ waitOpened:
 	}))
 	go c.Run()
 
-	assertReady(t, c)
+	assertConsumerReady(t, c)
 
 	count := 0
 	errorCount := 0
@@ -93,7 +95,7 @@ waitOpened:
 	time.Sleep(time.Millisecond * 100)
 }
 
-func assertReady(t *testing.T, p *consumer.Consumer) {
+func assertConsumerReady(t *testing.T, p *consumer.Consumer) {
 	timer := time.NewTimer(time.Millisecond * 2000)
 	defer timer.Stop()
 
