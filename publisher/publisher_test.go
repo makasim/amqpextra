@@ -769,7 +769,7 @@ func TestReadyPublisher(main *testing.T) {
 		})
 
 		err := waitResult(resultCh, time.Millisecond*100)
-		require.EqualError(t, err, "message context canceled")
+		require.EqualError(t, err, "message: context canceled")
 
 		p.Close()
 		assertClosed(t, p)
