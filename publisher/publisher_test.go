@@ -400,18 +400,21 @@ func TestUnreadyPublisher(main *testing.T) {
 		p := publisher.New(connReadyCh, publisher.WithLogger(l))
 		defer p.Close()
 
-		p.Publish(publisher.Message{
+		resultCh := p.Go(publisher.Message{
 			ErrOnUnready: true,
 			Publishing:   amqp.Publishing{},
 			ResultCh:     nil,
 		})
 
 		assertUnready(t, p, amqp.ErrClosed.Error())
+
+		err := waitResult(resultCh, time.Millisecond*100)
+		require.EqualError(t, err, "publisher not ready")
+
 		p.Close()
 		assertClosed(t, p)
 
 		expected := `[DEBUG] publisher starting
-[ERROR] publisher not ready
 [DEBUG] publisher stopped
 `
 		require.Equal(t, expected, l.Logs())
@@ -426,12 +429,10 @@ func TestUnreadyPublisher(main *testing.T) {
 		p := publisher.New(connReadyCh, publisher.WithLogger(l))
 		defer p.Close()
 
-		resultCh := make(chan error, 1)
-
-		p.Publish(publisher.Message{
+		resultCh := p.Go(publisher.Message{
 			ErrOnUnready: true,
 			Publishing:   amqp.Publishing{},
-			ResultCh:     resultCh,
+			ResultCh:     make(chan error, 1),
 		})
 
 		assertUnready(t, p, amqp.ErrClosed.Error())
@@ -458,7 +459,7 @@ func TestUnreadyPublisher(main *testing.T) {
 		defer p.Close()
 
 		assert.PanicsWithValue(t, "amqpextra: resultCh channel is unbuffered", func() {
-			p.Publish(publisher.Message{
+			p.Go(publisher.Message{
 				Context:    context.Background(),
 				Publishing: amqp.Publishing{},
 				ResultCh:   make(chan error),
@@ -495,7 +496,7 @@ func TestUnreadyPublisher(main *testing.T) {
 			cancelFunc()
 		}()
 
-		p.Publish(publisher.Message{
+		p.Go(publisher.Message{
 			Context:    msgCtx,
 			Publishing: amqp.Publishing{},
 		})
@@ -505,7 +506,6 @@ func TestUnreadyPublisher(main *testing.T) {
 		assertClosed(t, p)
 
 		expected := `[DEBUG] publisher starting
-[ERROR] message: context canceled
 [DEBUG] publisher stopped
 `
 		require.Equal(t, expected, l.Logs())
@@ -575,13 +575,11 @@ func TestReadyPublisher(main *testing.T) {
 
 		assertReady(t, p)
 
-		resultCh := make(chan error, 1)
-		p.Publish(publisher.Message{
+		resultCh := p.Go(publisher.Message{
 			Exchange:  "theExchange",
 			Key:       "theKey",
 			Mandatory: true,
 			Immediate: true,
-			ResultCh:  resultCh,
 			Publishing: amqp.Publishing{
 				Headers: amqp.Table{
 					"fooHeader": "fooHeaderVal",
@@ -652,9 +650,12 @@ func TestReadyPublisher(main *testing.T) {
 
 		assertReady(t, p)
 
-		p.Publish(publisher.Message{
+		resultCh := p.Go(publisher.Message{
 			Publishing: amqp.Publishing{},
 		})
+
+		err := waitResult(resultCh, time.Millisecond*100)
+		require.EqualError(t, err, "publish errored")
 
 		time.Sleep(time.Millisecond * 100)
 		p.Close()
@@ -662,7 +663,6 @@ func TestReadyPublisher(main *testing.T) {
 
 		expected := `[DEBUG] publisher starting
 [DEBUG] publisher ready
-[ERROR] publish errored
 [DEBUG] publisher stopped
 `
 		require.Equal(t, expected, l.Logs())
@@ -705,9 +705,8 @@ func TestReadyPublisher(main *testing.T) {
 
 		assertReady(t, p)
 
-		resultCh := make(chan error, 1)
-		p.Publish(publisher.Message{
-			ResultCh:   resultCh,
+		resultCh := p.Go(publisher.Message{
+			ResultCh:   make(chan error, 1),
 			Publishing: amqp.Publishing{},
 		})
 
@@ -764,18 +763,19 @@ func TestReadyPublisher(main *testing.T) {
 		msgCtx, cancelFunc := context.WithCancel(context.Background())
 		cancelFunc()
 
-		p.Publish(publisher.Message{
+		resultCh := p.Go(publisher.Message{
 			Context:    msgCtx,
 			Publishing: amqp.Publishing{},
 		})
 
-		time.Sleep(time.Millisecond * 100)
+		err := waitResult(resultCh, time.Millisecond*100)
+		require.EqualError(t, err, "message context canceled")
+
 		p.Close()
 		assertClosed(t, p)
 
 		expected := `[DEBUG] publisher starting
 [DEBUG] publisher ready
-[ERROR] message: context canceled
 [DEBUG] publisher stopped
 `
 		require.Equal(t, expected, l.Logs())
@@ -822,11 +822,10 @@ func TestReadyPublisher(main *testing.T) {
 
 		assertUnready(t, p, amqp.ErrClosed.Error())
 
-		resultCh := make(chan error, 1)
 		before := time.Now().UnixNano()
-		p.Publish(publisher.Message{
+		resultCh := p.Go(publisher.Message{
 			Publishing: amqp.Publishing{},
-			ResultCh:   resultCh,
+			ResultCh:   make(chan error, 1),
 		})
 
 		err := waitResult(resultCh, time.Millisecond*1300)
@@ -859,15 +858,16 @@ func TestClosedPublisher(main *testing.T) {
 		p.Close()
 		assertClosed(t, p)
 
-		p.Publish(publisher.Message{
+		resultCh := p.Go(publisher.Message{
 			Context:    context.Background(),
 			Publishing: amqp.Publishing{},
-			ResultCh:   nil,
 		})
+
+		err := waitResult(resultCh, time.Millisecond*1300)
+		require.EqualError(t, err, "publisher stopped")
 
 		expected := `[DEBUG] publisher starting
 [DEBUG] publisher stopped
-[ERROR] publisher stopped
 `
 		require.Equal(t, expected, l.Logs())
 	})
@@ -883,12 +883,10 @@ func TestClosedPublisher(main *testing.T) {
 		p.Close()
 		assertClosed(t, p)
 
-		resultCh := make(chan error, 1)
-
-		p.Publish(publisher.Message{
+		resultCh := p.Go(publisher.Message{
 			Context:    context.Background(),
 			Publishing: amqp.Publishing{},
-			ResultCh:   resultCh,
+			ResultCh:   make(chan error, 1),
 		})
 
 		assertUnready(t, p, "permanently closed")
@@ -1120,12 +1118,8 @@ func TestConcurrency(main *testing.T) {
 
 		for i := 0; i < 10; i++ {
 			go func() {
-				resultCh := make(chan error, 1)
 				for i := 0; i < 10; i++ {
-					p.Publish(publisher.Message{
-						ResultCh: resultCh,
-					})
-					<-resultCh
+					<-p.Go(publisher.Message{})
 				}
 			}()
 		}
@@ -1212,12 +1206,8 @@ func TestConcurrency(main *testing.T) {
 
 		for i := 0; i < 10; i++ {
 			go func() {
-				resultCh := make(chan error, 1)
 				for i := 0; i < 10; i++ {
-					p.Publish(publisher.Message{
-						ResultCh: resultCh,
-					})
-					<-resultCh
+					<-p.Go(publisher.Message{})
 				}
 			}()
 		}
@@ -1309,12 +1299,8 @@ func TestConcurrency(main *testing.T) {
 
 		for i := 0; i < 10; i++ {
 			go func() {
-				resultCh := make(chan error, 1)
 				for i := 0; i < 10; i++ {
-					p.Publish(publisher.Message{
-						ResultCh: resultCh,
-					})
-					<-resultCh
+					<-p.Go(publisher.Message{})
 				}
 			}()
 		}
@@ -1381,13 +1367,13 @@ func TestFlowControl(main *testing.T) {
 
 		resultCh := make(chan error, 1)
 
-		p.Publish(publisher.Message{ResultCh: resultCh})
+		p.Go(publisher.Message{ResultCh: resultCh})
 		require.NoError(t, waitResult(resultCh, time.Millisecond*50))
 
 		chFlowCh <- false
 		assertUnready(t, p, "publisher flow paused")
 
-		go p.Publish(publisher.Message{ResultCh: resultCh})
+		go p.Go(publisher.Message{ResultCh: resultCh})
 		require.EqualError(t, waitResult(resultCh, time.Millisecond*100), "wait result timeout")
 
 		chFlowCh <- true
@@ -1395,7 +1381,7 @@ func TestFlowControl(main *testing.T) {
 
 		require.NoError(t, waitResult(resultCh, time.Millisecond*50))
 
-		p.Publish(publisher.Message{ResultCh: resultCh})
+		p.Go(publisher.Message{ResultCh: resultCh})
 		require.NoError(t, waitResult(resultCh, time.Millisecond*50))
 
 		p.Close()
@@ -1454,7 +1440,7 @@ func TestFlowControl(main *testing.T) {
 
 		resultCh := make(chan error, 1)
 
-		p.Publish(publisher.Message{
+		p.Go(publisher.Message{
 			ResultCh:     resultCh,
 			ErrOnUnready: true,
 		})
@@ -1463,7 +1449,7 @@ func TestFlowControl(main *testing.T) {
 		chFlowCh <- false
 		assertUnready(t, p, "publisher flow paused")
 
-		go p.Publish(publisher.Message{
+		go p.Go(publisher.Message{
 			ResultCh:     resultCh,
 			ErrOnUnready: true,
 		})
@@ -1472,7 +1458,7 @@ func TestFlowControl(main *testing.T) {
 		chFlowCh <- true
 		assertReady(t, p)
 
-		p.Publish(publisher.Message{
+		p.Go(publisher.Message{
 			ResultCh:     resultCh,
 			ErrOnUnready: true,
 		})
@@ -1532,7 +1518,7 @@ func TestFlowControl(main *testing.T) {
 
 		assertReady(t, p)
 
-		p.Publish(publisher.Message{})
+		p.Go(publisher.Message{})
 
 		chFlowCh <- false
 		assertUnready(t, p, "publisher flow paused")
@@ -1540,7 +1526,7 @@ func TestFlowControl(main *testing.T) {
 		waitResult := make(chan struct{})
 		go func() {
 			defer close(waitResult)
-			p.Publish(publisher.Message{})
+			p.Go(publisher.Message{})
 		}()
 
 		chFlowCh <- true
@@ -1548,7 +1534,7 @@ func TestFlowControl(main *testing.T) {
 
 		<-waitResult
 
-		p.Publish(publisher.Message{})
+		p.Go(publisher.Message{})
 
 		p.Close()
 		assertClosed(t, p)
@@ -1795,7 +1781,7 @@ func newPublisher(opts ...publisher.Option) (connReadyCh chan publisher.Connecti
 	return connReadyCh, l, p
 }
 
-func waitResult(resultCh chan error, dur time.Duration) error {
+func waitResult(resultCh <-chan error, dur time.Duration) error {
 	timer := time.NewTimer(dur)
 	defer timer.Stop()
 

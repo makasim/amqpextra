@@ -52,18 +52,14 @@ waitOpened:
 
 	count := 0
 	errorCount := 0
-	resultCh := make(chan error, 1)
 	for i := 0; i < 1000; i++ {
 		if i == 300 {
 			time.Sleep(time.Millisecond * 100)
 			require.True(t, rabbitmq.CloseConn(connName))
 		}
 
-		p.Publish(publisher.Message{
-			ResultCh: resultCh,
-		})
+		res := p.Publish(publisher.Message{})
 
-		res := <-resultCh
 		if res == nil {
 			count++
 		} else {
