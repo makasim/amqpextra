@@ -12,13 +12,13 @@ import (
 
 func ExampleDialer_Consumer() {
 	// open connection
-	dialier, err := amqpextra.New(amqpextra.WithURL("amqp://guest:guest@localhost:5672/%2f"))
+	dialer, err := amqpextra.New(amqpextra.WithURL("amqp://guest:guest@localhost:5672/%2f"))
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	// create consumer
-	c := dialier.Consumer(
+	c := dialer.Consumer(
 		"some_queue",
 		consumer.HandlerFunc(func(ctx context.Context, msg amqp.Delivery) interface{} {
 			// process message
@@ -36,7 +36,7 @@ func ExampleDialer_Consumer() {
 	<-c.Closed()
 
 	// close connection
-	dialier.Close()
+	dialer.Close()
 
 	// Output:
 }
