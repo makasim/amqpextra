@@ -116,8 +116,15 @@ func WithInitFunc(f func(conn Connection) (Channel, error)) Option {
 	}
 }
 
-func (p *Publisher) Publish(msg Message) {
-	if msg.ResultCh != nil && cap(msg.ResultCh) == 0 {
+func (p *Publisher) Publish(msg Message) error {
+	return <-p.Go(msg)
+}
+
+func (p *Publisher) Go(msg Message) <-chan error {
+	if msg.ResultCh == nil {
+		msg.ResultCh = make(chan error, 1)
+	}
+	if cap(msg.ResultCh) == 0 {
 		panic("amqpextra: resultCh channel is unbuffered")
 	}
 
@@ -133,20 +140,22 @@ func (p *Publisher) Publish(msg Message) {
 	select {
 	case <-p.closeCh:
 		p.reply(msg.ResultCh, fmt.Errorf("publisher stopped"))
-		return
+		return msg.ResultCh
 	default:
 	}
 
 	select {
 	case p.publishingCh <- msg:
 	case <-msg.Context.Done():
-		p.reply(msg.ResultCh, fmt.Errorf("message: %v", msg.Context.Err()))
+		p.reply(msg.ResultCh, fmt.Errorf("message %v", msg.Context.Err()))
 	// noinspection GoNilness
 	case <-unreadyCh:
 		p.reply(msg.ResultCh, fmt.Errorf("publisher not ready"))
 	case <-p.ctx.Done():
 		p.reply(msg.ResultCh, fmt.Errorf("publisher stopped"))
 	}
+
+	return msg.ResultCh
 }
 
 func (p *Publisher) Close() {
