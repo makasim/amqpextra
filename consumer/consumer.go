@@ -53,7 +53,7 @@ func New(
 	handler Handler,
 	connCh <-chan *Connection,
 	opts ...Option,
-) *Consumer {
+) (*Consumer, error) {
 	c := &Consumer{
 		queue:   queue,
 		handler: handler,
@@ -92,7 +92,9 @@ func New(
 		c.worker = &DefaultWorker{Logger: c.logger}
 	}
 
-	return c
+	go c.connectionState()
+
+	return c, nil
 }
 
 func WithLogger(l logger.Logger) Option {
@@ -134,10 +136,6 @@ func WithConsumeArgs(consumer string, autoAck, exclusive, noLocal, noWait bool, 
 		c.noWait = noWait
 		c.args = args
 	}
-}
-
-func (c *Consumer) Run() {
-	c.connectionState()
 }
 
 func (c *Consumer) NotifyReady() <-chan struct{} {

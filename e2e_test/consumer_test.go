@@ -59,7 +59,7 @@ waitOpened:
 	}
 
 	resultCh := make(chan error, 1)
-	c := dialer.Consumer(q, consumer.HandlerFunc(func(ctx context.Context, msg amqp.Delivery) interface{} {
+	c, err := dialer.Consumer(q, consumer.HandlerFunc(func(ctx context.Context, msg amqp.Delivery) interface{} {
 		resultCh <- msg.Ack(false)
 
 		if string(msg.Body) == "Last!" {
@@ -68,7 +68,7 @@ waitOpened:
 
 		return nil
 	}))
-	go c.Run()
+	require.NoError(t, err)
 
 	assertConsumerReady(t, c)
 
