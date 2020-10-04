@@ -1732,7 +1732,7 @@ func assertReady(t *testing.T, p *publisher.Publisher) {
 	defer timer.Stop()
 
 	select {
-	case <-p.Ready():
+	case <-p.NotifyReady():
 	case <-timer.C:
 		t.Fatal("publisher must be ready")
 	}
@@ -1743,7 +1743,7 @@ func assertClosed(t *testing.T, p *publisher.Publisher) {
 	defer timer.Stop()
 
 	select {
-	case <-p.Closed():
+	case <-p.NotifyClosed():
 	case <-timer.C:
 		t.Fatal("publisher close timeout")
 	}
@@ -1754,7 +1754,7 @@ func assertUnready(t *testing.T, p *publisher.Publisher, errString string) {
 	defer timer.Stop()
 
 	select {
-	case actualErr, ok := <-p.Unready():
+	case actualErr, ok := <-p.NotifyUnready():
 		if !ok {
 			require.Equal(t, "permanently closed", errString)
 			return

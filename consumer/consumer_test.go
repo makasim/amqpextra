@@ -1046,7 +1046,7 @@ func TestConcurrency(main *testing.T) {
 				for i := 0; i < 10; i++ {
 					select {
 					case msgCh <- amqp.Delivery{}:
-					case <-c.Closed():
+					case <-c.NotifyClosed():
 						return
 					}
 				}
@@ -1157,7 +1157,7 @@ func assertUnready(t *testing.T, c *consumer.Consumer, errString string) {
 	defer timer.Stop()
 
 	select {
-	case err, ok := <-c.Unready():
+	case err, ok := <-c.NotifyUnready():
 		if !ok {
 			require.Equal(t, "permanently closed", errString)
 			return
@@ -1174,7 +1174,7 @@ func assertReady(t *testing.T, c *consumer.Consumer) {
 	defer timer.Stop()
 
 	select {
-	case <-c.Ready():
+	case <-c.NotifyReady():
 	case <-timer.C:
 		t.Fatal("consumer must be ready")
 	}
@@ -1185,7 +1185,7 @@ func assertClosed(t *testing.T, c *consumer.Consumer) {
 	defer timer.Stop()
 
 	select {
-	case <-c.Closed():
+	case <-c.NotifyClosed():
 	case <-timer.C:
 		t.Fatal("consumer close timeout")
 	}

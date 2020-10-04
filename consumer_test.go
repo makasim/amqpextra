@@ -33,7 +33,7 @@ func ExampleDialer_Consumer() {
 
 	// close consumer
 	c.Close()
-	<-c.Closed()
+	<-c.NotifyClosed()
 
 	// close connection
 	dialer.Close()
@@ -62,7 +62,7 @@ func ExampleNewConsumer() {
 
 	// close consumer
 	c.Close()
-	<-c.Closed()
+	<-c.NotifyClosed()
 
 	// Output:
 }

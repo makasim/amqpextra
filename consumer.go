@@ -13,7 +13,7 @@ func NewConsumer(
 	consConnCh := make(chan consumer.ConnectionReady)
 
 	c := consumer.New(queue, handler, consConnCh, opts...)
-	go proxyConsumerConn(connCh, consConnCh, c.Closed())
+	go proxyConsumerConn(connCh, consConnCh, c.NotifyClosed())
 
 	return c
 }

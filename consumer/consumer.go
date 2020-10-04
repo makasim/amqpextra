@@ -140,15 +140,15 @@ func (c *Consumer) Run() {
 	c.connectionState()
 }
 
-func (c *Consumer) Ready() <-chan struct{} {
+func (c *Consumer) NotifyReady() <-chan struct{} {
 	return c.readyCh
 }
 
-func (c *Consumer) Unready() <-chan error {
+func (c *Consumer) NotifyUnready() <-chan error {
 	return c.unreadyCh
 }
 
-func (c *Consumer) Closed() <-chan struct{} {
+func (c *Consumer) NotifyClosed() <-chan struct{} {
 	return c.closeCh
 }
 

@@ -90,17 +90,17 @@ waitOpened:
 	assert.GreaterOrEqual(t, count, 995)
 
 	conn.Close()
-	<-c.Closed()
+	<-c.NotifyClosed()
 	//
 	time.Sleep(time.Millisecond * 100)
 }
 
-func assertConsumerReady(t *testing.T, p *consumer.Consumer) {
+func assertConsumerReady(t *testing.T, c *consumer.Consumer) {
 	timer := time.NewTimer(time.Millisecond * 2000)
 	defer timer.Stop()
 
 	select {
-	case <-p.Ready():
+	case <-c.NotifyReady():
 	case <-timer.C:
 		t.Fatal("consumer must be ready")
 	}
