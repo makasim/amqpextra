@@ -147,7 +147,7 @@ func (p *Publisher) Go(msg Message) <-chan error {
 	select {
 	case p.publishingCh <- msg:
 	case <-msg.Context.Done():
-		p.reply(msg.ResultCh, fmt.Errorf("message %v", msg.Context.Err()))
+		p.reply(msg.ResultCh, fmt.Errorf("message: %v", msg.Context.Err()))
 	// noinspection GoNilness
 	case <-unreadyCh:
 		p.reply(msg.ResultCh, fmt.Errorf("publisher not ready"))
