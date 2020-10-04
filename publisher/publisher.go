@@ -36,7 +36,7 @@ type Message struct {
 }
 
 type Publisher struct {
-	connCh <-chan ConnectionReady
+	connCh <-chan *Connection
 
 	ctx         context.Context
 	cancelFunc  context.CancelFunc
@@ -51,11 +51,11 @@ type Publisher struct {
 }
 
 func New(
-	connReadyCh <-chan ConnectionReady,
+	connCh <-chan *Connection,
 	opts ...Option,
 ) *Publisher {
 	p := &Publisher{
-		connCh: connReadyCh,
+		connCh: connCh,
 
 		publishingCh: make(chan Message),
 		closeCh:      make(chan struct{}),
@@ -198,7 +198,7 @@ func (p *Publisher) connectionState() {
 			default:
 			}
 
-			err := p.channelState(conn.Conn(), conn.NotifyClose())
+			err := p.channelState(conn.AMQPConnection(), conn.NotifyClose())
 			if err != nil {
 				p.logger.Printf("[DEBUG] publisher unready")
 

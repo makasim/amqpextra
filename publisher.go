@@ -8,7 +8,7 @@ func NewPublisher(
 	connCh <-chan *Connection,
 	opts ...publisher.Option,
 ) *publisher.Publisher {
-	pubConnCh := make(chan publisher.ConnectionReady)
+	pubConnCh := make(chan *publisher.Connection)
 
 	p := publisher.New(pubConnCh, opts...)
 	go proxyPublisherConn(connCh, pubConnCh, p.NotifyClosed())
@@ -19,7 +19,7 @@ func NewPublisher(
 //nolint:dupl // ignore linter err
 func proxyPublisherConn(
 	connCh <-chan *Connection,
-	publisherConnCh chan publisher.ConnectionReady,
+	publisherConnCh chan *publisher.Connection,
 	publisherCloseCh <-chan struct{},
 ) {
 	go func() {

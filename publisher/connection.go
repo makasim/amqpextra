@@ -1,26 +1,21 @@
 package publisher
 
-type ConnectionReady interface {
-	Conn() AMQPConnection
-	NotifyClose() chan struct{}
-}
-
-func NewConnection(conn AMQPConnection, closeCh chan struct{}) ConnectionReady {
-	return &connectionReady{
-		conn:        conn,
+func NewConnection(amqpConn AMQPConnection, closeCh chan struct{}) *Connection {
+	return &Connection{
+		amqpConn:    amqpConn,
 		notifyClose: closeCh,
 	}
 }
 
-type connectionReady struct {
-	conn        AMQPConnection
+type Connection struct {
+	amqpConn    AMQPConnection
 	notifyClose chan struct{}
 }
 
-func (cr *connectionReady) Conn() AMQPConnection {
-	return cr.conn
+func (c *Connection) AMQPConnection() AMQPConnection {
+	return c.amqpConn
 }
 
-func (cr *connectionReady) NotifyClose() chan struct{} {
-	return cr.notifyClose
+func (c *Connection) NotifyClose() chan struct{} {
+	return c.notifyClose
 }
