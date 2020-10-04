@@ -7,13 +7,17 @@ import (
 func NewPublisher(
 	connCh <-chan *Connection,
 	opts ...publisher.Option,
-) *publisher.Publisher {
+) (*publisher.Publisher, error) {
 	pubConnCh := make(chan *publisher.Connection)
 
-	p := publisher.New(pubConnCh, opts...)
+	p, err := publisher.New(pubConnCh, opts...)
+	if err != nil {
+		return nil, err
+	}
+
 	go proxyPublisherConn(connCh, pubConnCh, p.NotifyClosed())
 
-	return p
+	return p, nil
 }
 
 //nolint:dupl // ignore linter err

@@ -53,7 +53,7 @@ type Publisher struct {
 func New(
 	connCh <-chan *Connection,
 	opts ...Option,
-) *Publisher {
+) (*Publisher, error) {
 	p := &Publisher{
 		connCh: connCh,
 
@@ -89,7 +89,7 @@ func New(
 
 	go p.connectionState()
 
-	return p
+	return p, nil
 }
 
 func WithLogger(l logger.Logger) Option {

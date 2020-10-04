@@ -16,7 +16,10 @@ func ExampleDialer_Publisher() {
 	}
 
 	// create publisher
-	p := dialer.Publisher()
+	p, err := dialer.Publisher()
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	// publish a message
 	go p.Publish(publisher.Message{
@@ -41,7 +44,10 @@ func ExampleNewPublisher() {
 	var connCh chan *amqpextra.Connection
 
 	// create publisher
-	p := amqpextra.NewPublisher(connCh)
+	p, err := amqpextra.NewPublisher(connCh)
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	// publish a message
 	go p.Publish(publisher.Message{
