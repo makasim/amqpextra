@@ -1775,15 +1775,15 @@ func any() gomock.Matcher {
 	return gomock.Any()
 }
 
-func newPublisher(opts ...publisher.Option) (connReadyCh chan *publisher.Connection, l *logger.TestLogger, p *publisher.Publisher) {
-	connReadyCh = make(chan *publisher.Connection, 1)
+func newPublisher(opts ...publisher.Option) (connCh chan *publisher.Connection, l *logger.TestLogger, p *publisher.Publisher) {
+	connCh = make(chan *publisher.Connection, 1)
 
 	l = logger.NewTest()
 	opts = append(opts, publisher.WithLogger(l))
 
-	p = publisher.New(connReadyCh, opts...)
+	p = publisher.New(connCh, opts...)
 
-	return connReadyCh, l, p
+	return connCh, l, p
 }
 
 func waitResult(resultCh <-chan error, dur time.Duration) error {

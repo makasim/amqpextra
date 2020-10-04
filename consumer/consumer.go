@@ -12,10 +12,10 @@ import (
 
 var errChannelClosed = fmt.Errorf("channel closed")
 
-type Connection interface {
+type AMQPConnection interface {
 }
 
-type Channel interface {
+type AMQPChannel interface {
 	Consume(queue, consumer string, autoAck, exclusive, noLocal, noWait bool, args amqp.Table) (<-chan amqp.Delivery, error)
 	NotifyClose(receiver chan *amqp.Error) chan *amqp.Error
 	NotifyCancel(c chan string) chan string
@@ -25,13 +25,13 @@ type Channel interface {
 type Option func(c *Consumer)
 
 type Consumer struct {
-	handler     Handler
-	connReadyCh <-chan ConnectionReady
+	handler Handler
+	connCh  <-chan *Connection
 
 	worker Worker
 
 	retryPeriod time.Duration
-	initFunc    func(conn Connection) (Channel, error)
+	initFunc    func(conn AMQPConnection) (AMQPChannel, error)
 	ctx         context.Context
 	cancelFunc  context.CancelFunc
 	logger      logger.Logger
@@ -51,13 +51,13 @@ type Consumer struct {
 func New(
 	queue string,
 	handler Handler,
-	connReadyCh <-chan ConnectionReady,
+	connCh <-chan *Connection,
 	opts ...Option,
 ) *Consumer {
 	c := &Consumer{
-		queue:       queue,
-		handler:     handler,
-		connReadyCh: connReadyCh,
+		queue:   queue,
+		handler: handler,
+		connCh:  connCh,
 
 		closeCh:   make(chan struct{}),
 		readyCh:   make(chan struct{}),
@@ -83,7 +83,7 @@ func New(
 	}
 
 	if c.initFunc == nil {
-		c.initFunc = func(conn Connection) (Channel, error) {
+		c.initFunc = func(conn AMQPConnection) (AMQPChannel, error) {
 			return conn.(*amqp.Connection).Channel()
 		}
 	}
@@ -113,7 +113,7 @@ func WithRetryPeriod(dur time.Duration) Option {
 	}
 }
 
-func WithInitFunc(f func(conn Connection) (Channel, error)) Option {
+func WithInitFunc(f func(conn AMQPConnection) (AMQPChannel, error)) Option {
 	return func(c *Consumer) {
 		c.initFunc = f
 	}
@@ -166,20 +166,20 @@ func (c *Consumer) connectionState() {
 	var connErr error = amqp.ErrClosed
 	for {
 		select {
-		case connReady, ok := <-c.connReadyCh:
+		case conn, ok := <-c.connCh:
 			if !ok {
 				return
 			}
 
 			select {
-			case <-connReady.NotifyClose():
+			case <-conn.NotifyClose():
 				continue
 			case <-c.ctx.Done():
 				return
 			default:
 			}
 
-			if err := c.channelState(connReady.Conn(), connReady.NotifyClose()); err != nil {
+			if err := c.channelState(conn.AMQPConnection(), conn.NotifyClose()); err != nil {
 				c.logger.Printf("[DEBUG] consumer unready")
 				connErr = err
 				continue
@@ -194,7 +194,7 @@ func (c *Consumer) connectionState() {
 	}
 }
 
-func (c *Consumer) channelState(conn Connection, connCloseCh <-chan struct{}) error {
+func (c *Consumer) channelState(conn AMQPConnection, connCloseCh <-chan struct{}) error {
 	for {
 		ch, err := c.initFunc(conn)
 		if err != nil {
@@ -211,7 +211,7 @@ func (c *Consumer) channelState(conn Connection, connCloseCh <-chan struct{}) er
 	}
 }
 
-func (c *Consumer) consumeState(ch Channel, connCloseCh <-chan struct{}) error {
+func (c *Consumer) consumeState(ch AMQPChannel, connCloseCh <-chan struct{}) error {
 	msgCh, err := ch.Consume(
 		c.queue,
 		c.consumer,
@@ -288,7 +288,7 @@ func (c *Consumer) waitRetry(err error) error {
 	}
 }
 
-func (c *Consumer) close(ch Channel) {
+func (c *Consumer) close(ch AMQPChannel) {
 	if ch != nil {
 		if err := ch.Close(); err != nil && !strings.Contains(err.Error(), "channel/connection is not open") {
 			c.logger.Printf("[WARN] channel close: %s", err)

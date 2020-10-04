@@ -10,10 +10,10 @@ func NewConsumer(
 	connCh <-chan *Connection,
 	opts ...consumer.Option,
 ) *consumer.Consumer {
-	consConnCh := make(chan consumer.ConnectionReady)
+	consumerConnCh := make(chan *consumer.Connection)
 
-	c := consumer.New(queue, handler, consConnCh, opts...)
-	go proxyConsumerConn(connCh, consConnCh, c.NotifyClosed())
+	c := consumer.New(queue, handler, consumerConnCh, opts...)
+	go proxyConsumerConn(connCh, consumerConnCh, c.NotifyClosed())
 
 	return c
 }
@@ -21,7 +21,7 @@ func NewConsumer(
 //nolint:dupl // ignore linter err
 func proxyConsumerConn(
 	connCh <-chan *Connection,
-	consumerConnCh chan consumer.ConnectionReady,
+	consumerConnCh chan *consumer.Connection,
 	consumerCloseCh <-chan struct{},
 ) {
 	go func() {
