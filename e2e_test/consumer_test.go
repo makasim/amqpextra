@@ -33,14 +33,14 @@ func TestConsumeWhileConnectionClosed(t *testing.T) {
 	}
 	rabbitmq.Publish(amqpConn, `Last!`, q)
 	connName := fmt.Sprintf("amqpextra-test-%d-%d", time.Now().UnixNano(), rand.Int63n(10000000))
-	conn, err := amqpextra.New(
+	dialer, err := amqpextra.NewDialer(
 		amqpextra.WithURL("amqp://guest:guest@rabbitmq:5672/amqpextra"),
 		amqpextra.WithConnectionProperties(amqp.Table{
 			"connection_name": connName,
 		}),
 	)
 	require.NoError(t, err)
-	defer conn.Close()
+	defer dialer.Close()
 
 	ticker := time.NewTicker(time.Millisecond * 100)
 	defer ticker.Stop()
@@ -59,7 +59,7 @@ waitOpened:
 	}
 
 	resultCh := make(chan error, 1)
-	c := conn.Consumer(q, consumer.HandlerFunc(func(ctx context.Context, msg amqp.Delivery) interface{} {
+	c := dialer.Consumer(q, consumer.HandlerFunc(func(ctx context.Context, msg amqp.Delivery) interface{} {
 		resultCh <- msg.Ack(false)
 
 		if string(msg.Body) == "Last!" {
@@ -89,7 +89,7 @@ waitOpened:
 
 	assert.GreaterOrEqual(t, count, 995)
 
-	conn.Close()
+	dialer.Close()
 	<-c.NotifyClosed()
 	//
 	time.Sleep(time.Millisecond * 100)

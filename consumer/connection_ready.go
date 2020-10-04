@@ -5,7 +5,7 @@ type ConnectionReady interface {
 	NotifyClose() chan struct{}
 }
 
-func NewConnectionReady(conn Connection, closeCh chan struct{}) ConnectionReady {
+func NewConnection(conn Connection, closeCh chan struct{}) ConnectionReady {
 	return &connectionReady{
 		conn:    conn,
 		closeCh: closeCh,

@@ -29,16 +29,16 @@ func proxyConsumerConn(
 
 		for {
 			select {
-			case connReady, ok := <-connCh:
+			case conn, ok := <-connCh:
 				if !ok {
 					return
 				}
 
-				consumerConnReady := consumer.NewConnectionReady(connReady.AMQPConnection(), connReady.NotifyClose())
+				consumerConn := consumer.NewConnection(conn.AMQPConnection(), conn.NotifyClose())
 
 				select {
-				case consumerConnCh <- consumerConnReady:
-				case <-connReady.NotifyClose():
+				case consumerConnCh <- consumerConn:
+				case <-conn.NotifyClose():
 					continue
 				case <-consumerCloseCh:
 					return

@@ -53,13 +53,14 @@ type Dialer struct {
 	ctx        context.Context
 	cancelFunc context.CancelFunc
 
-	readyCh   chan *Connection
+	connCh    chan *Connection
+	readyCh   chan struct{}
 	unreadyCh chan error
 	closedCh  chan struct{}
 }
 
 func Dial(opts ...Option) (*amqp.Connection, error) {
-	d, err := New(opts...)
+	d, err := NewDialer(opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -70,7 +71,7 @@ func Dial(opts ...Option) (*amqp.Connection, error) {
 	return d.Connection(ctx)
 }
 
-func New(opts ...Option) (*Dialer, error) {
+func NewDialer(opts ...Option) (*Dialer, error) {
 	c := &Dialer{
 		config: config{
 			amqpUrls: make([]string, 0, 1),
@@ -86,7 +87,8 @@ func New(opts ...Option) (*Dialer, error) {
 			logger:      logger.Discard,
 		},
 
-		readyCh:   make(chan *Connection),
+		connCh:    make(chan *Connection),
+		readyCh:   make(chan struct{}),
 		unreadyCh: make(chan error),
 		closedCh:  make(chan struct{}),
 	}
@@ -151,7 +153,11 @@ func WithConnectionProperties(props amqp.Table) Option {
 	}
 }
 
-func (c *Dialer) NotifyReady() <-chan *Connection {
+func (c *Dialer) ConnectionCh() <-chan *Connection {
+	return c.connCh
+}
+
+func (c *Dialer) NotifyReady() <-chan struct{} {
 	return c.readyCh
 }
 
@@ -173,7 +179,11 @@ func (c *Dialer) Connection(ctx context.Context) (*amqp.Connection, error) {
 		return nil, fmt.Errorf("connection closed")
 	case <-ctx.Done():
 		return nil, ctx.Err()
-	case conn := <-c.readyCh:
+	case conn, ok := <-c.connCh:
+		if !ok {
+			return nil, fmt.Errorf("connection closed")
+		}
+
 		return conn.AMQPConnection(), nil
 	}
 }
@@ -184,7 +194,7 @@ func (c *Dialer) Consumer(queue string, handler consumer.Handler, opts ...consum
 		consumer.WithContext(c.ctx),
 	}, opts...)
 
-	return NewConsumer(queue, handler, c.NotifyReady(), opts...)
+	return NewConsumer(queue, handler, c.ConnectionCh(), opts...)
 }
 
 func (c *Dialer) Publisher(opts ...publisher.Option) *publisher.Publisher {
@@ -193,10 +203,11 @@ func (c *Dialer) Publisher(opts ...publisher.Option) *publisher.Publisher {
 		publisher.WithContext(c.ctx),
 	}, opts...)
 
-	return NewPublisher(c.NotifyReady(), opts...)
+	return NewPublisher(c.ConnectionCh(), opts...)
 }
 
 func (c *Dialer) connectState() {
+	defer close(c.connCh)
 	defer close(c.closedCh)
 	defer close(c.unreadyCh)
 	defer c.cancelFunc()
@@ -274,7 +285,9 @@ func (c *Dialer) connectedState(amqpConn AMQPConnection) error {
 	c.logger.Printf("[DEBUG] connection ready")
 	for {
 		select {
-		case c.readyCh <- conn:
+		case c.readyCh <- struct{}{}:
+			continue
+		case c.connCh <- conn:
 			continue
 		case err, ok := <-internalCloseCh:
 			if !ok {

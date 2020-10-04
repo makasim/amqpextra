@@ -8,8 +8,6 @@ import (
 	"net/http/httputil"
 	"time"
 
-	"github.com/makasim/amqpextra"
-
 	"github.com/streadway/amqp"
 )
 
@@ -123,15 +121,6 @@ func Queue(conn *amqp.Connection) string {
 	return q.Name
 }
 
-func Queue2(conn *amqpextra.Dialer) string {
-	est, ok := <-conn.NotifyReady()
-	if !ok {
-		panic("connection is closed")
-	}
-
-	return Queue(est.AMQPConnection())
-}
-
 func Publish(conn *amqp.Connection, body, queue string) {
 	ch, err := conn.Channel()
 	if err != nil {
@@ -144,13 +133,4 @@ func Publish(conn *amqp.Connection, body, queue string) {
 	if err != nil {
 		panic(err)
 	}
-}
-
-func Publish2(conn *amqpextra.Dialer, body, queue string) {
-	est, ok := <-conn.NotifyReady()
-	if !ok {
-		panic("connection is closed")
-	}
-
-	Publish(est.AMQPConnection(), body, queue)
 }

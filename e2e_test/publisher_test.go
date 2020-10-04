@@ -22,14 +22,14 @@ func TestPublishWhileConnectionClosed(t *testing.T) {
 	defer goleak.VerifyNone(t)
 
 	connName := fmt.Sprintf("amqpextra-test-%d-%d", time.Now().UnixNano(), rand.Int63n(10000000))
-	conn, err := amqpextra.New(
+	dialer, err := amqpextra.NewDialer(
 		amqpextra.WithURL("amqp://guest:guest@rabbitmq:5672/amqpextra"),
 		amqpextra.WithConnectionProperties(amqp.Table{
 			"connection_name": connName,
 		}),
 	)
 	require.NoError(t, err)
-	defer conn.Close()
+	defer dialer.Close()
 
 	ticker := time.NewTicker(time.Millisecond * 100)
 	defer ticker.Stop()
@@ -47,7 +47,7 @@ waitOpened:
 			t.Fatalf("connection %s is not opened", connName)
 		}
 	}
-	p := conn.Publisher()
+	p := dialer.Publisher()
 	assertPublisherReady(t, p)
 
 	count := 0
@@ -69,7 +69,7 @@ waitOpened:
 
 	assert.GreaterOrEqual(t, count, 995)
 
-	conn.Close()
+	dialer.Close()
 	<-p.NotifyClosed()
 }
 

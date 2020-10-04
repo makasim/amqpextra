@@ -10,7 +10,7 @@ import (
 
 func ExampleDialer_Publisher() {
 	// open connection
-	dialer, err := amqpextra.New(amqpextra.WithURL("amqp://guest:guest@localhost:5672/%2f"))
+	dialer, err := amqpextra.NewDialer(amqpextra.WithURL("amqp://guest:guest@localhost:5672/%2f"))
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -37,11 +37,11 @@ func ExampleDialer_Publisher() {
 }
 
 func ExampleNewPublisher() {
-	// you can get readyCh from dialer.NotifyReady() method
-	var readyCh chan *amqpextra.Connection
+	// you can get readyCh from dialer.ConnectionCh() method
+	var connCh chan *amqpextra.Connection
 
 	// create publisher
-	p := amqpextra.NewPublisher(readyCh)
+	p := amqpextra.NewPublisher(connCh)
 
 	// publish a message
 	go p.Publish(publisher.Message{

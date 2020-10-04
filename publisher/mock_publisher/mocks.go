@@ -63,20 +63,6 @@ func (mr *MockConnectionReadyMockRecorder) NotifyClose() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NotifyClose", reflect.TypeOf((*MockConnectionReady)(nil).NotifyClose))
 }
 
-// NotifyLost mocks base method.
-func (m *MockConnectionReady) NotifyLost() chan struct{} {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "NotifyLost")
-	ret0, _ := ret[0].(chan struct{})
-	return ret0
-}
-
-// NotifyLost indicates an expected call of NotifyLost.
-func (mr *MockConnectionReadyMockRecorder) NotifyLost() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NotifyLost", reflect.TypeOf((*MockConnectionReady)(nil).NotifyLost))
-}
-
 // MockAMQPConnection is a mock of AMQPConnection interface.
 type MockAMQPConnection struct {
 	ctrl     *gomock.Controller

@@ -36,7 +36,7 @@ type Message struct {
 }
 
 type Publisher struct {
-	connReadyCh <-chan ConnectionReady
+	connCh <-chan ConnectionReady
 
 	ctx         context.Context
 	cancelFunc  context.CancelFunc
@@ -55,7 +55,7 @@ func New(
 	opts ...Option,
 ) *Publisher {
 	p := &Publisher{
-		connReadyCh: connReadyCh,
+		connCh: connReadyCh,
 
 		publishingCh: make(chan Message),
 		closeCh:      make(chan struct{}),
@@ -185,21 +185,20 @@ func (p *Publisher) connectionState() {
 	p.logger.Printf("[DEBUG] publisher starting")
 	for {
 		select {
-		case connReady, ok := <-p.connReadyCh:
+		case conn, ok := <-p.connCh:
 			if !ok {
-				p.close(nil)
 				return
 			}
 
 			select {
-			case <-connReady.NotifyClose():
+			case <-conn.NotifyClose():
 				continue
 			case <-p.ctx.Done():
 				return
 			default:
 			}
 
-			err := p.channelState(connReady.Conn(), connReady.NotifyClose())
+			err := p.channelState(conn.Conn(), conn.NotifyClose())
 			if err != nil {
 				p.logger.Printf("[DEBUG] publisher unready")
 
