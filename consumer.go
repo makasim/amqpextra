@@ -10,10 +10,10 @@ func NewConsumer(
 	connCh <-chan *Connection,
 	opts ...consumer.Option,
 ) *consumer.Consumer {
-	consConnCh := make(chan consumer.ConnectionReady)
+	consumerConnCh := make(chan *consumer.Connection)
 
-	c := consumer.New(queue, handler, consConnCh, opts...)
-	go proxyConsumerConn(connCh, consConnCh, c.NotifyClosed())
+	c := consumer.New(queue, handler, consumerConnCh, opts...)
+	go proxyConsumerConn(connCh, consumerConnCh, c.NotifyClosed())
 
 	return c
 }
@@ -21,7 +21,7 @@ func NewConsumer(
 //nolint:dupl // ignore linter err
 func proxyConsumerConn(
 	connCh <-chan *Connection,
-	consumerConnCh chan consumer.ConnectionReady,
+	consumerConnCh chan *consumer.Connection,
 	consumerCloseCh <-chan struct{},
 ) {
 	go func() {
@@ -29,16 +29,16 @@ func proxyConsumerConn(
 
 		for {
 			select {
-			case connReady, ok := <-connCh:
+			case conn, ok := <-connCh:
 				if !ok {
 					return
 				}
 
-				consumerConnReady := consumer.NewConnectionReady(connReady.AMQPConnection(), connReady.NotifyClose())
+				consumerConn := consumer.NewConnection(conn.AMQPConnection(), conn.NotifyClose())
 
 				select {
-				case consumerConnCh <- consumerConnReady:
-				case <-connReady.NotifyClose():
+				case consumerConnCh <- consumerConn:
+				case <-conn.NotifyClose():
 					continue
 				case <-consumerCloseCh:
 					return

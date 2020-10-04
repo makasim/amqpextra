@@ -8,7 +8,7 @@ func NewPublisher(
 	connCh <-chan *Connection,
 	opts ...publisher.Option,
 ) *publisher.Publisher {
-	pubConnCh := make(chan publisher.ConnectionReady)
+	pubConnCh := make(chan *publisher.Connection)
 
 	p := publisher.New(pubConnCh, opts...)
 	go proxyPublisherConn(connCh, pubConnCh, p.NotifyClosed())
@@ -19,7 +19,7 @@ func NewPublisher(
 //nolint:dupl // ignore linter err
 func proxyPublisherConn(
 	connCh <-chan *Connection,
-	publisherConnCh chan publisher.ConnectionReady,
+	publisherConnCh chan *publisher.Connection,
 	publisherCloseCh <-chan struct{},
 ) {
 	go func() {
@@ -27,16 +27,19 @@ func proxyPublisherConn(
 
 		for {
 			select {
-			case connReady, ok := <-connCh:
+			case conn, ok := <-connCh:
 				if !ok {
 					return
 				}
 
-				publisherConnReady := publisher.NewConnectionReady(connReady.AMQPConnection(), connReady.NotifyClose())
+				publisherConn := publisher.NewConnection(
+					conn.AMQPConnection(),
+					conn.NotifyLost(),
+				)
 
 				select {
-				case publisherConnCh <- publisherConnReady:
-				case <-connReady.NotifyClose():
+				case publisherConnCh <- publisherConn:
+				case <-conn.NotifyClose():
 					continue
 				case <-publisherCloseCh:
 					return

@@ -22,18 +22,23 @@ import (
 )
 
 // nolint:gosimple // the purpose of select case is to stress the connCh close case.
-func ExampleDialer_NotifyReady() {
-	conn, err := amqpextra.New(amqpextra.WithURL("amqp://guest:guest@localhost:5672/%2f"))
+func ExampleDialer_ConnectionCh() {
+	dialer, err := amqpextra.NewDialer(amqpextra.WithURL("amqp://guest:guest@localhost:5672/%2f"))
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	connCh := conn.NotifyReady()
+	connCh := dialer.ConnectionCh()
 	go func() {
 	L1:
 		for {
 			select {
-			case conn := <-connCh:
+			case conn, ok := <-connCh:
+				if !ok {
+					// connection permanently closed
+					return
+				}
+
 				ch, err := conn.AMQPConnection().Channel()
 				if err != nil {
 					return
@@ -63,7 +68,7 @@ func ExampleDialer_NotifyReady() {
 	}()
 
 	time.Sleep(time.Second)
-	conn.Close()
+	dialer.Close()
 
 	// Output:
 }
@@ -75,7 +80,7 @@ func TestOptions(main *testing.T) {
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
 
-		_, err := amqpextra.New()
+		_, err := amqpextra.NewDialer()
 		require.EqualError(t, err, "url(s) must be set")
 	})
 
@@ -85,7 +90,7 @@ func TestOptions(main *testing.T) {
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
 
-		_, err := amqpextra.New(
+		_, err := amqpextra.NewDialer(
 			amqpextra.WithURL("URL"),
 			amqpextra.WithRetryPeriod(time.Duration(0)),
 		)
@@ -98,7 +103,7 @@ func TestOptions(main *testing.T) {
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
 
-		_, err := amqpextra.New(
+		_, err := amqpextra.NewDialer(
 			amqpextra.WithURL("URL"),
 			amqpextra.WithRetryPeriod(time.Duration(-1)),
 		)
@@ -115,7 +120,7 @@ func TestConnectState(main *testing.T) {
 
 		l := logger.NewTest()
 
-		dialer, err := amqpextra.New(
+		dialer, err := amqpextra.NewDialer(
 			amqpextra.WithURL("amqp://rabbitmq.host"),
 			amqpextra.WithAMQPDial(amqpDialStub(time.Millisecond*150, fmt.Errorf("dialing errored"))),
 			amqpextra.WithLogger(l),
@@ -149,7 +154,7 @@ func TestConnectState(main *testing.T) {
 		conn.EXPECT().Close().Return(nil)
 		conn.EXPECT().NotifyClose(any()).Return(closeCh)
 
-		dialer, err := amqpextra.New(
+		dialer, err := amqpextra.NewDialer(
 			amqpextra.WithURL("amqp://rabbitmq.host"),
 			amqpextra.WithAMQPDial(amqpDialStub(time.Millisecond*150, conn)),
 			amqpextra.WithLogger(l),
@@ -188,7 +193,7 @@ func TestConnectState(main *testing.T) {
 		ctx, cancelFunc := context.WithCancel(context.Background())
 		defer cancelFunc()
 
-		dialer, err := amqpextra.New(
+		dialer, err := amqpextra.NewDialer(
 			amqpextra.WithURL("amqp://rabbitmq.host"),
 			amqpextra.WithAMQPDial(amqpDialStub(time.Millisecond*150, conn)),
 			amqpextra.WithLogger(l),
@@ -225,14 +230,14 @@ func TestConnectState(main *testing.T) {
 		amqpConn.EXPECT().Close().Return(nil)
 		amqpConn.EXPECT().NotifyClose(any()).Return(closeCh)
 
-		dialer, err := amqpextra.New(
+		dialer, err := amqpextra.NewDialer(
 			amqpextra.WithURL("amqp://rabbitmq.host"),
 			amqpextra.WithAMQPDial(amqpDialStub(time.Millisecond*150, amqpConn)),
 			amqpextra.WithLogger(l),
 		)
 		require.NoError(t, err)
 
-		assertNoConn(t, dialer.NotifyReady())
+		assertNoConn(t, dialer.ConnectionCh())
 		assertUnready(t, dialer, amqp.ErrClosed.Error())
 
 		assertReady(t, dialer)
@@ -255,7 +260,7 @@ func TestConnectState(main *testing.T) {
 
 		l := logger.NewTest()
 
-		dialer, err := amqpextra.New(
+		dialer, err := amqpextra.NewDialer(
 			amqpextra.WithURL("amqp://rabbitmq.host"),
 			amqpextra.WithAMQPDial(amqpDialStub(fmt.Errorf("the error"))),
 			amqpextra.WithRetryPeriod(time.Millisecond*150),
@@ -287,7 +292,7 @@ func TestConnectState(main *testing.T) {
 		ctx, cancelFunc := context.WithCancel(context.Background())
 		defer cancelFunc()
 
-		dialer, err := amqpextra.New(
+		dialer, err := amqpextra.NewDialer(
 			amqpextra.WithURL("amqp://rabbitmq.host"),
 			amqpextra.WithAMQPDial(amqpDialStub(fmt.Errorf("the error"))),
 			amqpextra.WithRetryPeriod(time.Millisecond*150),
@@ -317,7 +322,7 @@ func TestConnectState(main *testing.T) {
 
 		l := logger.NewTest()
 
-		dialer, err := amqpextra.New(
+		dialer, err := amqpextra.NewDialer(
 			amqpextra.WithURL("amqp://rabbitmq.host"),
 			amqpextra.WithAMQPDial(amqpDialStub(fmt.Errorf("the error"))),
 			amqpextra.WithRetryPeriod(time.Millisecond*150),
@@ -325,7 +330,7 @@ func TestConnectState(main *testing.T) {
 		)
 		require.NoError(t, err)
 
-		assertNoConn(t, dialer.NotifyReady())
+		assertNoConn(t, dialer.ConnectionCh())
 		assertUnready(t, dialer, "the error")
 
 		dialer.Close()
@@ -352,7 +357,7 @@ func TestConnectState(main *testing.T) {
 		amqpConn.EXPECT().Close().Return(nil)
 		amqpConn.EXPECT().NotifyClose(any()).Return(closeCh)
 
-		dialer, err := amqpextra.New(
+		dialer, err := amqpextra.NewDialer(
 			amqpextra.WithURL("amqp://rabbitmq.host"),
 			amqpextra.WithAMQPDial(amqpDialStub(fmt.Errorf("the error"), amqpConn)),
 			amqpextra.WithRetryPeriod(time.Millisecond*150),
@@ -360,12 +365,12 @@ func TestConnectState(main *testing.T) {
 		)
 		require.NoError(t, err)
 
-		assertNoConn(t, dialer.NotifyReady())
+		assertNoConn(t, dialer.ConnectionCh())
 		assertUnready(t, dialer, "the error")
 		time.Sleep(time.Millisecond * 50)
 		assertReady(t, dialer)
 
-		conn := <-dialer.NotifyReady()
+		conn := <-dialer.ConnectionCh()
 		assertConnNotClosed(t, conn)
 		assertConnNotLost(t, conn)
 
@@ -389,7 +394,7 @@ func TestConnectState(main *testing.T) {
 
 		l := logger.NewTest()
 
-		dialer, err := amqpextra.New(
+		dialer, err := amqpextra.NewDialer(
 			amqpextra.WithURL("amqp://rabbitmq.host"),
 			amqpextra.WithAMQPDial(amqpDialStub(time.Millisecond*75, fmt.Errorf("the error"))),
 			amqpextra.WithLogger(l),
@@ -413,7 +418,7 @@ func TestConnectState(main *testing.T) {
 
 		l := logger.NewTest()
 
-		dialer, err := amqpextra.New(
+		dialer, err := amqpextra.NewDialer(
 			amqpextra.WithURL("amqp://rabbitmq.host"),
 			amqpextra.WithAMQPDial(amqpDialStub(time.Millisecond*75, fmt.Errorf("the error"))),
 			amqpextra.WithLogger(l),
@@ -443,7 +448,7 @@ func TestConnectedState(main *testing.T) {
 		amqpConn.EXPECT().Close().Return(nil)
 		amqpConn.EXPECT().NotifyClose(any()).Return(closeCh)
 
-		dialer, err := amqpextra.New(
+		dialer, err := amqpextra.NewDialer(
 			amqpextra.WithURL("amqp://rabbitmq.host"),
 			amqpextra.WithAMQPDial(amqpDialStub(amqpConn)),
 			amqpextra.WithLogger(l),
@@ -452,7 +457,7 @@ func TestConnectedState(main *testing.T) {
 
 		assertReady(t, dialer)
 
-		conn := <-dialer.NotifyReady()
+		conn := <-dialer.ConnectionCh()
 		assertConnNotClosed(t, conn)
 		assertConnNotLost(t, conn)
 
@@ -484,7 +489,7 @@ func TestConnectedState(main *testing.T) {
 		amqpConn1.EXPECT().NotifyClose(any()).Return(closeCh1)
 		amqpConn1.EXPECT().Close().Return(nil)
 
-		dialer, err := amqpextra.New(
+		dialer, err := amqpextra.NewDialer(
 			amqpextra.WithURL("amqp://rabbitmq.host"),
 			amqpextra.WithAMQPDial(amqpDialStub(amqpConn0, amqpConn1)),
 			amqpextra.WithLogger(l),
@@ -493,7 +498,7 @@ func TestConnectedState(main *testing.T) {
 
 		assertReady(t, dialer)
 
-		conn0 := <-dialer.NotifyReady()
+		conn0 := <-dialer.ConnectionCh()
 		assertConnNotClosed(t, conn0)
 		assertConnNotLost(t, conn0)
 
@@ -504,7 +509,7 @@ func TestConnectedState(main *testing.T) {
 
 		assertReady(t, dialer)
 
-		conn1 := <-dialer.NotifyReady()
+		conn1 := <-dialer.ConnectionCh()
 		assertConnNotClosed(t, conn1)
 		assertConnNotLost(t, conn1)
 
@@ -539,7 +544,7 @@ func TestConnectedState(main *testing.T) {
 		amqpConn1.EXPECT().NotifyClose(any()).Return(closeCh1)
 		amqpConn1.EXPECT().Close().Return(nil)
 
-		dialer, err := amqpextra.New(
+		dialer, err := amqpextra.NewDialer(
 			amqpextra.WithURL("amqp://rabbitmq.host"),
 			amqpextra.WithAMQPDial(amqpDialStub(amqpConn0, amqpConn1)),
 			amqpextra.WithLogger(l),
@@ -548,7 +553,7 @@ func TestConnectedState(main *testing.T) {
 
 		assertReady(t, dialer)
 
-		conn0 := <-dialer.NotifyReady()
+		conn0 := <-dialer.ConnectionCh()
 		assertConnNotClosed(t, conn0)
 		assertConnNotLost(t, conn0)
 
@@ -559,7 +564,7 @@ func TestConnectedState(main *testing.T) {
 
 		assertReady(t, dialer)
 
-		conn1 := <-dialer.NotifyReady()
+		conn1 := <-dialer.ConnectionCh()
 		assertConnNotClosed(t, conn1)
 		assertConnNotLost(t, conn1)
 
@@ -590,7 +595,7 @@ func TestConnectedState(main *testing.T) {
 		amqpConn.EXPECT().NotifyClose(any()).Return(closeCh0)
 		amqpConn.EXPECT().Close().Return(amqp.ErrClosed)
 
-		dialer, err := amqpextra.New(
+		dialer, err := amqpextra.NewDialer(
 			amqpextra.WithURL("amqp://rabbitmq.host"),
 			amqpextra.WithAMQPDial(amqpDialStub(amqpConn)),
 			amqpextra.WithLogger(l),
@@ -621,7 +626,7 @@ func TestConnectedState(main *testing.T) {
 		amqpConn.EXPECT().NotifyClose(any()).Return(closeCh0)
 		amqpConn.EXPECT().Close().Return(fmt.Errorf("connection closed errored"))
 
-		dialer, err := amqpextra.New(
+		dialer, err := amqpextra.NewDialer(
 			amqpextra.WithURL("amqp://rabbitmq.host"),
 			amqpextra.WithAMQPDial(amqpDialStub(amqpConn)),
 			amqpextra.WithLogger(l),

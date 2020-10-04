@@ -17,18 +17,18 @@ import (
 func TestDialerReconnectWhenClosedByClient(t *testing.T) {
 	defer goleak.VerifyNone(t)
 
-	dialer, err := amqpextra.New(
+	dialer, err := amqpextra.NewDialer(
 		amqpextra.WithURL("amqp://guest:guest@rabbitmq:5672/amqpextra"),
 	)
 	require.NoError(t, err)
 	defer dialer.Close()
 
 	assertConnectionReady(t, dialer)
-	ready := <-dialer.NotifyReady()
+	conn := <-dialer.ConnectionCh()
 
 	go func() {
 		time.Sleep(time.Millisecond * 100)
-		require.NoError(t, ready.AMQPConnection().Close())
+		require.NoError(t, conn.AMQPConnection().Close())
 	}()
 	assertConnectionUnready(t, dialer)
 
@@ -39,7 +39,7 @@ func TestDialerReconnectWhenClosedByServer(t *testing.T) {
 	defer goleak.VerifyNone(t)
 
 	connName := fmt.Sprintf("amqpextra-test-%d-%d", time.Now().UnixNano(), rand.Int63n(10000000))
-	dialer, err := amqpextra.New(
+	dialer, err := amqpextra.NewDialer(
 		amqpextra.WithURL("amqp://guest:guest@rabbitmq:5672/amqpextra"),
 		amqpextra.WithConnectionProperties(amqp.Table{
 			"connection_name": connName,

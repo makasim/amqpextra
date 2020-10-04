@@ -12,7 +12,7 @@ import (
 
 func ExampleDialer_Consumer() {
 	// open connection
-	dialer, err := amqpextra.New(amqpextra.WithURL("amqp://guest:guest@localhost:5672/%2f"))
+	dialer, err := amqpextra.NewDialer(amqpextra.WithURL("amqp://guest:guest@localhost:5672/%2f"))
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -42,8 +42,8 @@ func ExampleDialer_Consumer() {
 }
 
 func ExampleNewConsumer() {
-	// you can get readyCh from dialer.NotifyReady() method
-	var readyCh chan *amqpextra.Connection
+	// you can get connCh from dialer.ConnectionCh() method
+	var connCh chan *amqpextra.Connection
 
 	// create consumer
 	c := amqpextra.NewConsumer(
@@ -55,7 +55,7 @@ func ExampleNewConsumer() {
 
 			return nil
 		}),
-		readyCh,
+		connCh,
 	)
 	// run consumer
 	go c.Run()
