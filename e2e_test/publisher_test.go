@@ -47,7 +47,8 @@ waitOpened:
 			t.Fatalf("connection %s is not opened", connName)
 		}
 	}
-	p := dialer.Publisher()
+	p, err := dialer.Publisher()
+	require.NoError(t, err)
 	assertPublisherReady(t, p)
 
 	count := 0

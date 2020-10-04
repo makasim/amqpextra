@@ -33,8 +33,8 @@ func TestUnready(main *testing.T) {
 
 		connCh := make(chan *consumer.Connection, 1)
 
-		c := consumer.New("foo", h, connCh, consumer.WithLogger(l))
-		go c.Run()
+		c, err := consumer.New("foo", h, connCh, consumer.WithLogger(l))
+		require.NoError(t, err)
 
 		assertUnready(t, c, amqp.ErrClosed.Error())
 		c.Close()
@@ -59,8 +59,8 @@ func TestUnready(main *testing.T) {
 
 		connCh := make(chan *consumer.Connection, 1)
 
-		c := consumer.New("foo", h, connCh, consumer.WithLogger(l), consumer.WithContext(ctx))
-		go c.Run()
+		c, err := consumer.New("foo", h, connCh, consumer.WithLogger(l), consumer.WithContext(ctx))
+		require.NoError(t, err)
 
 		assertUnready(t, c, amqp.ErrClosed.Error())
 		cancelFunc()
@@ -82,8 +82,8 @@ func TestUnready(main *testing.T) {
 
 		connCh := make(chan *consumer.Connection, 1)
 
-		c := consumer.New("foo", h, connCh, consumer.WithLogger(l))
-		go c.Run()
+		c, err := consumer.New("foo", h, connCh, consumer.WithLogger(l))
+		require.NoError(t, err)
 
 		assertUnready(t, c, amqp.ErrClosed.Error())
 		close(connCh)
@@ -107,7 +107,7 @@ func TestUnready(main *testing.T) {
 
 		connCh := make(chan *consumer.Connection, 1)
 
-		c := consumer.New(
+		c, err := consumer.New(
 			"foo",
 			h,
 			connCh,
@@ -117,7 +117,7 @@ func TestUnready(main *testing.T) {
 				return nil, fmt.Errorf("the error")
 			}),
 		)
-		go c.Run()
+		require.NoError(t, err)
 
 		assertUnready(t, c, amqp.ErrClosed.Error())
 		connCh <- consumer.NewConnection(conn, nil)
@@ -145,7 +145,7 @@ func TestUnready(main *testing.T) {
 
 		connCh := make(chan *consumer.Connection, 1)
 
-		c := consumer.New(
+		c, err := consumer.New(
 			"foo",
 			h,
 			connCh,
@@ -155,7 +155,7 @@ func TestUnready(main *testing.T) {
 				return nil, fmt.Errorf("the error")
 			}),
 		)
-		go c.Run()
+		require.NoError(t, err)
 
 		assertUnready(t, c, amqp.ErrClosed.Error())
 		connCh <- consumer.NewConnection(conn, nil)
@@ -184,7 +184,7 @@ func TestUnready(main *testing.T) {
 
 		connCh := make(chan *consumer.Connection, 1)
 
-		c := consumer.New(
+		c, err := consumer.New(
 			"foo",
 			h,
 			connCh,
@@ -194,7 +194,7 @@ func TestUnready(main *testing.T) {
 				return nil, fmt.Errorf("the error")
 			}),
 		)
-		go c.Run()
+		require.NoError(t, err)
 
 		assertUnready(t, c, amqp.ErrClosed.Error())
 		connCh <- consumer.NewConnection(conn, nil)
@@ -223,7 +223,7 @@ func TestUnready(main *testing.T) {
 
 		connCh := make(chan *consumer.Connection, 1)
 
-		c := consumer.New(
+		c, err := consumer.New(
 			"foo",
 			h,
 			connCh,
@@ -233,7 +233,7 @@ func TestUnready(main *testing.T) {
 				return nil, fmt.Errorf("the error")
 			}),
 		)
-		go c.Run()
+		require.NoError(t, err)
 
 		assertUnready(t, c, amqp.ErrClosed.Error())
 		connCh <- consumer.NewConnection(conn, nil)
@@ -262,7 +262,7 @@ func TestUnready(main *testing.T) {
 
 		connCh := make(chan *consumer.Connection, 1)
 
-		c := consumer.New(
+		c, err := consumer.New(
 			"foo",
 			h,
 			connCh,
@@ -272,7 +272,7 @@ func TestUnready(main *testing.T) {
 				return nil, fmt.Errorf("the error")
 			}),
 		)
-		go c.Run()
+		require.NoError(t, err)
 
 		assertUnready(t, c, amqp.ErrClosed.Error())
 		connCh <- consumer.NewConnection(conn, nil)
@@ -300,7 +300,7 @@ func TestUnready(main *testing.T) {
 
 		connCh := make(chan *consumer.Connection, 1)
 
-		c := consumer.New(
+		c, err := consumer.New(
 			"foo",
 			h,
 			connCh,
@@ -310,7 +310,7 @@ func TestUnready(main *testing.T) {
 				return nil, fmt.Errorf("the error")
 			}),
 		)
-		go c.Run()
+		require.NoError(t, err)
 
 		assertUnready(t, c, amqp.ErrClosed.Error())
 		connCh <- consumer.NewConnection(conn, nil)
@@ -343,7 +343,7 @@ func TestUnready(main *testing.T) {
 
 		connCh := make(chan *consumer.Connection, 1)
 
-		c := consumer.New(
+		c, err := consumer.New(
 			"foo",
 			h,
 			connCh,
@@ -351,7 +351,7 @@ func TestUnready(main *testing.T) {
 			consumer.WithRetryPeriod(time.Millisecond*400),
 			consumer.WithInitFunc(initFuncStub(ch)),
 		)
-		go c.Run()
+		require.NoError(t, err)
 
 		assertUnready(t, c, amqp.ErrClosed.Error())
 		connCh <- consumer.NewConnection(conn, nil)
@@ -383,7 +383,7 @@ func TestUnready(main *testing.T) {
 
 		connCh := make(chan *consumer.Connection, 1)
 
-		c := consumer.New(
+		c, err := consumer.New(
 			"foo",
 			h,
 			connCh,
@@ -391,7 +391,7 @@ func TestUnready(main *testing.T) {
 			consumer.WithRetryPeriod(time.Millisecond*400),
 			consumer.WithInitFunc(initFuncStub(ch)),
 		)
-		go c.Run()
+		require.NoError(t, err)
 
 		assertUnready(t, c, amqp.ErrClosed.Error())
 		connCh <- consumer.NewConnection(conn, nil)
@@ -436,14 +436,14 @@ func TestConsume(main *testing.T) {
 		connCh := make(chan *consumer.Connection, 1)
 		connCh <- consumer.NewConnection(conn, nil)
 
-		c := consumer.New(
+		c, err := consumer.New(
 			"foo",
 			h,
 			connCh,
 			consumer.WithLogger(l),
 			consumer.WithInitFunc(initFuncStub(ch)),
 		)
-		go c.Run()
+		require.NoError(t, err)
 
 		assertReady(t, c)
 		c.Close()
@@ -485,14 +485,14 @@ func TestConsume(main *testing.T) {
 		connCh := make(chan *consumer.Connection, 1)
 		connCh <- consumer.NewConnection(conn, nil)
 
-		c := consumer.New(
+		c, err := consumer.New(
 			"theQueue",
 			h,
 			connCh,
 			consumer.WithLogger(l),
 			consumer.WithInitFunc(initFuncStub(ch)),
 		)
-		go c.Run()
+		require.NoError(t, err)
 
 		assertReady(t, c)
 		c.Close()
@@ -536,7 +536,7 @@ func TestConsume(main *testing.T) {
 		connCh := make(chan *consumer.Connection, 1)
 		connCh <- consumer.NewConnection(conn, nil)
 
-		c := consumer.New(
+		c, err := consumer.New(
 			"theQueue",
 			h,
 			connCh,
@@ -544,7 +544,7 @@ func TestConsume(main *testing.T) {
 			consumer.WithConsumeArgs("theConsumer", true, true, true, true, table),
 			consumer.WithInitFunc(initFuncStub(ch)),
 		)
-		go c.Run()
+		require.NoError(t, err)
 
 		assertReady(t, c)
 		c.Close()
@@ -588,14 +588,14 @@ func TestConsume(main *testing.T) {
 		connCh := make(chan *consumer.Connection, 1)
 		connCh <- conn
 
-		c := consumer.New(
+		c, err := consumer.New(
 			"theQueue",
 			h,
 			connCh,
 			consumer.WithLogger(l),
 			consumer.WithInitFunc(initFuncStub(ch)),
 		)
-		go c.Run()
+		require.NoError(t, err)
 
 		assertReady(t, c)
 		close(connCh)
@@ -651,7 +651,7 @@ func TestConsume(main *testing.T) {
 		connCh := make(chan *consumer.Connection, 1)
 		connCh <- consumer.NewConnection(conn, nil)
 
-		c := consumer.New(
+		c, err := consumer.New(
 			"theQueue",
 			h,
 			connCh,
@@ -659,7 +659,7 @@ func TestConsume(main *testing.T) {
 			consumer.WithRetryPeriod(time.Millisecond),
 			consumer.WithInitFunc(initFuncStub(ch, newCh)),
 		)
-		go c.Run()
+		require.NoError(t, err)
 
 		assertReady(t, c)
 		time.Sleep(time.Millisecond * 50)
@@ -708,7 +708,7 @@ func TestConsume(main *testing.T) {
 		connCh := make(chan *consumer.Connection, 1)
 		connCh <- consumer.NewConnection(conn, nil)
 
-		c := consumer.New(
+		c, err := consumer.New(
 			"theQueue",
 			h,
 			connCh,
@@ -716,7 +716,7 @@ func TestConsume(main *testing.T) {
 			consumer.WithRetryPeriod(time.Millisecond),
 			consumer.WithInitFunc(initFuncStub(ch)),
 		)
-		go c.Run()
+		require.NoError(t, err)
 
 		assertReady(t, c)
 		c.Close()
@@ -759,7 +759,7 @@ func TestConsume(main *testing.T) {
 		connCh := make(chan *consumer.Connection, 1)
 		connCh <- consumer.NewConnection(conn, nil)
 
-		c := consumer.New(
+		c, err := consumer.New(
 			"theQueue",
 			h,
 			connCh,
@@ -767,7 +767,7 @@ func TestConsume(main *testing.T) {
 			consumer.WithRetryPeriod(time.Millisecond),
 			consumer.WithInitFunc(initFuncStub(ch)),
 		)
-		go c.Run()
+		require.NoError(t, err)
 
 		assertReady(t, c)
 		c.Close()
@@ -824,7 +824,7 @@ func TestConsume(main *testing.T) {
 			Return(newCancelCh).Times(1)
 		newCh.EXPECT().Close().Times(1)
 
-		c := consumer.New(
+		c, err := consumer.New(
 			"theQueue",
 			h,
 			connCh,
@@ -832,7 +832,7 @@ func TestConsume(main *testing.T) {
 			consumer.WithRetryPeriod(time.Millisecond),
 			consumer.WithInitFunc(initFuncStub(ch, newCh)),
 		)
-		go c.Run()
+		require.NoError(t, err)
 
 		assertReady(t, c)
 		time.Sleep(time.Millisecond * 50)
@@ -885,7 +885,7 @@ func TestConsume(main *testing.T) {
 		connCh := make(chan *consumer.Connection, 1)
 		connCh <- consumer.NewConnection(conn, nil)
 
-		c := consumer.New(
+		c, err := consumer.New(
 			"theQueue",
 			handlerStub(l),
 			connCh,
@@ -893,7 +893,7 @@ func TestConsume(main *testing.T) {
 			consumer.WithRetryPeriod(time.Millisecond),
 			consumer.WithInitFunc(initFuncStub(ch)),
 		)
-		go c.Run()
+		require.NoError(t, err)
 
 		assertReady(t, c)
 		msgCh <- amqp.Delivery{}
@@ -971,7 +971,7 @@ func TestConcurrency(main *testing.T) {
 			}()
 		}
 
-		c := consumer.New(
+		c, err := consumer.New(
 			"theQueue",
 			h,
 			connCh,
@@ -979,7 +979,7 @@ func TestConcurrency(main *testing.T) {
 			consumer.WithRetryPeriod(time.Millisecond),
 			consumer.WithInitFunc(initFuncStub(ch, newCh)),
 		)
-		go c.Run()
+		require.NoError(t, err)
 
 		assertReady(t, c)
 		time.Sleep(time.Millisecond * 300)
@@ -1030,7 +1030,7 @@ func TestConcurrency(main *testing.T) {
 		connCh := make(chan *consumer.Connection, 2)
 		connCh <- consumer.NewConnection(conn, nil)
 
-		c := consumer.New(
+		c, err := consumer.New(
 			"theQueue",
 			h,
 			connCh,
@@ -1038,7 +1038,7 @@ func TestConcurrency(main *testing.T) {
 			consumer.WithRetryPeriod(time.Millisecond),
 			consumer.WithInitFunc(initFuncStub(ch)),
 		)
-		go c.Run()
+		require.NoError(t, err)
 
 		wg := &sync.WaitGroup{}
 		for i := 0; i < 10; i++ {
@@ -1122,7 +1122,7 @@ func TestConcurrency(main *testing.T) {
 			}()
 		}
 
-		c := consumer.New(
+		c, err := consumer.New(
 			"theQueue",
 			h,
 			connCh,
@@ -1130,7 +1130,7 @@ func TestConcurrency(main *testing.T) {
 			consumer.WithRetryPeriod(time.Millisecond),
 			consumer.WithInitFunc(initFuncStub(ch, newCh)),
 		)
-		go c.Run()
+		require.NoError(t, err)
 
 		assertReady(t, c)
 		time.Sleep(time.Millisecond * 300)

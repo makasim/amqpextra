@@ -188,7 +188,7 @@ func (c *Dialer) Connection(ctx context.Context) (*amqp.Connection, error) {
 	}
 }
 
-func (c *Dialer) Consumer(queue string, handler consumer.Handler, opts ...consumer.Option) *consumer.Consumer {
+func (c *Dialer) Consumer(queue string, handler consumer.Handler, opts ...consumer.Option) (*consumer.Consumer, error) {
 	opts = append([]consumer.Option{
 		consumer.WithLogger(c.logger),
 		consumer.WithContext(c.ctx),
@@ -197,7 +197,7 @@ func (c *Dialer) Consumer(queue string, handler consumer.Handler, opts ...consum
 	return NewConsumer(queue, handler, c.ConnectionCh(), opts...)
 }
 
-func (c *Dialer) Publisher(opts ...publisher.Option) *publisher.Publisher {
+func (c *Dialer) Publisher(opts ...publisher.Option) (*publisher.Publisher, error) {
 	opts = append([]publisher.Option{
 		publisher.WithLogger(c.logger),
 		publisher.WithContext(c.ctx),

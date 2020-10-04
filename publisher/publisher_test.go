@@ -370,7 +370,8 @@ func TestUnreadyPublisher(main *testing.T) {
 
 		connCh := make(chan *publisher.Connection)
 
-		p := publisher.New(connCh, publisher.WithLogger(l))
+		p, err := publisher.New(connCh, publisher.WithLogger(l))
+		require.NoError(t, err)
 		defer p.Close()
 
 		assertUnready(t, p, amqp.ErrClosed.Error())
@@ -384,7 +385,8 @@ func TestUnreadyPublisher(main *testing.T) {
 
 		connCh := make(chan *publisher.Connection)
 
-		p := publisher.New(connCh, publisher.WithLogger(l))
+		p, err := publisher.New(connCh, publisher.WithLogger(l))
+		require.NoError(t, err)
 		defer p.Close()
 
 		assertUnready(t, p, amqp.ErrClosed.Error())
@@ -399,7 +401,8 @@ func TestUnreadyPublisher(main *testing.T) {
 
 		connCh := make(chan *publisher.Connection)
 
-		p := publisher.New(connCh, publisher.WithLogger(l))
+		p, err := publisher.New(connCh, publisher.WithLogger(l))
+		require.NoError(t, err)
 		defer p.Close()
 
 		resultCh := p.Go(publisher.Message{
@@ -410,7 +413,7 @@ func TestUnreadyPublisher(main *testing.T) {
 
 		assertUnready(t, p, amqp.ErrClosed.Error())
 
-		err := waitResult(resultCh, time.Millisecond*100)
+		err = waitResult(resultCh, time.Millisecond*100)
 		require.EqualError(t, err, "publisher not ready")
 
 		p.Close()
@@ -428,7 +431,8 @@ func TestUnreadyPublisher(main *testing.T) {
 
 		connCh := make(chan *publisher.Connection)
 
-		p := publisher.New(connCh, publisher.WithLogger(l))
+		p, err := publisher.New(connCh, publisher.WithLogger(l))
+		require.NoError(t, err)
 		defer p.Close()
 
 		resultCh := p.Go(publisher.Message{
@@ -439,7 +443,7 @@ func TestUnreadyPublisher(main *testing.T) {
 
 		assertUnready(t, p, amqp.ErrClosed.Error())
 
-		err := waitResult(resultCh, time.Millisecond*100)
+		err = waitResult(resultCh, time.Millisecond*100)
 		require.EqualError(t, err, "publisher not ready")
 
 		p.Close()
@@ -457,7 +461,8 @@ func TestUnreadyPublisher(main *testing.T) {
 
 		connCh := make(chan *publisher.Connection)
 
-		p := publisher.New(connCh, publisher.WithLogger(l))
+		p, err := publisher.New(connCh, publisher.WithLogger(l))
+		require.NoError(t, err)
 		defer p.Close()
 
 		assert.PanicsWithValue(t, "amqpextra: resultCh channel is unbuffered", func() {
@@ -855,7 +860,8 @@ func TestClosedPublisher(main *testing.T) {
 
 		connCh := make(chan *publisher.Connection)
 
-		p := publisher.New(connCh, publisher.WithLogger(l))
+		p, err := publisher.New(connCh, publisher.WithLogger(l))
+		require.NoError(t, err)
 
 		p.Close()
 		assertClosed(t, p)
@@ -865,7 +871,7 @@ func TestClosedPublisher(main *testing.T) {
 			Publishing: amqp.Publishing{},
 		})
 
-		err := waitResult(resultCh, time.Millisecond*1300)
+		err = waitResult(resultCh, time.Millisecond*1300)
 		require.EqualError(t, err, "publisher stopped")
 
 		expected := `[DEBUG] publisher starting
@@ -880,7 +886,8 @@ func TestClosedPublisher(main *testing.T) {
 
 		connCh := make(chan *publisher.Connection)
 
-		p := publisher.New(connCh, publisher.WithLogger(l))
+		p, err := publisher.New(connCh, publisher.WithLogger(l))
+		require.NoError(t, err)
 
 		p.Close()
 		assertClosed(t, p)
@@ -893,7 +900,7 @@ func TestClosedPublisher(main *testing.T) {
 
 		assertUnready(t, p, "permanently closed")
 
-		err := waitResult(resultCh, time.Millisecond*100)
+		err = waitResult(resultCh, time.Millisecond*100)
 		require.EqualError(t, err, `publisher stopped`)
 
 		expected := `[DEBUG] publisher starting
@@ -910,7 +917,8 @@ func TestClose(main *testing.T) {
 
 		connCh := make(chan *publisher.Connection)
 
-		p := publisher.New(connCh, publisher.WithLogger(l))
+		p, err := publisher.New(connCh, publisher.WithLogger(l))
+		require.NoError(t, err)
 		defer p.Close()
 
 		assertUnready(t, p, amqp.ErrClosed.Error())
@@ -929,7 +937,8 @@ func TestClose(main *testing.T) {
 		ctx, cancelFunc := context.WithCancel(context.Background())
 		defer cancelFunc()
 
-		p := publisher.New(connCh, publisher.WithContext(ctx), publisher.WithLogger(l))
+		p, err := publisher.New(connCh, publisher.WithContext(ctx), publisher.WithLogger(l))
+		require.NoError(t, err)
 		defer p.Close()
 
 		assertUnready(t, p, amqp.ErrClosed.Error())
@@ -1781,7 +1790,10 @@ func newPublisher(opts ...publisher.Option) (connCh chan *publisher.Connection, 
 	l = logger.NewTest()
 	opts = append(opts, publisher.WithLogger(l))
 
-	p = publisher.New(connCh, opts...)
+	p, err := publisher.New(connCh, opts...)
+	if err != nil {
+		panic(err)
+	}
 
 	return connCh, l, p
 }

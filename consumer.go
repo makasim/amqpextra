@@ -9,13 +9,17 @@ func NewConsumer(
 	handler consumer.Handler,
 	connCh <-chan *Connection,
 	opts ...consumer.Option,
-) *consumer.Consumer {
+) (*consumer.Consumer, error) {
 	consumerConnCh := make(chan *consumer.Connection)
 
-	c := consumer.New(queue, handler, consumerConnCh, opts...)
+	c, err := consumer.New(queue, handler, consumerConnCh, opts...)
+	if err != nil {
+		return nil, err
+	}
+
 	go proxyConsumerConn(connCh, consumerConnCh, c.NotifyClosed())
 
-	return c
+	return c, nil
 }
 
 //nolint:dupl // ignore linter err
