@@ -28,7 +28,7 @@ func ExampleDialer_Publisher() {
 
 	// close publisher
 	p.Close()
-	<-p.Closed()
+	<-p.NotifyClosed()
 
 	// close connection
 	dialer.Close()
@@ -53,7 +53,7 @@ func ExampleNewPublisher() {
 
 	// close publisher
 	p.Close()
-	<-p.Closed()
+	<-p.NotifyClosed()
 
 	// Output:
 }

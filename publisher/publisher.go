@@ -134,7 +134,7 @@ func (p *Publisher) Go(msg Message) <-chan error {
 
 	var unreadyCh <-chan error
 	if msg.ErrOnUnready {
-		unreadyCh = p.Unready()
+		unreadyCh = p.NotifyUnready()
 	}
 
 	select {
@@ -162,15 +162,15 @@ func (p *Publisher) Close() {
 	p.cancelFunc()
 }
 
-func (p *Publisher) Ready() <-chan struct{} {
+func (p *Publisher) NotifyReady() <-chan struct{} {
 	return p.readyCh
 }
 
-func (p *Publisher) Unready() <-chan error {
+func (p *Publisher) NotifyUnready() <-chan error {
 	return p.unreadyCh
 }
 
-func (p *Publisher) Closed() <-chan struct{} {
+func (p *Publisher) NotifyClosed() <-chan struct{} {
 	return p.closeCh
 }
 

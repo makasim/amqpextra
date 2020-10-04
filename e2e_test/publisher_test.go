@@ -70,7 +70,7 @@ waitOpened:
 	assert.GreaterOrEqual(t, count, 995)
 
 	conn.Close()
-	<-p.Closed()
+	<-p.NotifyClosed()
 }
 
 func assertPublisherReady(t *testing.T, p *publisher.Publisher) {
@@ -78,7 +78,7 @@ func assertPublisherReady(t *testing.T, p *publisher.Publisher) {
 	defer timer.Stop()
 
 	select {
-	case <-p.Ready():
+	case <-p.NotifyReady():
 	case <-timer.C:
 		t.Fatal("publisher must be ready")
 	}

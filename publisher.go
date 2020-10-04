@@ -11,7 +11,7 @@ func NewPublisher(
 	pubConnCh := make(chan publisher.ConnectionReady)
 
 	p := publisher.New(pubConnCh, opts...)
-	go proxyPublisherConn(connCh, pubConnCh, p.Closed())
+	go proxyPublisherConn(connCh, pubConnCh, p.NotifyClosed())
 
 	return p
 }
