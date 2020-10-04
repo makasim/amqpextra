@@ -23,8 +23,6 @@ func proxyPublisherConn(
 	publisherCloseCh <-chan struct{},
 ) {
 	go func() {
-		defer close(publisherConnCh)
-
 		for {
 			select {
 			case connReady, ok := <-connCh:
@@ -32,7 +30,7 @@ func proxyPublisherConn(
 					return
 				}
 
-				publisherConnReady := publisher.NewConnectionReady(connReady.AMQPConnection(), connReady.NotifyClose())
+				publisherConnReady := publisher.NewConnectionReady(connReady.AMQPConnection(), connReady.NotifyLost(), connReady.NotifyClose())
 
 				select {
 				case publisherConnCh <- publisherConnReady:

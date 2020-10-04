@@ -12,10 +12,10 @@ import (
 
 var errChannelClosed = fmt.Errorf("channel closed")
 
-type Connection interface {
+type AMQPConnection interface {
 }
 
-type Channel interface {
+type AMQPChannel interface {
 	Publish(exchange, key string, mandatory, immediate bool, msg amqp.Publishing) error
 	NotifyClose(receiver chan *amqp.Error) chan *amqp.Error
 	NotifyFlow(c chan bool) chan bool
@@ -41,7 +41,7 @@ type Publisher struct {
 	ctx         context.Context
 	cancelFunc  context.CancelFunc
 	retryPeriod time.Duration
-	initFunc    func(conn Connection) (Channel, error)
+	initFunc    func(conn AMQPConnection) (AMQPChannel, error)
 	logger      logger.Logger
 
 	publishingCh chan Message
@@ -82,7 +82,7 @@ func New(
 	}
 
 	if p.initFunc == nil {
-		p.initFunc = func(conn Connection) (Channel, error) {
+		p.initFunc = func(conn AMQPConnection) (AMQPChannel, error) {
 			return conn.(*amqp.Connection).Channel()
 		}
 	}
@@ -110,7 +110,7 @@ func WithRestartSleep(dur time.Duration) Option {
 	}
 }
 
-func WithInitFunc(f func(conn Connection) (Channel, error)) Option {
+func WithInitFunc(f func(conn AMQPConnection) (AMQPChannel, error)) Option {
 	return func(p *Publisher) {
 		p.initFunc = f
 	}
@@ -218,7 +218,7 @@ func (p *Publisher) connectionState() {
 	}
 }
 
-func (p *Publisher) channelState(conn Connection, connCloseCh <-chan struct{}) error {
+func (p *Publisher) channelState(conn AMQPConnection, connCloseCh <-chan struct{}) error {
 	for {
 		ch, err := p.initFunc(conn)
 		if err != nil {
@@ -236,7 +236,7 @@ func (p *Publisher) channelState(conn Connection, connCloseCh <-chan struct{}) e
 	}
 }
 
-func (p *Publisher) publishState(ch Channel, connCloseCh <-chan struct{}) error {
+func (p *Publisher) publishState(ch AMQPChannel, connCloseCh <-chan struct{}) error {
 	chCloseCh := ch.NotifyClose(make(chan *amqp.Error, 1))
 	chFlowCh := ch.NotifyFlow(make(chan bool, 1))
 
@@ -288,7 +288,7 @@ func (p *Publisher) pausedState(chFlowCh <-chan bool, connCloseCh <-chan struct{
 	}
 }
 
-func (p *Publisher) publish(ch Channel, msg Message) {
+func (p *Publisher) publish(ch AMQPChannel, msg Message) {
 	select {
 	case <-msg.Context.Done():
 		p.reply(msg.ResultCh, fmt.Errorf("message: %v", msg.Context.Err()))
@@ -336,7 +336,7 @@ func (p *Publisher) waitRetry(err error) error {
 	}
 }
 
-func (p *Publisher) close(ch Channel) {
+func (p *Publisher) close(ch AMQPChannel) {
 	if ch != nil {
 		if err := ch.Close(); err != nil && !strings.Contains(err.Error(), "channel/connection is not open") {
 			p.logger.Printf("[WARN] publisher: channel close: %s", err)
