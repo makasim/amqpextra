@@ -49,15 +49,11 @@ type Consumer struct {
 }
 
 func New(
-	queue string,
-	handler Handler,
 	connCh <-chan *Connection,
 	opts ...Option,
 ) (*Consumer, error) {
 	c := &Consumer{
-		queue:   queue,
-		handler: handler,
-		connCh:  connCh,
+		connCh: connCh,
 
 		closeCh:   make(chan struct{}),
 		readyCh:   make(chan struct{}),
@@ -77,6 +73,9 @@ func New(
 	if c.retryPeriod == 0 {
 		c.retryPeriod = time.Second * 5
 	}
+	if c.retryPeriod < 0 {
+		return nil, fmt.Errorf("retryPeriod less than zero")
+	}
 
 	if c.logger == nil {
 		c.logger = logger.Discard
@@ -92,9 +91,29 @@ func New(
 		c.worker = &DefaultWorker{Logger: c.logger}
 	}
 
+	if c.handler == nil {
+		return nil, fmt.Errorf("handler not set")
+	}
+
+	if c.queue == "" {
+		return nil, fmt.Errorf("queue not set")
+	}
+
 	go c.connectionState()
 
 	return c, nil
+}
+
+func WithQueue(q string) Option {
+	return func(c *Consumer) {
+		c.queue = q
+	}
+}
+
+func WithHandler(h Handler) Option {
+	return func(c *Consumer) {
+		c.handler = h
+	}
 }
 
 func WithLogger(l logger.Logger) Option {
