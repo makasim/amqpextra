@@ -1,8 +1,9 @@
 package e2e_test
 
 import (
+	"crypto/rand"
 	"fmt"
-	"math/rand"
+	"math/big"
 	"testing"
 
 	"time"
@@ -38,7 +39,9 @@ func TestDialerReconnectWhenClosedByClient(t *testing.T) {
 func TestDialerReconnectWhenClosedByServer(t *testing.T) {
 	defer goleak.VerifyNone(t)
 
-	connName := fmt.Sprintf("amqpextra-test-%d-%d", time.Now().UnixNano(), rand.Int63n(10000000))
+	rnum, err := rand.Int(rand.Reader, big.NewInt(10000000))
+	require.NoError(t, err)
+	connName := fmt.Sprintf("amqpextra-test-%d-%d", time.Now().UnixNano(), rnum)
 	dialer, err := amqpextra.NewDialer(
 		amqpextra.WithURL("amqp://guest:guest@rabbitmq:5672/amqpextra"),
 		amqpextra.WithConnectionProperties(amqp.Table{
