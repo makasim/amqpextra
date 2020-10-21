@@ -2,6 +2,7 @@ package amqpextra
 
 import (
 	"context"
+	"sync"
 	"time"
 
 	"fmt"
@@ -55,6 +56,11 @@ type Dialer struct {
 
 	connCh    chan *Connection
 	readyCh   chan struct{}
+
+	mu *sync.Mutex
+	notifyReady []chan struct{}
+	notifyUnready []chan struct{}
+
 	unreadyCh chan error
 	closedCh  chan struct{}
 }
@@ -86,6 +92,8 @@ func NewDialer(opts ...Option) (*Dialer, error) {
 			retryPeriod: time.Second * 5,
 			logger:      logger.Discard,
 		},
+
+		mu: new(sync.Mutex),
 
 		connCh:    make(chan *Connection),
 		readyCh:   make(chan struct{}),
@@ -153,15 +161,59 @@ func WithConnectionProperties(props amqp.Table) Option {
 	}
 }
 
+func WithReadyChan(readyCh chan struct{}) Option {
+	return func(c *Dialer) {
+		if readyCh == nil {
+			readyCh = make(chan struct{}, 1)
+		}
+		c.readyCh = readyCh
+	}
+}
+
+func WithUnreadyChan(unreadyCh chan error) Option {
+	f := func(c *Dialer) {
+		if unreadyCh == nil {
+			unreadyCh = make(chan error, 1)
+		}
+		c.unreadyCh = unreadyCh
+	}
+	return f
+}
+
 func (c *Dialer) ConnectionCh() <-chan *Connection {
 	return c.connCh
 }
 
-func (c *Dialer) NotifyReady() <-chan struct{} {
+func (c *Dialer) NotifyReady(receiver chan struct{}) <-chan struct{} {
+	if cap(receiver) == 0 {
+		panic("receiver chan must be buffered")
+	}
+
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	select {
+	case <- c.NotifyClosed():
+		close(receiver)
+	default:
+	}
+
 	return c.readyCh
 }
 
-func (c *Dialer) NotifyUnready() <-chan error {
+func (c *Dialer) NotifyUnready(receiver chan struct{}) <-chan error {
+	if cap(receiver) == 0 {
+		panic("unreadyCh must be buffered")
+	}
+
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	select {
+	case <- c.NotifyClosed():
+		close(receiver)
+	default:
+		c.notifyUnready = append(c.notifyUnready, receiver)
+	}
+
 	return c.unreadyCh
 }
 
