@@ -13,8 +13,10 @@ import (
 	"github.com/streadway/amqp"
 )
 
+
 const (
-	errChanIsUnbuffered = "receiver chan is unbuffered"
+	errMsgReadyChanUnbuffered   = "ready chan is unbuffered"
+	errMsgUnreadyChanUnbuffered = "unready chan is unbuffered"
 )
 
 type Option func(c *Dialer)
@@ -61,9 +63,9 @@ type Dialer struct {
 	connCh    chan *Connection
 	readyCh   chan struct{}
 
-	mu *sync.Mutex
-	notifyReady []chan struct{}
-	notifyUnready []chan error
+	mu         *sync.Mutex
+	readyChs   []chan struct{}
+	unreadyChs []chan error
 
 	unreadyCh chan error
 	closedCh  chan struct{}
@@ -107,6 +109,27 @@ func NewDialer(opts ...Option) (*Dialer, error) {
 
 	for _, opt := range opts {
 		opt(c)
+	}
+
+	// if the chan of receivers == nil the checking will be skipped
+	for _, unreadyReceiver := range c.unreadyChs {
+		if unreadyReceiver == nil {
+			unreadyReceiver = make(chan error, 1)
+		}
+
+		if cap(unreadyReceiver) == 0 {
+			return nil, fmt.Errorf(errMsgUnreadyChanUnbuffered)
+		}
+	}
+
+	for _, readyReceiver := range c.readyChs {
+		if readyReceiver == nil {
+			readyReceiver = make(chan struct{}, 1)
+		}
+
+		if cap(readyReceiver) == 0 {
+			return nil, fmt.Errorf(errMsgUnreadyChanUnbuffered)
+		}
 	}
 
 	if len(c.amqpUrls) == 0 {
@@ -166,32 +189,19 @@ func WithConnectionProperties(props amqp.Table) Option {
 }
 
 func WithReadyChan(receiver chan struct{}) Option {
-	return func(c *Dialer) {
-
-		if receiver == nil {
-			receiver = make(chan struct{}, 1)
-		} else {
-			if cap(receiver) == 0 {
-				panic(errChanIsUnbuffered)
-			}
-		}
-
-		c.notifyReady = append(c.notifyReady, receiver)
+	f := func(c *Dialer) {
+		c.mu.Lock()
+		defer c.mu.Unlock()
+		c.readyChs = append(c.readyChs, receiver)
 	}
+	return f
 }
 
-func WithUnreadyChan(receiver chan error) Option {
+func WithUnreadyChan(chUnready chan error) Option {
 	f := func(c *Dialer) {
-
-		if receiver == nil {
-			receiver = make(chan error, 1)
-		} else {
-			if cap(receiver) == 0 {
-				panic(errChanIsUnbuffered)
-			}
-		}
-
-		c.notifyUnready = append(c.notifyUnready, receiver)
+		c.mu.Lock()
+		defer c.mu.Unlock()
+		c.unreadyChs = append(c.unreadyChs, chUnready)
 	}
 	return f
 }
@@ -200,46 +210,37 @@ func (c *Dialer) ConnectionCh() <-chan *Connection {
 	return c.connCh
 }
 
-func (c *Dialer) NotifyReady(receiver chan struct{}) <-chan struct{} {
-	if cap(receiver) == 0 {
-		panic(errChanIsUnbuffered)
+func (c *Dialer) NotifyReady(chReady chan struct{}) <-chan struct{} {
+	if cap(chReady) == 0 {
+		panic(errMsgReadyChanUnbuffered)
 	}
 
 	select {
 	case <- c.NotifyClosed():
-		return receiver
+		return chReady
 	default:
 		c.mu.Lock()
-		if receiver == nil {
-			receiver = make(chan struct{}, 1)
-		}
-
-		c.notifyReady = append(c.notifyReady, receiver)
-		c.mu.Unlock()
-
-		return receiver
+		defer c.mu.Unlock()
+		c.readyChs = append(c.readyChs, chReady)
+		return chReady
 	}
 }
 
-func (c *Dialer) NotifyUnready(receiver chan error) <-chan error {
-	if cap(receiver) == 0 {
-		panic(errChanIsUnbuffered)
+func (c *Dialer) NotifyUnready(chUnready chan error) <-chan error {
+	if cap(chUnready) == 0 {
+		panic(errMsgUnreadyChanUnbuffered)
 	}
 
 	select {
 	case <- c.NotifyClosed():
-		close(receiver)
+		close(chUnready)
 	default:
 		c.mu.Lock()
-		if receiver == nil {
-			receiver = make(chan error, 1)
-		}
-
-		c.notifyUnready = append(c.notifyUnready, receiver)
-		c.mu.Unlock()
+		defer c.mu.Unlock()
+		c.unreadyChs = append(c.unreadyChs, chUnready)
 	}
 
-	return receiver
+	return chUnready
 }
 
 func (c *Dialer) NotifyClosed() <-chan struct{} {
@@ -321,9 +322,7 @@ func (c *Dialer) connectState() {
 		for {
 			select {
 			case c.unreadyCh <- connErr:
-				for _, receiver := range c.notifyUnready {
-					receiver <- connErr
-				}
+				c.notifyUnready(connErr)
 			case conn := <-connCh:
 				select {
 				case <-c.ctx.Done():
@@ -365,9 +364,7 @@ func (c *Dialer) connectedState(amqpConn AMQPConnection) error {
 	for {
 		select {
 		case c.readyCh <- struct{}{}:
-			for _, receiver := range c.notifyReady {
-				receiver <- struct{}{}
-			}
+			c.notifyReady()
 			continue
 		case c.connCh <- conn:
 			continue
@@ -383,6 +380,26 @@ func (c *Dialer) connectedState(amqpConn AMQPConnection) error {
 	}
 }
 
+func(c *Dialer) notifyUnready(err error) {
+	go func(){
+		c.mu.Lock()
+		defer c.mu.Unlock()
+		for _, unreadyReceiver := range c.unreadyChs {
+			unreadyReceiver <- err
+		}
+	}()
+}
+
+func(c *Dialer) notifyReady() {
+	go func(){
+		c.mu.Lock()
+		defer c.mu.Unlock()
+		for _, readyReceiver := range c.readyChs {
+			readyReceiver <- struct{}{}
+		}
+	}()
+}
+
 func (c *Dialer) waitRetry(err error) error {
 	timer := time.NewTimer(c.retryPeriod)
 	defer func() {
@@ -396,6 +413,7 @@ func (c *Dialer) waitRetry(err error) error {
 	for {
 		select {
 		case c.unreadyCh <- err:
+			c.notifyUnready(err)
 			continue
 		case <-timer.C:
 			return err
