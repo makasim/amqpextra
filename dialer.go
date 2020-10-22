@@ -2,6 +2,7 @@ package amqpextra
 
 import (
 	"context"
+	"errors"
 	"sync"
 	"time"
 
@@ -11,12 +12,6 @@ import (
 	"github.com/makasim/amqpextra/logger"
 	"github.com/makasim/amqpextra/publisher"
 	"github.com/streadway/amqp"
-)
-
-
-const (
-	errMsgReadyChanUnbuffered   = "ready chan is unbuffered"
-	errMsgUnreadyChanUnbuffered = "unready chan is unbuffered"
 )
 
 type Option func(c *Dialer)
@@ -60,15 +55,12 @@ type Dialer struct {
 	ctx        context.Context
 	cancelFunc context.CancelFunc
 
-	connCh    chan *Connection
-	readyCh   chan struct{}
+	connCh chan *Connection
 
 	mu         *sync.Mutex
 	readyChs   []chan struct{}
 	unreadyChs []chan error
-
-	unreadyCh chan error
-	closedCh  chan struct{}
+	closedCh   chan struct{}
 }
 
 func Dial(opts ...Option) (*amqp.Connection, error) {
@@ -101,34 +93,32 @@ func NewDialer(opts ...Option) (*Dialer, error) {
 
 		mu: new(sync.Mutex),
 
-		connCh:    make(chan *Connection),
-		readyCh:   make(chan struct{}),
-		unreadyCh: make(chan error),
-		closedCh:  make(chan struct{}),
+		connCh:   make(chan *Connection),
+		closedCh: make(chan struct{}),
 	}
 
 	for _, opt := range opts {
 		opt(c)
 	}
 
-	// if the chan of receivers == nil the checking will be skipped
-	for _, unreadyReceiver := range c.unreadyChs {
-		if unreadyReceiver == nil {
-			unreadyReceiver = make(chan error, 1)
+	// if the []chan of receivers == nil the checking will be skipped
+	for _, unreadyCh := range c.unreadyChs {
+		if unreadyCh == nil {
+			return nil, errors.New("unready chan must be not nil")
 		}
 
-		if cap(unreadyReceiver) == 0 {
-			return nil, fmt.Errorf(errMsgUnreadyChanUnbuffered)
+		if cap(unreadyCh) == 0 {
+			return nil, errors.New("unready chan is unbuffered")
 		}
 	}
 
-	for _, readyReceiver := range c.readyChs {
-		if readyReceiver == nil {
-			readyReceiver = make(chan struct{}, 1)
+	for _, readyCh := range c.readyChs {
+		if readyCh == nil {
+			return nil, errors.New("ready chan must be not nil")
 		}
 
-		if cap(readyReceiver) == 0 {
-			return nil, fmt.Errorf(errMsgUnreadyChanUnbuffered)
+		if cap(readyCh) == 0 {
+			return nil, errors.New("ready chan is unbuffered")
 		}
 	}
 
@@ -188,59 +178,53 @@ func WithConnectionProperties(props amqp.Table) Option {
 	}
 }
 
-func WithReadyChan(receiver chan struct{}) Option {
-	f := func(c *Dialer) {
-		c.mu.Lock()
-		defer c.mu.Unlock()
-		c.readyChs = append(c.readyChs, receiver)
+func WithReadyChan(readyCh chan struct{}) Option {
+	return func(c *Dialer) {
+		c.readyChs = append(c.readyChs, readyCh)
 	}
-	return f
 }
 
-func WithUnreadyChan(chUnready chan error) Option {
-	f := func(c *Dialer) {
-		c.mu.Lock()
-		defer c.mu.Unlock()
-		c.unreadyChs = append(c.unreadyChs, chUnready)
+func WithUnreadyChan(unreadyCh chan error) Option {
+	return func(c *Dialer) {
+		c.unreadyChs = append(c.unreadyChs, unreadyCh)
 	}
-	return f
 }
 
 func (c *Dialer) ConnectionCh() <-chan *Connection {
 	return c.connCh
 }
 
-func (c *Dialer) NotifyReady(chReady chan struct{}) <-chan struct{} {
-	if cap(chReady) == 0 {
-		panic(errMsgReadyChanUnbuffered)
+func (c *Dialer) NotifyReady(readyCh chan struct{}) <-chan struct{} {
+	if cap(readyCh) == 0 {
+		panic("ready chan is unbuffered")
 	}
 
 	select {
-	case <- c.NotifyClosed():
-		return chReady
+	case <-c.NotifyClosed():
+		return readyCh
 	default:
 		c.mu.Lock()
 		defer c.mu.Unlock()
-		c.readyChs = append(c.readyChs, chReady)
-		return chReady
+		c.readyChs = append(c.readyChs, readyCh)
+		return readyCh
 	}
 }
 
-func (c *Dialer) NotifyUnready(chUnready chan error) <-chan error {
-	if cap(chUnready) == 0 {
-		panic(errMsgUnreadyChanUnbuffered)
+func (c *Dialer) NotifyUnready(unreadyCh chan error) <-chan error {
+	if cap(unreadyCh) == 0 {
+		panic("unready chan is unbuffered")
 	}
 
 	select {
-	case <- c.NotifyClosed():
-		close(chUnready)
+	case <-c.NotifyClosed():
+		close(unreadyCh)
 	default:
 		c.mu.Lock()
 		defer c.mu.Unlock()
-		c.unreadyChs = append(c.unreadyChs, chUnready)
+		c.unreadyChs = append(c.unreadyChs, unreadyCh)
 	}
 
-	return chUnready
+	return unreadyCh
 }
 
 func (c *Dialer) NotifyClosed() <-chan struct{} {
@@ -287,7 +271,6 @@ func (c *Dialer) Publisher(opts ...publisher.Option) (*publisher.Publisher, erro
 func (c *Dialer) connectState() {
 	defer close(c.connCh)
 	defer close(c.closedCh)
-	defer close(c.unreadyCh)
 	defer c.cancelFunc()
 	defer c.logger.Printf("[DEBUG] connection closed")
 
@@ -296,6 +279,8 @@ func (c *Dialer) connectState() {
 
 	c.logger.Printf("[DEBUG] connection unready")
 	var connErr error = amqp.ErrClosed
+
+	c.notifyUnready(connErr)
 	for {
 		select {
 		case <-c.ctx.Done():
@@ -321,8 +306,6 @@ func (c *Dialer) connectState() {
 	loop2:
 		for {
 			select {
-			case c.unreadyCh <- connErr:
-				c.notifyUnready(connErr)
 			case conn := <-connCh:
 				select {
 				case <-c.ctx.Done():
@@ -361,11 +344,9 @@ func (c *Dialer) connectedState(amqpConn AMQPConnection) error {
 	conn := &Connection{amqpConn: amqpConn, lostCh: lostCh, closeCh: c.closedCh}
 
 	c.logger.Printf("[DEBUG] connection ready")
+	c.notifyReady()
 	for {
 		select {
-		case c.readyCh <- struct{}{}:
-			c.notifyReady()
-			continue
 		case c.connCh <- conn:
 			continue
 		case err, ok := <-internalCloseCh:
@@ -380,24 +361,26 @@ func (c *Dialer) connectedState(amqpConn AMQPConnection) error {
 	}
 }
 
-func(c *Dialer) notifyUnready(err error) {
-	go func(){
-		c.mu.Lock()
-		defer c.mu.Unlock()
-		for _, unreadyReceiver := range c.unreadyChs {
-			unreadyReceiver <- err
+func (c *Dialer) notifyUnready(err error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	for _, ch := range c.unreadyChs {
+		select {
+		case ch <- err:
+		default:
 		}
-	}()
+	}
 }
 
-func(c *Dialer) notifyReady() {
-	go func(){
-		c.mu.Lock()
-		defer c.mu.Unlock()
-		for _, readyReceiver := range c.readyChs {
-			readyReceiver <- struct{}{}
+func (c *Dialer) notifyReady() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	for _, ch := range c.readyChs {
+		select {
+		case ch <- struct{}{}:
+		default:
 		}
-	}()
+	}
 }
 
 func (c *Dialer) waitRetry(err error) error {
@@ -410,11 +393,10 @@ func (c *Dialer) waitRetry(err error) error {
 		}
 	}()
 
+	c.notifyUnready(err)
+
 	for {
 		select {
-		case c.unreadyCh <- err:
-			c.notifyUnready(err)
-			continue
 		case <-timer.C:
 			return err
 		case <-c.ctx.Done():
