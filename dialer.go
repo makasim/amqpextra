@@ -13,6 +13,10 @@ import (
 	"github.com/streadway/amqp"
 )
 
+const (
+	errChanIsUnbuffered = "receiver chan is unbuffered"
+)
+
 type Option func(c *Dialer)
 
 type AMQPConnection interface {
@@ -59,7 +63,7 @@ type Dialer struct {
 
 	mu *sync.Mutex
 	notifyReady []chan struct{}
-	notifyUnready []chan struct{}
+	notifyUnready []chan error
 
 	unreadyCh chan error
 	closedCh  chan struct{}
@@ -161,21 +165,33 @@ func WithConnectionProperties(props amqp.Table) Option {
 	}
 }
 
-func WithReadyChan(readyCh chan struct{}) Option {
+func WithReadyChan(receiver chan struct{}) Option {
 	return func(c *Dialer) {
-		if readyCh == nil {
-			readyCh = make(chan struct{}, 1)
+
+		if receiver == nil {
+			receiver = make(chan struct{}, 1)
+		} else {
+			if cap(receiver) == 0 {
+				panic(errChanIsUnbuffered)
+			}
 		}
-		c.readyCh = readyCh
+
+		c.notifyReady = append(c.notifyReady, receiver)
 	}
 }
 
-func WithUnreadyChan(unreadyCh chan error) Option {
+func WithUnreadyChan(receiver chan error) Option {
 	f := func(c *Dialer) {
-		if unreadyCh == nil {
-			unreadyCh = make(chan error, 1)
+
+		if receiver == nil {
+			receiver = make(chan error, 1)
+		} else {
+			if cap(receiver) == 0 {
+				panic(errChanIsUnbuffered)
+			}
 		}
-		c.unreadyCh = unreadyCh
+
+		c.notifyUnready = append(c.notifyUnready, receiver)
 	}
 	return f
 }
@@ -186,35 +202,44 @@ func (c *Dialer) ConnectionCh() <-chan *Connection {
 
 func (c *Dialer) NotifyReady(receiver chan struct{}) <-chan struct{} {
 	if cap(receiver) == 0 {
-		panic("receiver chan must be buffered")
+		panic(errChanIsUnbuffered)
 	}
 
-	c.mu.Lock()
-	defer c.mu.Unlock()
 	select {
 	case <- c.NotifyClosed():
-		close(receiver)
+		return receiver
 	default:
-	}
+		c.mu.Lock()
+		if receiver == nil {
+			receiver = make(chan struct{}, 1)
+		}
 
-	return c.readyCh
+		c.notifyReady = append(c.notifyReady, receiver)
+		c.mu.Unlock()
+
+		return receiver
+	}
 }
 
-func (c *Dialer) NotifyUnready(receiver chan struct{}) <-chan error {
+func (c *Dialer) NotifyUnready(receiver chan error) <-chan error {
 	if cap(receiver) == 0 {
-		panic("unreadyCh must be buffered")
+		panic(errChanIsUnbuffered)
 	}
 
-	c.mu.Lock()
-	defer c.mu.Unlock()
 	select {
 	case <- c.NotifyClosed():
 		close(receiver)
 	default:
+		c.mu.Lock()
+		if receiver == nil {
+			receiver = make(chan error, 1)
+		}
+
 		c.notifyUnready = append(c.notifyUnready, receiver)
+		c.mu.Unlock()
 	}
 
-	return c.unreadyCh
+	return receiver
 }
 
 func (c *Dialer) NotifyClosed() <-chan struct{} {
@@ -296,7 +321,9 @@ func (c *Dialer) connectState() {
 		for {
 			select {
 			case c.unreadyCh <- connErr:
-				continue
+				for _, receiver := range c.notifyUnready {
+					receiver <- connErr
+				}
 			case conn := <-connCh:
 				select {
 				case <-c.ctx.Done():
@@ -338,6 +365,9 @@ func (c *Dialer) connectedState(amqpConn AMQPConnection) error {
 	for {
 		select {
 		case c.readyCh <- struct{}{}:
+			for _, receiver := range c.notifyReady {
+				receiver <- struct{}{}
+			}
 			continue
 		case c.connCh <- conn:
 			continue
