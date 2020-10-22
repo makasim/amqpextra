@@ -101,7 +101,6 @@ func NewDialer(opts ...Option) (*Dialer, error) {
 		opt(c)
 	}
 
-	// if the []chan of receivers == nil the checking will be skipped
 	for _, unreadyCh := range c.unreadyChs {
 		if unreadyCh == nil {
 			return nil, errors.New("unready chan must be not nil")
@@ -178,13 +177,13 @@ func WithConnectionProperties(props amqp.Table) Option {
 	}
 }
 
-func WithReadyChan(readyCh chan struct{}) Option {
+func WithReadyCh(readyCh chan struct{}) Option {
 	return func(c *Dialer) {
 		c.readyChs = append(c.readyChs, readyCh)
 	}
 }
 
-func WithUnreadyChan(unreadyCh chan error) Option {
+func WithUnreadyCh(unreadyCh chan error) Option {
 	return func(c *Dialer) {
 		c.unreadyChs = append(c.unreadyChs, unreadyCh)
 	}
