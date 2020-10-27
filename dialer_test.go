@@ -280,14 +280,19 @@ func TestConnectState(main *testing.T) {
 		dialer, err := amqpextra.NewDialer(
 			amqpextra.WithURL("amqp://rabbitmq.host"),
 			amqpextra.WithUnreadyCh(unreadyCh),
-			amqpextra.WithRetryPeriod(time.Second*150),
+			amqpextra.WithRetryPeriod(time.Millisecond*150),
 			amqpextra.WithAMQPDial(amqpDialStub(fmt.Errorf("the error"))),
 			amqpextra.WithLogger(l),
 		)
 		require.NoError(t, err)
 
-		time.Sleep(time.Millisecond * 100)
-		assertUnready(t, unreadyCh, "the error")
+		time.Sleep(time.Millisecond*100)
+
+		assertUnready2(t, unreadyCh, amqp.ErrClosed.Error())
+
+		time.Sleep(time.Millisecond*100)
+
+		assertUnready2(t, unreadyCh, "the error")
 
 		dialer.Close()
 		assertClosed(t, dialer)
@@ -670,6 +675,25 @@ func TestConnectedState(main *testing.T) {
 	})
 }
 
+func assertUnready2(t *testing.T, unreadyCh chan error, errString string) {
+	log.Println("start assert2")
+	timer := time.NewTimer(time.Millisecond * 100)
+	defer timer.Stop()
+	select {
+	case err, ok := <-unreadyCh:
+		if !ok {
+			require.Equal(t, "permanently closed", errString)
+			return
+		}
+		log.Println("<-unreadyCh assert2")
+
+		require.EqualError(t, err, errString)
+	case <-timer.C:
+		log.Println("<-timer.C assert2")
+		t.Fatal("dialer must be unready")
+	}
+}
+
 func assertUnready(t *testing.T, unreadyCh chan error, errString string) {
 	timer := time.NewTimer(time.Millisecond * 100)
 	defer timer.Stop()
@@ -773,6 +797,7 @@ func any() gomock.Matcher {
 func amqpDialStub(conns ...interface{}) func(url string, config amqp.Config) (amqpextra.AMQPConnection, error) {
 	index := 0
 	return func(url string, config amqp.Config) (amqpextra.AMQPConnection, error) {
+		log.Printf("dial stub called %d time\n", index+1)
 		if index == len(conns) {
 			panic(fmt.Sprintf("dial stub called more times(%d) than len(conns) - %d", index+1, len(conns)))
 		}
