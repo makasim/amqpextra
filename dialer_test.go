@@ -154,6 +154,7 @@ func TestConnectState(main *testing.T) {
 		closeCh := make(chan *amqp.Error)
 
 		unreadyCh := make(chan error, 1)
+		readyCh := make(chan struct{}, 1)
 
 		conn := mock_amqpextra.NewMockAMQPConnection(ctrl)
 		conn.EXPECT().Close().Return(nil)
@@ -170,7 +171,7 @@ func TestConnectState(main *testing.T) {
 		time.Sleep(time.Millisecond * 100)
 		assertUnready(t, unreadyCh, amqp.ErrClosed.Error())
 
-		assertReady(t, dialer)
+		assertReady(t, readyCh)
 
 		dialer.Close()
 
@@ -192,6 +193,7 @@ func TestConnectState(main *testing.T) {
 
 		closeCh := make(chan *amqp.Error)
 		unreadyCh := make(chan error, 1)
+		readyCh := make(chan struct{}, 1)
 
 		conn := mock_amqpextra.NewMockAMQPConnection(ctrl)
 		conn.EXPECT().Close().Return(nil)
@@ -200,20 +202,20 @@ func TestConnectState(main *testing.T) {
 		ctx, cancelFunc := context.WithCancel(context.Background())
 		defer cancelFunc()
 
-		// TODO на финалочку разоьраться как это работает
 		dialer, err := amqpextra.NewDialer(
 			amqpextra.WithURL("amqp://rabbitmq.host"),
 			amqpextra.WithAMQPDial(amqpDialStub(conn)),
 			amqpextra.WithLogger(l),
 			amqpextra.WithContext(ctx),
 			amqpextra.WithUnreadyCh(unreadyCh),
+			amqpextra.WithReadyCh(readyCh),
 		)
 		require.NoError(t, err)
 
 		time.Sleep(time.Millisecond * 100)
 		assertUnready(t, unreadyCh, amqp.ErrClosed.Error())
 
-		assertReady(t, dialer)
+		assertReady2(t, dialer, readyCh)
 
 		cancelFunc()
 		assertClosed(t, dialer)
@@ -235,7 +237,7 @@ func TestConnectState(main *testing.T) {
 
 		closeCh := make(chan *amqp.Error)
 		unreadyCh := make(chan error, 1)
-
+		readyCh := make(chan struct{}, 1)
 		amqpConn := mock_amqpextra.NewMockAMQPConnection(ctrl)
 		amqpConn.EXPECT().Close().Return(nil)
 		amqpConn.EXPECT().NotifyClose(any()).Return(closeCh)
@@ -251,7 +253,7 @@ func TestConnectState(main *testing.T) {
 		assertNoConn(t, dialer.ConnectionCh())
 		assertUnready(t, unreadyCh, amqp.ErrClosed.Error())
 
-		assertReady(t, dialer)
+		assertReady(t, readyCh)
 
 		dialer.Close()
 		assertClosed(t, dialer)
@@ -367,7 +369,7 @@ func TestConnectState(main *testing.T) {
 
 		closeCh := make(chan *amqp.Error)
 		unreadyCh := make(chan error, 1)
-
+		readyCh := make(chan struct{}, 1)
 		amqpConn := mock_amqpextra.NewMockAMQPConnection(ctrl)
 		amqpConn.EXPECT().Close().Return(nil)
 		amqpConn.EXPECT().NotifyClose(any()).Return(closeCh)
@@ -383,7 +385,7 @@ func TestConnectState(main *testing.T) {
 		assertNoConn(t, dialer.ConnectionCh())
 		assertUnready(t, unreadyCh, "the error")
 		time.Sleep(time.Millisecond * 50)
-		assertReady(t, dialer)
+		assertReady(t, readyCh)
 
 		conn := <-dialer.ConnectionCh()
 		assertConnNotClosed(t, conn)
@@ -458,7 +460,7 @@ func TestConnectedState(main *testing.T) {
 		l := logger.NewTest()
 
 		closeCh := make(chan *amqp.Error)
-
+		readyCh := make(chan struct{}, 1)
 		amqpConn := mock_amqpextra.NewMockAMQPConnection(ctrl)
 		amqpConn.EXPECT().Close().Return(nil)
 		amqpConn.EXPECT().NotifyClose(any()).Return(closeCh)
@@ -470,7 +472,7 @@ func TestConnectedState(main *testing.T) {
 		)
 		require.NoError(t, err)
 
-		assertReady(t, dialer)
+		assertReady(t, readyCh)
 
 		conn := <-dialer.ConnectionCh()
 		assertConnNotClosed(t, conn)
@@ -493,7 +495,7 @@ func TestConnectedState(main *testing.T) {
 		defer ctrl.Finish()
 
 		l := logger.NewTest()
-
+		readyCh := make(chan struct{}, 1)
 		closeCh0 := make(chan *amqp.Error, 1)
 		amqpConn0 := mock_amqpextra.NewMockAMQPConnection(ctrl)
 		amqpConn0.EXPECT().NotifyClose(any()).Return(closeCh0)
@@ -511,7 +513,7 @@ func TestConnectedState(main *testing.T) {
 		)
 		require.NoError(t, err)
 
-		assertReady(t, dialer)
+		assertReady(t, readyCh)
 
 		conn0 := <-dialer.ConnectionCh()
 		assertConnNotClosed(t, conn0)
@@ -522,7 +524,7 @@ func TestConnectedState(main *testing.T) {
 		assertConnLost(t, conn0)
 		assertConnNotClosed(t, conn0)
 
-		assertReady(t, dialer)
+		assertReady(t, readyCh)
 
 		conn1 := <-dialer.ConnectionCh()
 		assertConnNotClosed(t, conn1)
@@ -548,13 +550,14 @@ func TestConnectedState(main *testing.T) {
 		defer ctrl.Finish()
 
 		l := logger.NewTest()
-
+		readyCh := make(chan struct{}, 1)
 		closeCh0 := make(chan *amqp.Error, 1)
 		amqpConn0 := mock_amqpextra.NewMockAMQPConnection(ctrl)
 		amqpConn0.EXPECT().NotifyClose(any()).Return(closeCh0)
 		amqpConn0.EXPECT().Close().Return(nil)
 
 		closeCh1 := make(chan *amqp.Error, 1)
+
 		amqpConn1 := mock_amqpextra.NewMockAMQPConnection(ctrl)
 		amqpConn1.EXPECT().NotifyClose(any()).Return(closeCh1)
 		amqpConn1.EXPECT().Close().Return(nil)
@@ -566,7 +569,7 @@ func TestConnectedState(main *testing.T) {
 		)
 		require.NoError(t, err)
 
-		assertReady(t, dialer)
+		assertReady(t, readyCh)
 
 		conn0 := <-dialer.ConnectionCh()
 		assertConnNotClosed(t, conn0)
@@ -577,7 +580,7 @@ func TestConnectedState(main *testing.T) {
 		assertConnLost(t, conn0)
 		assertConnNotClosed(t, conn0)
 
-		assertReady(t, dialer)
+		assertReady(t, readyCh)
 
 		conn1 := <-dialer.ConnectionCh()
 		assertConnNotClosed(t, conn1)
@@ -605,6 +608,7 @@ func TestConnectedState(main *testing.T) {
 
 		l := logger.NewTest()
 
+		readyCh := make(chan struct{}, 1)
 		closeCh0 := make(chan *amqp.Error, 1)
 		amqpConn := mock_amqpextra.NewMockAMQPConnection(ctrl)
 		amqpConn.EXPECT().NotifyClose(any()).Return(closeCh0)
@@ -617,7 +621,7 @@ func TestConnectedState(main *testing.T) {
 		)
 		require.NoError(t, err)
 
-		assertReady(t, dialer)
+		assertReady(t, readyCh)
 
 		dialer.Close()
 		assertClosed(t, dialer)
@@ -637,6 +641,8 @@ func TestConnectedState(main *testing.T) {
 		l := logger.NewTest()
 
 		closeCh0 := make(chan *amqp.Error, 1)
+
+		readyCh := make(chan struct{}, 1)
 		amqpConn := mock_amqpextra.NewMockAMQPConnection(ctrl)
 		amqpConn.EXPECT().NotifyClose(any()).Return(closeCh0)
 		amqpConn.EXPECT().Close().Return(fmt.Errorf("connection closed errored"))
@@ -648,7 +654,7 @@ func TestConnectedState(main *testing.T) {
 		)
 		require.NoError(t, err)
 
-		assertReady(t, dialer)
+		assertReady(t, readyCh)
 
 		dialer.Close()
 		assertClosed(t, dialer)
@@ -677,12 +683,24 @@ func assertUnready(t *testing.T, unreadyCh chan error, errString string) {
 	}
 }
 
-func assertReady(t *testing.T, c *amqpextra.Dialer) {
+func assertReady2(t *testing.T, c *amqpextra.Dialer, readyCh chan struct{}) {
 	timer := time.NewTimer(time.Millisecond * 100)
 	defer timer.Stop()
-	readyCh := make(chan struct{}, 1)
 	select {
-	case _, ok := <-c.NotifyReady(readyCh):
+	case _, ok := <-readyCh:
+		if !ok {
+			t.Fatal("dialer notify ready closed")
+		}
+	case <-timer.C:
+		t.Fatal("dialer must be ready")
+	}
+}
+
+func assertReady(t *testing.T, readyCh chan struct{}) {
+	timer := time.NewTimer(time.Millisecond * 100)
+	defer timer.Stop()
+	select {
+	case _, ok := <-readyCh:
 		if !ok {
 			t.Fatal("dialer notify ready closed")
 		}
@@ -765,7 +783,7 @@ func amqpDialStub(conns ...interface{}) func(url string, config amqp.Config) (am
 	index := 0
 	return func(url string, config amqp.Config) (amqpextra.AMQPConnection, error) {
 		if index == len(conns) {
-			panic(fmt.Sprintf("dial stub called more times(%d) than len(conns) - %d", index + 1, len(conns)))
+			panic(fmt.Sprintf("dial stub called more times(%d) than len(conns) - %d", index+1, len(conns)))
 		}
 		if dur, ok := conns[index].(time.Duration); ok {
 			time.Sleep(dur)
