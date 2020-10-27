@@ -134,6 +134,7 @@ func TestConnectState(main *testing.T) {
 		assertUnready(t, unreadyCh, amqp.ErrClosed.Error())
 
 		dialer.Close()
+
 		assertClosed(t, dialer)
 
 		assert.Equal(t, `[DEBUG] connection unready
@@ -165,6 +166,7 @@ func TestConnectState(main *testing.T) {
 			amqpextra.WithAMQPDial(amqpDialStub(time.Millisecond*150, conn)),
 			amqpextra.WithLogger(l),
 			amqpextra.WithUnreadyCh(unreadyCh),
+			amqpextra.WithReadyCh(readyCh),
 		)
 		require.NoError(t, err)
 
@@ -215,7 +217,7 @@ func TestConnectState(main *testing.T) {
 		time.Sleep(time.Millisecond * 100)
 		assertUnready(t, unreadyCh, amqp.ErrClosed.Error())
 
-		assertReady2(t, dialer, readyCh)
+		assertReady(t, readyCh)
 
 		cancelFunc()
 		assertClosed(t, dialer)
@@ -247,6 +249,7 @@ func TestConnectState(main *testing.T) {
 			amqpextra.WithAMQPDial(amqpDialStub(time.Millisecond*150, amqpConn)),
 			amqpextra.WithLogger(l),
 			amqpextra.WithUnreadyCh(unreadyCh),
+			amqpextra.WithReadyCh(readyCh),
 		)
 		require.NoError(t, err)
 
@@ -277,7 +280,7 @@ func TestConnectState(main *testing.T) {
 		dialer, err := amqpextra.NewDialer(
 			amqpextra.WithURL("amqp://rabbitmq.host"),
 			amqpextra.WithUnreadyCh(unreadyCh),
-			amqpextra.WithRetryPeriod(time.Millisecond*150),
+			amqpextra.WithRetryPeriod(time.Second*150),
 			amqpextra.WithAMQPDial(amqpDialStub(fmt.Errorf("the error"))),
 			amqpextra.WithLogger(l),
 		)
@@ -683,18 +686,6 @@ func assertUnready(t *testing.T, unreadyCh chan error, errString string) {
 	}
 }
 
-func assertReady2(t *testing.T, c *amqpextra.Dialer, readyCh chan struct{}) {
-	timer := time.NewTimer(time.Millisecond * 100)
-	defer timer.Stop()
-	select {
-	case _, ok := <-readyCh:
-		if !ok {
-			t.Fatal("dialer notify ready closed")
-		}
-	case <-timer.C:
-		t.Fatal("dialer must be ready")
-	}
-}
 
 func assertReady(t *testing.T, readyCh chan struct{}) {
 	timer := time.NewTimer(time.Millisecond * 100)
