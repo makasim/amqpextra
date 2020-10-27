@@ -231,9 +231,6 @@ func (c *Dialer) NotifyClosed() <-chan struct{} {
 }
 
 func (c *Dialer) Close() {
-	for _, unreadyCh := range c.unreadyChs {
-		close(unreadyCh)
-	}
 	c.cancelFunc()
 }
 
