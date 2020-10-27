@@ -231,6 +231,9 @@ func (c *Dialer) NotifyClosed() <-chan struct{} {
 }
 
 func (c *Dialer) Close() {
+	for _, unreadyCh := range c.unreadyChs {
+		close(unreadyCh)
+	}
 	c.cancelFunc()
 }
 
@@ -287,8 +290,9 @@ func (c *Dialer) connectState() {
 		default:
 		}
 
-		i = (i + 1) % l
+		// todo: add test that covered the first url of iteration is a first elem into urls slice
 		url := c.amqpUrls[i]
+		i = (i + 1) % l
 
 		connCh := make(chan AMQPConnection)
 		errorCh := make(chan error)
@@ -322,7 +326,6 @@ func (c *Dialer) connectState() {
 			case err := <-errorCh:
 				c.logger.Printf("[DEBUG] connection unready: %v", err)
 				if retryErr := c.waitRetry(err); retryErr != nil {
-					connErr = retryErr
 					break loop2
 				}
 
