@@ -711,7 +711,7 @@ func TestConnectedState(main *testing.T) {
 		dialer, err := amqpextra.NewDialer(
 			amqpextra.WithUnreadyCh(unreadyCh),
 			amqpextra.WithURL(urlsPool[0], urlsPool...),
-			amqpextra.WithAMQPDial(amqpDialStub(urlsPool[0])),
+			amqpextra.WithAMQPDial(amqpDialStub("please, check url")),
 		)
 
 		require.NoError(t, err)
