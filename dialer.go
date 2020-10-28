@@ -3,7 +3,6 @@ package amqpextra
 import (
 	"context"
 	"errors"
-	"log"
 	"sync"
 	"time"
 
@@ -386,9 +385,7 @@ func (c *Dialer) notifyReady() {
 
 func (c *Dialer) waitRetry(err error) error {
 	timer := time.NewTimer(c.retryPeriod)
-	log.Println("RETRY")
 	defer func() {
-		log.Println("EXIT RETRY")
 		timer.Stop()
 		select {
 		case <-timer.C:
