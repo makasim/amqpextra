@@ -700,29 +700,25 @@ func TestConnectedState(main *testing.T) {
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
 
-		unreadyCh := make(chan error, 2)
-
 		urlsPool := []string{
 			"the.first.url",
 			"the.second.url",
 			"the.last.url",
 		}
+		wantedIndex := 0
+		dialSub := func(url string, config amqp.Config) (amqpextra.AMQPConnection, error) {
+			assert.Equal(t, url, urlsPool[wantedIndex])
+			wantedIndex++
+
+			return nil, errors.New("the error")
+		}
 
 		dialer, err := amqpextra.NewDialer(
-			amqpextra.WithUnreadyCh(unreadyCh),
 			amqpextra.WithURL(urlsPool[0], urlsPool...),
-			amqpextra.WithAMQPDial(amqpDialStub("please, check url")),
+			amqpextra.WithAMQPDial(dialSub),
 		)
 
 		require.NoError(t, err)
-
-		time.Sleep(time.Millisecond*100)
-
-		assertUnready(t, unreadyCh, amqp.ErrClosed.Error())
-
-		time.Sleep(time.Millisecond*100)
-
-		assertUnready(t, unreadyCh, urlsPool[0])
 
 		dialer.Close()
 	})
@@ -846,8 +842,6 @@ func amqpDialStub(conns ...interface{}) func(url string, config amqp.Config) (am
 		case error:
 			index++
 			return nil, curr
-		case string:
-			return nil, errors.New(url)
 		default:
 			panic(fmt.Sprintf("unexpected type given: %T", conns[index]))
 		}
