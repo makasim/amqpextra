@@ -490,6 +490,7 @@ func TestConnectedState(main *testing.T) {
 
 		dialer, err := amqpextra.NewDialer(
 			amqpextra.WithURL("amqp://rabbitmq.host"),
+			amqpextra.WithReadyCh(readyCh),
 			amqpextra.WithAMQPDial(amqpDialStub(amqpConn)),
 			amqpextra.WithLogger(l),
 		)
@@ -530,6 +531,7 @@ func TestConnectedState(main *testing.T) {
 		amqpConn1.EXPECT().Close().Return(nil)
 
 		dialer, err := amqpextra.NewDialer(
+			amqpextra.WithReadyCh(readyCh),
 			amqpextra.WithURL("amqp://rabbitmq.host"),
 			amqpextra.WithAMQPDial(amqpDialStub(amqpConn0, amqpConn1)),
 			amqpextra.WithLogger(l),
@@ -586,6 +588,7 @@ func TestConnectedState(main *testing.T) {
 		amqpConn1.EXPECT().Close().Return(nil)
 
 		dialer, err := amqpextra.NewDialer(
+			amqpextra.WithReadyCh(readyCh),
 			amqpextra.WithURL("amqp://rabbitmq.host"),
 			amqpextra.WithAMQPDial(amqpDialStub(amqpConn0, amqpConn1)),
 			amqpextra.WithLogger(l),
@@ -638,6 +641,7 @@ func TestConnectedState(main *testing.T) {
 		amqpConn.EXPECT().Close().Return(amqp.ErrClosed)
 
 		dialer, err := amqpextra.NewDialer(
+			amqpextra.WithReadyCh(readyCh),
 			amqpextra.WithURL("amqp://rabbitmq.host"),
 			amqpextra.WithAMQPDial(amqpDialStub(amqpConn)),
 			amqpextra.WithLogger(l),
@@ -671,6 +675,7 @@ func TestConnectedState(main *testing.T) {
 		amqpConn.EXPECT().Close().Return(fmt.Errorf("connection closed errored"))
 
 		dialer, err := amqpextra.NewDialer(
+			amqpextra.WithReadyCh(readyCh),
 			amqpextra.WithURL("amqp://rabbitmq.host"),
 			amqpextra.WithAMQPDial(amqpDialStub(amqpConn)),
 			amqpextra.WithLogger(l),
