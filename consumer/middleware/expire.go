@@ -7,8 +7,8 @@ import (
 
 	"time"
 
-	"github.com/streadway/amqp"
 	"github.com/makasim/amqpextra/consumer"
+	"github.com/streadway/amqp"
 )
 
 func ExpireToTimeout(defaultTimeout time.Duration) func(next consumer.Handler) consumer.Handler {

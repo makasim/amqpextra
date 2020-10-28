@@ -3,9 +3,9 @@ package middleware
 import (
 	"context"
 
-	"github.com/streadway/amqp"
-	"github.com/makasim/amqpextra/logger"
 	"github.com/makasim/amqpextra/consumer"
+	"github.com/makasim/amqpextra/logger"
+	"github.com/streadway/amqp"
 )
 
 var loggerKey = &contextKey{"logger"}

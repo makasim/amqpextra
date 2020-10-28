@@ -3,8 +3,8 @@ package middleware
 import (
 	"context"
 
-	"github.com/streadway/amqp"
 	"github.com/makasim/amqpextra/consumer"
+	"github.com/streadway/amqp"
 )
 
 func HasCorrelationID() consumer.Middleware {
