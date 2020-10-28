@@ -288,7 +288,6 @@ func (c *Dialer) connectState() {
 		default:
 		}
 
-		// todo: add test that covered the first url of iteration is a first elem into urls slice
 		url := c.amqpUrls[i]
 		i = (i + 1) % l
 

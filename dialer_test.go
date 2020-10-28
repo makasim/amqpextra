@@ -1,6 +1,7 @@
 package amqpextra_test
 
 import (
+	"errors"
 	"log"
 
 	"time"
@@ -109,26 +110,6 @@ func TestOptions(main *testing.T) {
 		)
 		require.EqualError(t, err, "retryPeriod must be greater then zero")
 	})
-
-
-/*	main.Run("UrlsIterEqualUrlsOrder", func(t *testing.T) {
-		defer goleak.VerifyNone(t)
-		ctrl := gomock.NewController(t)
-		defer ctrl.Finish()
-
-		urlsPool := []string {
-			"the.first.url",
-			"the.second.url",
-			"the.last.url",
-		}
-
-		_, err := amqpextra.NewDialer(
-			amqpextra.WithURL(urlsPool[0], urlsPool...),
-			amqpextra.WithAMQPDial(amqpDialStub(urlsPool[0])),
-			)
-		require.NoError(t, err)
-
-	})*/
 }
 
 func TestConnectState(main *testing.T) {
@@ -713,6 +694,38 @@ func TestConnectedState(main *testing.T) {
 [DEBUG] connection closed
 `, l.Logs())
 	})
+
+	main.Run("UrlsIterEqualUrlsOrder", func(t *testing.T) {
+		defer goleak.VerifyNone(t)
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		unreadyCh := make(chan error, 2)
+
+		urlsPool := []string{
+			"the.first.url",
+			"the.second.url",
+			"the.last.url",
+		}
+
+		dialer, err := amqpextra.NewDialer(
+			amqpextra.WithUnreadyCh(unreadyCh),
+			amqpextra.WithURL(urlsPool[0], urlsPool...),
+			amqpextra.WithAMQPDial(amqpDialStub(urlsPool[0])),
+		)
+
+		require.NoError(t, err)
+
+		time.Sleep(time.Millisecond*100)
+
+		assertUnready(t, unreadyCh, amqp.ErrClosed.Error())
+
+		time.Sleep(time.Millisecond*100)
+
+		assertUnready(t, unreadyCh, urlsPool[0])
+
+		dialer.Close()
+	})
 }
 
 func assertUnready(t *testing.T, unreadyCh chan error, errString string) {
@@ -833,6 +846,8 @@ func amqpDialStub(conns ...interface{}) func(url string, config amqp.Config) (am
 		case error:
 			index++
 			return nil, curr
+		case string:
+			return nil, errors.New(url)
 		default:
 			panic(fmt.Sprintf("unexpected type given: %T", conns[index]))
 		}
