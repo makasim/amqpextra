@@ -109,6 +109,26 @@ func TestOptions(main *testing.T) {
 		)
 		require.EqualError(t, err, "retryPeriod must be greater then zero")
 	})
+
+
+/*	main.Run("UrlsIterEqualUrlsOrder", func(t *testing.T) {
+		defer goleak.VerifyNone(t)
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		urlsPool := []string {
+			"the.first.url",
+			"the.second.url",
+			"the.last.url",
+		}
+
+		_, err := amqpextra.NewDialer(
+			amqpextra.WithURL(urlsPool[0], urlsPool...),
+			amqpextra.WithAMQPDial(amqpDialStub(urlsPool[0])),
+			)
+		require.NoError(t, err)
+
+	})*/
 }
 
 func TestConnectState(main *testing.T) {
@@ -286,13 +306,13 @@ func TestConnectState(main *testing.T) {
 		)
 		require.NoError(t, err)
 
-		time.Sleep(time.Millisecond*100)
+		time.Sleep(time.Millisecond * 100)
 
 		assertUnready(t, unreadyCh, amqp.ErrClosed.Error())
 		dialer.Close()
 		assertClosed(t, dialer)
 
-		time.Sleep(time.Millisecond*100)
+		time.Sleep(time.Millisecond * 100)
 
 		assertUnready(t, unreadyCh, "the error")
 
@@ -401,10 +421,10 @@ func TestConnectState(main *testing.T) {
 		require.NoError(t, err)
 
 		assertNoConn(t, dialer.ConnectionCh())
-		time.Sleep(time.Millisecond*50)
+		time.Sleep(time.Millisecond * 50)
 		assertUnready(t, unreadyCh, amqp.ErrClosed.Error())
 
-		time.Sleep(time.Millisecond*50)
+		time.Sleep(time.Millisecond * 50)
 		assertUnready(t, unreadyCh, "the error")
 
 		time.Sleep(time.Millisecond * 50)
@@ -695,25 +715,6 @@ func TestConnectedState(main *testing.T) {
 	})
 }
 
-func assertUnreadyDEBUG(t *testing.T, unreadyCh chan error, errString string) {
-	log.Println("start assertUnreadyDEBUG")
-	timer := time.NewTimer(time.Millisecond * 100)
-	defer timer.Stop()
-	select {
-	case err, ok := <-unreadyCh:
-		if !ok {
-			require.Equal(t, "permanently closed", errString)
-			return
-		}
-		log.Println("<-unreadyCh assertUnreadyDEBUG")
-
-		require.EqualError(t, err, errString)
-	case <-timer.C:
-		log.Println("<-timer.C assertUnreadyDEBUG")
-		t.Fatal("dialer must be unready")
-	}
-}
-
 func assertUnready(t *testing.T, unreadyCh chan error, errString string) {
 	timer := time.NewTimer(time.Millisecond * 100)
 	defer timer.Stop()
@@ -729,7 +730,6 @@ func assertUnready(t *testing.T, unreadyCh chan error, errString string) {
 		t.Fatal("dialer must be unready")
 	}
 }
-
 
 func assertReady(t *testing.T, readyCh chan struct{}) {
 	timer := time.NewTimer(time.Millisecond * 100)
