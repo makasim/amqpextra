@@ -275,7 +275,7 @@ func TestConnectState(main *testing.T) {
 		defer ctrl.Finish()
 
 		l := logger.NewTest()
-		unreadyCh := make(chan error, 1)
+		unreadyCh := make(chan error, 10)
 
 		dialer, err := amqpextra.NewDialer(
 			amqpextra.WithURL("amqp://rabbitmq.host"),
@@ -288,14 +288,13 @@ func TestConnectState(main *testing.T) {
 
 		time.Sleep(time.Millisecond*100)
 
-		assertUnready2(t, unreadyCh, amqp.ErrClosed.Error())
+		assertUnready(t, unreadyCh, amqp.ErrClosed.Error())
+		dialer.Close()
+		assertClosed(t, dialer)
 
 		time.Sleep(time.Millisecond*100)
 
-		assertUnready2(t, unreadyCh, "the error")
-
-		dialer.Close()
-		assertClosed(t, dialer)
+		assertUnready(t, unreadyCh, "the error")
 
 		assert.Equal(t, `[DEBUG] connection unready
 [DEBUG] dialing
@@ -309,26 +308,31 @@ func TestConnectState(main *testing.T) {
 
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
-
+		// TODO
 		l := logger.NewTest()
-		unreadyCh := make(chan error, 1)
+		unreadyCh := make(chan error, 10)
 
 		ctx, cancelFunc := context.WithCancel(context.Background())
-		defer cancelFunc()
 
 		dialer, err := amqpextra.NewDialer(
 			amqpextra.WithURL("amqp://rabbitmq.host"),
 			amqpextra.WithAMQPDial(amqpDialStub(fmt.Errorf("the error"))),
 			amqpextra.WithRetryPeriod(time.Millisecond*150),
+			amqpextra.WithUnreadyCh(unreadyCh),
 			amqpextra.WithLogger(l),
 			amqpextra.WithContext(ctx),
 		)
 		require.NoError(t, err)
 
 		time.Sleep(time.Millisecond * 100)
-		assertUnready(t, unreadyCh, "the error")
+		assertUnready(t, unreadyCh, amqp.ErrClosed.Error())
 
 		cancelFunc()
+
+		time.Sleep(time.Millisecond * 100)
+
+		assertUnready(t, unreadyCh, "the error")
+
 		assertClosed(t, dialer)
 
 		assert.Equal(t, `[DEBUG] connection unready
@@ -345,16 +349,20 @@ func TestConnectState(main *testing.T) {
 		defer ctrl.Finish()
 
 		l := logger.NewTest()
-		unreadyCh := make(chan error, 1)
+		unreadyCh := make(chan error, 2)
 		dialer, err := amqpextra.NewDialer(
 			amqpextra.WithURL("amqp://rabbitmq.host"),
 			amqpextra.WithAMQPDial(amqpDialStub(fmt.Errorf("the error"))),
 			amqpextra.WithRetryPeriod(time.Millisecond*150),
+			amqpextra.WithUnreadyCh(unreadyCh),
 			amqpextra.WithLogger(l),
 		)
 		require.NoError(t, err)
 
+		assertUnready(t, unreadyCh, amqp.ErrClosed.Error())
+
 		assertNoConn(t, dialer.ConnectionCh())
+
 		assertUnready(t, unreadyCh, "the error")
 
 		dialer.Close()
@@ -376,7 +384,7 @@ func TestConnectState(main *testing.T) {
 		l := logger.NewTest()
 
 		closeCh := make(chan *amqp.Error)
-		unreadyCh := make(chan error, 1)
+		unreadyCh := make(chan error, 2)
 		readyCh := make(chan struct{}, 1)
 		amqpConn := mock_amqpextra.NewMockAMQPConnection(ctrl)
 		amqpConn.EXPECT().Close().Return(nil)
@@ -384,6 +392,8 @@ func TestConnectState(main *testing.T) {
 
 		dialer, err := amqpextra.NewDialer(
 			amqpextra.WithURL("amqp://rabbitmq.host"),
+			amqpextra.WithUnreadyCh(unreadyCh),
+			amqpextra.WithReadyCh(readyCh),
 			amqpextra.WithAMQPDial(amqpDialStub(fmt.Errorf("the error"), amqpConn)),
 			amqpextra.WithRetryPeriod(time.Millisecond*150),
 			amqpextra.WithLogger(l),
@@ -391,7 +401,12 @@ func TestConnectState(main *testing.T) {
 		require.NoError(t, err)
 
 		assertNoConn(t, dialer.ConnectionCh())
+		time.Sleep(time.Millisecond*50)
+		assertUnready(t, unreadyCh, amqp.ErrClosed.Error())
+
+		time.Sleep(time.Millisecond*50)
 		assertUnready(t, unreadyCh, "the error")
+
 		time.Sleep(time.Millisecond * 50)
 		assertReady(t, readyCh)
 
@@ -675,8 +690,8 @@ func TestConnectedState(main *testing.T) {
 	})
 }
 
-func assertUnready2(t *testing.T, unreadyCh chan error, errString string) {
-	log.Println("start assert2")
+func assertUnreadyDEBUG(t *testing.T, unreadyCh chan error, errString string) {
+	log.Println("start assertUnreadyDEBUG")
 	timer := time.NewTimer(time.Millisecond * 100)
 	defer timer.Stop()
 	select {
@@ -685,11 +700,11 @@ func assertUnready2(t *testing.T, unreadyCh chan error, errString string) {
 			require.Equal(t, "permanently closed", errString)
 			return
 		}
-		log.Println("<-unreadyCh assert2")
+		log.Println("<-unreadyCh assertUnreadyDEBUG")
 
 		require.EqualError(t, err, errString)
 	case <-timer.C:
-		log.Println("<-timer.C assert2")
+		log.Println("<-timer.C assertUnreadyDEBUG")
 		t.Fatal("dialer must be unready")
 	}
 }
