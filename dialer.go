@@ -125,6 +125,12 @@ func NewDialer(opts ...Option) (*Dialer, error) {
 		return nil, fmt.Errorf("url(s) must be set")
 	}
 
+	for _, url := range c.amqpUrls {
+		if url == "" {
+			return nil, fmt.Errorf("url(s) must be not empty")
+		}
+	}
+
 	if c.config.ctx != nil {
 		c.ctx, c.cancelFunc = context.WithCancel(c.config.ctx)
 	} else {
@@ -140,9 +146,8 @@ func NewDialer(opts ...Option) (*Dialer, error) {
 	return c, nil
 }
 
-func WithURL(url string, urls ...string) Option {
+func WithURL(urls ...string) Option {
 	return func(c *Dialer) {
-		c.amqpUrls = append(c.amqpUrls, url)
 		c.amqpUrls = append(c.amqpUrls, urls...)
 	}
 }
@@ -270,6 +275,11 @@ func (c *Dialer) Publisher(opts ...publisher.Option) (*publisher.Publisher, erro
 func (c *Dialer) connectState() {
 	defer close(c.connCh)
 	defer close(c.closedCh)
+	defer func() {
+		for _, unreadyCh := range c.unreadyChs {
+			close(unreadyCh)
+		}
+	}()
 	defer c.cancelFunc()
 	defer c.logger.Printf("[DEBUG] connection closed")
 
@@ -277,8 +287,6 @@ func (c *Dialer) connectState() {
 	l := len(c.amqpUrls)
 
 	c.logger.Printf("[DEBUG] connection unready")
-
-	var connErr error = amqp.ErrClosed
 
 	c.notifyUnready(amqp.ErrClosed)
 	for {
