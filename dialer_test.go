@@ -110,6 +110,18 @@ func TestOptions(main *testing.T) {
 		)
 		require.EqualError(t, err, "retryPeriod must be greater then zero")
 	})
+
+	main.Run("ErrorEmptyURl", func(t *testing.T) {
+		defer goleak.VerifyNone(t)
+
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		_, err := amqpextra.NewDialer(
+			amqpextra.WithURL("", "url"),
+		)
+		require.EqualError(t, err, "url(s) must be not empty")
+	})
 }
 
 func TestConnectState(main *testing.T) {
