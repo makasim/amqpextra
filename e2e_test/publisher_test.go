@@ -2,13 +2,14 @@ package e2e_test
 
 import (
 	"fmt"
+	"math/big"
 	"testing"
 
 	"github.com/streadway/amqp"
 
 	"time"
 
-	"math/rand"
+	"crypto/rand"
 
 	"github.com/makasim/amqpextra"
 	"github.com/makasim/amqpextra/e2e_test/helper/rabbitmq"
@@ -21,7 +22,9 @@ import (
 func TestPublishWhileConnectionClosed(t *testing.T) {
 	defer goleak.VerifyNone(t)
 
-	connName := fmt.Sprintf("amqpextra-test-%d-%d", time.Now().UnixNano(), rand.Int63n(10000000))
+	rnum, err := rand.Int(rand.Reader, big.NewInt(10000000))
+	require.NoError(t, err)
+	connName := fmt.Sprintf("amqpextra-test-%d-%d", time.Now().UnixNano(), rnum)
 	dialer, err := amqpextra.NewDialer(
 		amqpextra.WithURL("amqp://guest:guest@rabbitmq:5672/amqpextra"),
 		amqpextra.WithConnectionProperties(amqp.Table{

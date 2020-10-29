@@ -7,11 +7,11 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/makasim/amqpextra/consumer"
 	"github.com/makasim/amqpextra/consumer/middleware"
 	"github.com/streadway/amqp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/makasim/amqpextra/consumer"
 )
 
 func TestExpireToTimeoutSetContextTimeout(t *testing.T) {
