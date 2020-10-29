@@ -3,8 +3,8 @@ package middleware
 import (
 	"context"
 
-	"github.com/streadway/amqp"
 	"github.com/makasim/amqpextra/consumer"
+	"github.com/streadway/amqp"
 )
 
 // contextKey is a value for use with context.WithValue. It's used as
