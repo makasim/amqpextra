@@ -280,7 +280,7 @@ func (c *Dialer) connectState() {
 
 	var connErr error = amqp.ErrClosed
 
-	c.notifyUnready(connErr)
+	c.notifyUnready(amqp.ErrClosed)
 	for {
 		select {
 		case <-c.ctx.Done():
