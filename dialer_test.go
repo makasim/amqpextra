@@ -710,7 +710,7 @@ func TestConnectedState(main *testing.T) {
 			assert.Equal(t, url, urlsPool[wantedIndex])
 			wantedIndex++
 
-			return nil, errors.New("the error")
+			return nil, errors.New("let's dial again")
 		}
 
 		dialer, err := amqpextra.NewDialer(
