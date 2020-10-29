@@ -36,8 +36,14 @@ type Consumer struct {
 	cancelFunc  context.CancelFunc
 	logger      logger.Logger
 	closeCh     chan struct{}
-	readyCh     chan struct{}
-	unreadyCh   chan error
+
+	// add unready chans pool
+	// add ready   chans pool
+
+	// remove this
+	readyCh chan struct{}
+	// remove this
+	unreadyCh chan error
 
 	queue     string
 	consumer  string
@@ -97,6 +103,9 @@ func New(
 	return c, nil
 }
 
+// add WithReadyCh
+// add WithUnreadyCh
+
 func WithLogger(l logger.Logger) Option {
 	return func(c *Consumer) {
 		c.logger = l
@@ -138,10 +147,12 @@ func WithConsumeArgs(consumer string, autoAck, exclusive, noLocal, noWait bool, 
 	}
 }
 
+// change as is in dialer
 func (c *Consumer) NotifyReady() <-chan struct{} {
 	return c.readyCh
 }
 
+// change as is in dialer
 func (c *Consumer) NotifyUnready() <-chan error {
 	return c.unreadyCh
 }
@@ -162,6 +173,7 @@ func (c *Consumer) connectionState() {
 
 	c.logger.Printf("[DEBUG] consumer starting")
 	var connErr error = amqp.ErrClosed
+	// notify unready
 	for {
 		select {
 		case conn, ok := <-c.connCh:
@@ -185,6 +197,7 @@ func (c *Consumer) connectionState() {
 
 			c.logger.Printf("[DEBUG] consumer unready")
 			return
+		// remove this
 		case c.unreadyCh <- connErr:
 		case <-c.ctx.Done():
 			return
@@ -232,7 +245,7 @@ func (c *Consumer) consumeState(ch AMQPChannel, connCloseCh <-chan struct{}) err
 	defer workerCancelFunc()
 
 	c.logger.Printf("[DEBUG] consumer ready")
-
+	// notify ready
 	go func() {
 		defer close(workerDoneCh)
 		c.worker.Serve(workerCtx, c.handler, msgCh)
@@ -241,6 +254,7 @@ func (c *Consumer) consumeState(ch AMQPChannel, connCloseCh <-chan struct{}) err
 	var result error
 	for {
 		select {
+		// remove this
 		case c.readyCh <- struct{}{}:
 			continue
 		case <-cancelCh:
@@ -273,9 +287,10 @@ func (c *Consumer) waitRetry(err error) error {
 		default:
 		}
 	}()
-
+	// notify unready
 	for {
 		select {
+		// remove this
 		case c.unreadyCh <- err:
 			continue
 		case <-timer.C:
