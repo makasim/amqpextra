@@ -207,7 +207,7 @@ func TestConnectState(main *testing.T) {
 
 		dialer, err := amqpextra.NewDialer(
 			amqpextra.WithURL("amqp://rabbitmq.host"),
-			amqpextra.WithAMQPDial(amqpDialStub(conn)),
+			amqpextra.WithAMQPDial(amqpDialStub(time.Millisecond*150, conn)),
 			amqpextra.WithLogger(l),
 			amqpextra.WithContext(ctx),
 			amqpextra.WithUnreadyCh(unreadyCh),
@@ -287,15 +287,13 @@ func TestConnectState(main *testing.T) {
 		)
 		require.NoError(t, err)
 
-		time.Sleep(time.Millisecond * 100)
-
 		assertUnready(t, unreadyCh, amqp.ErrClosed.Error())
+
+		time.Sleep(time.Millisecond * 100)
+		assertUnready(t, unreadyCh, "the error")
+
 		dialer.Close()
 		assertClosed(t, dialer)
-
-		time.Sleep(time.Millisecond * 100)
-
-		assertUnready(t, unreadyCh, "the error")
 
 		assert.Equal(t, `[DEBUG] connection unready
 [DEBUG] dialing
@@ -309,7 +307,7 @@ func TestConnectState(main *testing.T) {
 
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
-		// TODO
+
 		l := logger.NewTest()
 		unreadyCh := make(chan error, 10)
 
@@ -325,14 +323,12 @@ func TestConnectState(main *testing.T) {
 		)
 		require.NoError(t, err)
 
-		time.Sleep(time.Millisecond * 100)
 		assertUnready(t, unreadyCh, amqp.ErrClosed.Error())
 
-		cancelFunc()
-
 		time.Sleep(time.Millisecond * 100)
-
 		assertUnready(t, unreadyCh, "the error")
+
+		cancelFunc()
 
 		assertClosed(t, dialer)
 
@@ -695,7 +691,7 @@ func TestConnectedState(main *testing.T) {
 `, l.Logs())
 	})
 
-	main.Run("UrlsIterEqualUrlsOrder", func(t *testing.T) {
+	main.Run("UrlOrderInDial", func(t *testing.T) {
 		defer goleak.VerifyNone(t)
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
@@ -705,22 +701,23 @@ func TestConnectedState(main *testing.T) {
 			"the.second.url",
 			"the.last.url",
 		}
-		wantedIndex := 0
+		index := 0
 		dialSub := func(url string, config amqp.Config) (amqpextra.AMQPConnection, error) {
-			assert.Equal(t, url, urlsPool[wantedIndex])
-			wantedIndex++
-
-			return nil, errors.New("let's dial again")
+			require.Equal(t, url, urlsPool[index])
+			index++
+			return nil, errors.New("the error")
 		}
 
-		dialer, err := amqpextra.NewDialer(
-			amqpextra.WithURL(urlsPool[0], urlsPool...),
+		d, err := amqpextra.NewDialer(
+			amqpextra.WithRetryPeriod(time.Millisecond*100),
+			amqpextra.WithURL(urlsPool...),
 			amqpextra.WithAMQPDial(dialSub),
 		)
-
 		require.NoError(t, err)
 
-		dialer.Close()
+		time.Sleep(time.Millisecond * 300)
+
+		d.Close()
 	})
 }
 
