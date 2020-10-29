@@ -324,6 +324,7 @@ func TestConnectState(main *testing.T) {
 		unreadyCh := make(chan error, 10)
 
 		ctx, cancelFunc := context.WithCancel(context.Background())
+		defer cancelFunc()
 
 		dialer, err := amqpextra.NewDialer(
 			amqpextra.WithURL("amqp://rabbitmq.host"),
@@ -479,6 +480,42 @@ func TestConnectState(main *testing.T) {
 
 		_, err = dialer.Connection(context.Background())
 		require.EqualError(t, err, "connection closed")
+	})
+
+	main.Run("UrlOrderInDial", func(t *testing.T) {
+		defer goleak.VerifyNone(t)
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		urls := []string{
+			"the.first.url",
+			"the.second.url",
+			"the.last.url",
+		}
+
+		index := 0
+		dialSub := func(url string, config amqp.Config) (amqpextra.AMQPConnection, error) {
+			require.Equal(t, url,
+				[]string{
+					"the.first.url",
+					"the.second.url",
+					"the.last.url",
+					"the.first.url",
+				}[index])
+			index++
+			return nil, errors.New("the error")
+		}
+
+		d, err := amqpextra.NewDialer(
+			amqpextra.WithRetryPeriod(time.Millisecond*20),
+			amqpextra.WithURL(urls...),
+			amqpextra.WithAMQPDial(dialSub),
+		)
+		require.NoError(t, err)
+
+		time.Sleep(time.Millisecond * 70)
+
+		d.Close()
 	})
 }
 
@@ -702,35 +739,6 @@ func TestConnectedState(main *testing.T) {
 [DEBUG] connection closed
 `, l.Logs())
 	})
-
-	main.Run("UrlOrderInDial", func(t *testing.T) {
-		defer goleak.VerifyNone(t)
-		ctrl := gomock.NewController(t)
-		defer ctrl.Finish()
-
-		urlsPool := []string{
-			"the.first.url",
-			"the.second.url",
-			"the.last.url",
-		}
-		index := 0
-		dialSub := func(url string, config amqp.Config) (amqpextra.AMQPConnection, error) {
-			require.Equal(t, url, urlsPool[index])
-			index++
-			return nil, errors.New("the error")
-		}
-
-		d, err := amqpextra.NewDialer(
-			amqpextra.WithRetryPeriod(time.Millisecond*100),
-			amqpextra.WithURL(urlsPool...),
-			amqpextra.WithAMQPDial(dialSub),
-		)
-		require.NoError(t, err)
-
-		time.Sleep(time.Millisecond * 300)
-
-		d.Close()
-	})
 }
 
 func assertUnready(t *testing.T, unreadyCh chan error, errString string) {
@@ -835,9 +843,8 @@ func any() gomock.Matcher {
 func amqpDialStub(conns ...interface{}) func(url string, config amqp.Config) (amqpextra.AMQPConnection, error) {
 	index := 0
 	return func(url string, config amqp.Config) (amqpextra.AMQPConnection, error) {
-		log.Printf("dial stub called %d time\n", index+1)
 		if index == len(conns) {
-			panic(fmt.Sprintf("dial stub called more times(%d) than len(conns) - %d", index+1, len(conns)))
+			panic(fmt.Sprintf("dial stub must be called not more than %d times", len(conns)))
 		}
 		if dur, ok := conns[index].(time.Duration); ok {
 			time.Sleep(dur)
