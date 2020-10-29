@@ -276,9 +276,12 @@ func (c *Dialer) connectState() {
 	defer close(c.connCh)
 	defer close(c.closedCh)
 	defer func() {
+		c.mu.Lock()
+		defer c.mu.Unlock()
 		for _, unreadyCh := range c.unreadyChs {
 			close(unreadyCh)
 		}
+
 	}()
 	defer c.cancelFunc()
 	defer c.logger.Printf("[DEBUG] connection closed")
