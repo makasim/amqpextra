@@ -43,7 +43,7 @@ func TestUnready(main *testing.T) {
 		)
 		require.NoError(t, err)
 
-		assertUnready(t, amqp.ErrClosed.Error(), unreadyCh)
+		assertUnready(t, unreadyCh, amqp.ErrClosed.Error())
 		c.Close()
 		assertClosed(t, c)
 
@@ -76,7 +76,7 @@ func TestUnready(main *testing.T) {
 		)
 		require.NoError(t, err)
 
-		assertUnready(t, amqp.ErrClosed.Error(), unreadyCh)
+		assertUnready(t, unreadyCh, amqp.ErrClosed.Error())
 		cancelFunc()
 		assertClosed(t, c)
 
@@ -105,7 +105,7 @@ func TestUnready(main *testing.T) {
 		)
 		require.NoError(t, err)
 
-		assertUnready(t, amqp.ErrClosed.Error(), unreadyCh)
+		assertUnready(t, unreadyCh, amqp.ErrClosed.Error())
 		close(connCh)
 		assertClosed(t, c)
 
@@ -141,7 +141,7 @@ func TestUnready(main *testing.T) {
 		)
 		require.NoError(t, err)
 
-		assertUnready(t, amqp.ErrClosed.Error(), unreadyCh)
+		assertUnready(t, unreadyCh, amqp.ErrClosed.Error())
 
 		connCh <- consumer.NewConnection(conn, nil)
 		time.Sleep(time.Millisecond * 200)
@@ -182,7 +182,7 @@ func TestUnready(main *testing.T) {
 		)
 		require.NoError(t, err)
 
-		assertUnready(t, amqp.ErrClosed.Error(), unreadyCh)
+		assertUnready(t, unreadyCh, amqp.ErrClosed.Error())
 		connCh <- consumer.NewConnection(conn, nil)
 		time.Sleep(time.Millisecond * 200)
 		close(connCh)
@@ -223,11 +223,11 @@ func TestUnready(main *testing.T) {
 		)
 		require.NoError(t, err)
 
-		assertUnready(t, amqp.ErrClosed.Error(), unreadyCh)
+		assertUnready(t, unreadyCh, amqp.ErrClosed.Error())
 		connCh <- consumer.NewConnection(conn, nil)
 
 		time.Sleep(time.Millisecond * 200)
-		assertUnready(t, "the error", unreadyCh)
+		assertUnready(t, unreadyCh, "the error")
 
 		c.Close()
 		assertClosed(t, c)
@@ -266,7 +266,7 @@ func TestUnready(main *testing.T) {
 		)
 		require.NoError(t, err)
 
-		assertUnready(t, amqp.ErrClosed.Error(), unreadyCh)
+		assertUnready(t, unreadyCh, amqp.ErrClosed.Error())
 		connCh <- consumer.NewConnection(conn, nil)
 		time.Sleep(time.Millisecond * 200)
 		close(connCh)
@@ -307,7 +307,7 @@ func TestUnready(main *testing.T) {
 		)
 		require.NoError(t, err)
 
-		assertUnready(t, amqp.ErrClosed.Error(), unreadyCh)
+		assertUnready(t, unreadyCh, amqp.ErrClosed.Error())
 		connCh <- consumer.NewConnection(conn, nil)
 		time.Sleep(time.Millisecond * 200)
 		c.Close()
@@ -347,7 +347,7 @@ func TestUnready(main *testing.T) {
 		)
 		require.NoError(t, err)
 
-		assertUnready(t, amqp.ErrClosed.Error(), unreadyCh)
+		assertUnready(t, unreadyCh, amqp.ErrClosed.Error())
 		connCh <- consumer.NewConnection(conn, nil)
 		time.Sleep(time.Millisecond * 200)
 		close(connCh)
@@ -390,7 +390,7 @@ func TestUnready(main *testing.T) {
 		)
 		require.NoError(t, err)
 
-		assertUnready(t, amqp.ErrClosed.Error(), unreadyCh)
+		assertUnready(t, unreadyCh, amqp.ErrClosed.Error())
 		connCh <- consumer.NewConnection(conn, nil)
 		time.Sleep(time.Millisecond * 200)
 		c.Close()
@@ -432,7 +432,7 @@ func TestUnready(main *testing.T) {
 		)
 		require.NoError(t, err)
 
-		assertUnready(t, amqp.ErrClosed.Error(), unreadyCh)
+		assertUnready(t, unreadyCh, amqp.ErrClosed.Error())
 		connCh <- consumer.NewConnection(conn, nil)
 		time.Sleep(time.Millisecond * 200)
 		close(connCh)
@@ -886,18 +886,18 @@ func TestConsume(main *testing.T) {
 			consumer.WithLogger(l),
 			consumer.WithReadyCh(readyCh),
 			consumer.WithUnreadyCh(unreadyCh),
-			consumer.WithRetryPeriod(time.Millisecond*1),
+			consumer.WithRetryPeriod(time.Millisecond),
 			consumer.WithInitFunc(initFuncStub(ch, newCh)),
 		)
 		require.NoError(t, err)
 
 		assertReady(t, readyCh)
 		time.Sleep(time.Millisecond * 50)
-		assertUnready(t, amqp.ErrClosed.Error(), unreadyCh)
+		assertUnready(t, unreadyCh, amqp.ErrClosed.Error())
 
 		cancelCh <- "aTag"
 
-		assertUnready(t, "consumption canceled", unreadyCh)
+		assertUnready(t, unreadyCh, "consumption canceled")
 
 		connCh <- consumer.NewConnection(newConn, nil)
 
@@ -1223,7 +1223,7 @@ func TestConcurrency(main *testing.T) {
 	})
 }
 
-func assertUnready(t *testing.T, errString string, unreadyCh chan error) {
+func assertUnready(t *testing.T, unreadyCh chan error, errString string) {
 	timer := time.NewTimer(time.Millisecond * 100)
 	defer timer.Stop()
 
