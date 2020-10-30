@@ -54,7 +54,7 @@ type Publisher struct {
 
 	publishingCh chan Message
 
-	unreadyCh chan error
+	internalCh chan error
 }
 
 func New(
@@ -65,7 +65,7 @@ func New(
 		connCh: connCh,
 
 		publishingCh: make(chan Message),
-		unreadyCh:    make(chan error),
+		internalCh:   make(chan error),
 	}
 
 	for _, opt := range opts {
@@ -171,7 +171,7 @@ func (p *Publisher) Go(msg Message) <-chan error {
 
 	var unreadyCh <-chan error
 	if msg.ErrOnUnready {
-		unreadyCh = p.unreadyCh
+		unreadyCh = p.internalCh
 	}
 
 	select {
@@ -204,21 +204,17 @@ func (p *Publisher) NotifyReady(readyCh chan struct{}) <-chan struct{} {
 		panic("ready chan is unbuffered")
 	}
 
-	for {
-		select {
-		case <-p.unreadyCh:
-		case <-p.NotifyClosed():
-			return readyCh
-		default:
-			readyCh <- struct{}{}
-			p.mu.Lock()
-			p.readyChs = append(p.readyChs, readyCh)
-			p.mu.Unlock()
+	select {
+	case <-p.NotifyClosed():
+		return readyCh
+	default:
+		readyCh <- struct{}{}
+		p.mu.Lock()
+		p.readyChs = append(p.readyChs, readyCh)
+		p.mu.Unlock()
 
-			return readyCh
-		}
+		return readyCh
 	}
-
 }
 
 func (p *Publisher) NotifyUnready(unreadyCh chan error) <-chan error {
@@ -227,14 +223,17 @@ func (p *Publisher) NotifyUnready(unreadyCh chan error) <-chan error {
 	}
 
 	select {
-	case err := <-p.unreadyCh:
-		unreadyCh <- err
 	case <-p.NotifyClosed():
 		close(unreadyCh)
 	default:
 		p.mu.Lock()
 		defer p.mu.Unlock()
 		p.unreadyChs = append(p.unreadyChs, unreadyCh)
+	}
+
+	select {
+	case err := <-p.internalCh:
+		unreadyCh <- err
 	}
 
 	return unreadyCh
@@ -327,10 +326,11 @@ func (p *Publisher) publishState(ch AMQPChannel, connCloseCh <-chan struct{}) er
 			if resume {
 				continue
 			}
-
 			if err := p.pausedState(chFlowCh, connCloseCh, chCloseCh); err != nil {
 				return err
 			}
+			p.notifyReady()
+
 		case <-p.ctx.Done():
 			return nil
 		}
@@ -343,6 +343,7 @@ func (p *Publisher) pausedState(chFlowCh <-chan bool, connCloseCh <-chan struct{
 	p.notifyUnready(errFlowPaused)
 	for {
 		select {
+		case p.internalCh <- errFlowPaused:
 		case resume := <-chFlowCh:
 			if resume {
 				p.logger.Printf("[INFO] publisher flow resumed")
@@ -399,7 +400,7 @@ func (p *Publisher) waitRetry(err error) error {
 
 	for {
 		select {
-		case p.unreadyCh <- err:
+		case p.internalCh <- err:
 			continue
 		case <-timer.C:
 			return err
