@@ -36,7 +36,9 @@ func TestConsumeWhileConnectionClosed(t *testing.T) {
 	rnum, err := rand.Int(rand.Reader, big.NewInt(10000000))
 	require.NoError(t, err)
 	connName := fmt.Sprintf("amqpextra-test-%d-%d", time.Now().UnixNano(), rnum)
+	readyCh := make(chan struct{}, 1)
 	dialer, err := amqpextra.NewDialer(
+		amqpextra.WithReadyCh(readyCh),
 		amqpextra.WithURL("amqp://guest:guest@rabbitmq:5672/amqpextra"),
 		amqpextra.WithConnectionProperties(amqp.Table{
 			"connection_name": connName,
@@ -73,7 +75,7 @@ waitOpened:
 	}))
 	require.NoError(t, err)
 
-	assertConsumerReady(t, c)
+	assertConsumerReady(t, readyCh)
 
 	count := 0
 	errorCount := 0
@@ -98,12 +100,12 @@ waitOpened:
 	time.Sleep(time.Millisecond * 100)
 }
 
-func assertConsumerReady(t *testing.T, c *consumer.Consumer) {
+func assertConsumerReady(t *testing.T, readyCh chan struct{}) {
 	timer := time.NewTimer(time.Millisecond * 2000)
 	defer timer.Stop()
 
 	select {
-	case <-c.NotifyReady():
+	case <-readyCh:
 	case <-timer.C:
 		t.Fatal("consumer must be ready")
 	}
