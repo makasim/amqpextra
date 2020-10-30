@@ -32,8 +32,6 @@ type Consumer struct {
 
 	worker Worker
 
-	mu sync.Mutex
-
 	retryPeriod time.Duration
 	initFunc    func(conn AMQPConnection) (AMQPChannel, error)
 	ctx         context.Context
@@ -41,6 +39,7 @@ type Consumer struct {
 	logger      logger.Logger
 	closeCh     chan struct{}
 
+	mu         sync.Mutex
 	unreadyChs []chan error
 	readyChs   []chan struct{}
 
@@ -247,6 +246,7 @@ func (c *Consumer) connectionState() {
 			if err := c.channelState(conn.AMQPConnection(), conn.NotifyClose()); err != nil {
 				c.logger.Printf("[DEBUG] consumer unready")
 				connErr = err
+				c.notifyUnready(connErr)
 				continue
 			}
 
