@@ -34,7 +34,13 @@ func TestUnready(main *testing.T) {
 		connCh := make(chan *consumer.Connection, 1)
 		unreadyCh := make(chan error, 1)
 
-		c, err := consumer.New("foo", h, connCh, consumer.WithLogger(l))
+		c, err := consumer.New(
+			"foo",
+			h,
+			connCh,
+			consumer.WithLogger(l),
+			consumer.WithUnreadyCh(unreadyCh),
+		)
 		require.NoError(t, err)
 
 		assertUnready(t, amqp.ErrClosed.Error(), unreadyCh)
@@ -61,7 +67,13 @@ func TestUnready(main *testing.T) {
 		connCh := make(chan *consumer.Connection, 1)
 		unreadyCh := make(chan error, 1)
 
-		c, err := consumer.New("foo", h, connCh, consumer.WithLogger(l), consumer.WithContext(ctx))
+		c, err := consumer.New("foo",
+			h,
+			connCh,
+			consumer.WithLogger(l),
+			consumer.WithContext(ctx),
+			consumer.WithUnreadyCh(unreadyCh),
+		)
 		require.NoError(t, err)
 
 		assertUnready(t, amqp.ErrClosed.Error(), unreadyCh)
@@ -85,7 +97,12 @@ func TestUnready(main *testing.T) {
 		connCh := make(chan *consumer.Connection, 1)
 		unreadyCh := make(chan error, 1)
 
-		c, err := consumer.New("foo", h, connCh, consumer.WithLogger(l))
+		c, err := consumer.New("foo",
+			h,
+			connCh,
+			consumer.WithLogger(l),
+			consumer.WithUnreadyCh(unreadyCh),
+		)
 		require.NoError(t, err)
 
 		assertUnready(t, amqp.ErrClosed.Error(), unreadyCh)
@@ -117,6 +134,7 @@ func TestUnready(main *testing.T) {
 			connCh,
 			consumer.WithLogger(l),
 			consumer.WithRetryPeriod(time.Millisecond*400),
+			consumer.WithUnreadyCh(unreadyCh),
 			consumer.WithInitFunc(func(conn consumer.AMQPConnection) (consumer.AMQPChannel, error) {
 				return nil, fmt.Errorf("the error")
 			}),
@@ -156,6 +174,7 @@ func TestUnready(main *testing.T) {
 			h,
 			connCh,
 			consumer.WithLogger(l),
+			consumer.WithUnreadyCh(unreadyCh),
 			consumer.WithRetryPeriod(time.Millisecond*400),
 			consumer.WithInitFunc(func(conn consumer.AMQPConnection) (consumer.AMQPChannel, error) {
 				return nil, fmt.Errorf("the error")
@@ -196,6 +215,7 @@ func TestUnready(main *testing.T) {
 			h,
 			connCh,
 			consumer.WithLogger(l),
+			consumer.WithUnreadyCh(unreadyCh),
 			consumer.WithRetryPeriod(time.Millisecond*400),
 			consumer.WithInitFunc(func(conn consumer.AMQPConnection) (consumer.AMQPChannel, error) {
 				return nil, fmt.Errorf("the error")
@@ -239,6 +259,7 @@ func TestUnready(main *testing.T) {
 			connCh,
 			consumer.WithLogger(l),
 			consumer.WithRetryPeriod(time.Millisecond*400),
+			consumer.WithUnreadyCh(unreadyCh),
 			consumer.WithInitFunc(func(conn consumer.AMQPConnection) (consumer.AMQPChannel, error) {
 				return nil, fmt.Errorf("the error")
 			}),
@@ -278,6 +299,7 @@ func TestUnready(main *testing.T) {
 			h,
 			connCh,
 			consumer.WithLogger(l),
+			consumer.WithUnreadyCh(unreadyCh),
 			consumer.WithRetryPeriod(time.Millisecond*400),
 			consumer.WithInitFunc(func(conn consumer.AMQPConnection) (consumer.AMQPChannel, error) {
 				return nil, fmt.Errorf("the error")
@@ -317,6 +339,7 @@ func TestUnready(main *testing.T) {
 			h,
 			connCh,
 			consumer.WithLogger(l),
+			consumer.WithUnreadyCh(unreadyCh),
 			consumer.WithRetryPeriod(time.Millisecond*400),
 			consumer.WithInitFunc(func(conn consumer.AMQPConnection) (consumer.AMQPChannel, error) {
 				return nil, fmt.Errorf("the error")
@@ -360,6 +383,7 @@ func TestUnready(main *testing.T) {
 			"foo",
 			h,
 			connCh,
+			consumer.WithUnreadyCh(unreadyCh),
 			consumer.WithLogger(l),
 			consumer.WithRetryPeriod(time.Millisecond*400),
 			consumer.WithInitFunc(initFuncStub(ch)),
@@ -395,18 +419,19 @@ func TestUnready(main *testing.T) {
 		h := handlerStub(l)
 
 		connCh := make(chan *consumer.Connection, 1)
+		unreadyCh := make(chan error, 1)
 
 		c, err := consumer.New(
 			"foo",
 			h,
 			connCh,
 			consumer.WithLogger(l),
+			consumer.WithUnreadyCh(unreadyCh),
 			consumer.WithRetryPeriod(time.Millisecond*400),
 			consumer.WithInitFunc(initFuncStub(ch)),
 		)
 		require.NoError(t, err)
 
-		unreadyCh := make(chan error, 1)
 		assertUnready(t, amqp.ErrClosed.Error(), unreadyCh)
 		connCh <- consumer.NewConnection(conn, nil)
 		time.Sleep(time.Millisecond * 200)
@@ -455,6 +480,7 @@ func TestConsume(main *testing.T) {
 			"foo",
 			h,
 			connCh,
+			consumer.WithReadyCh(readyCh),
 			consumer.WithLogger(l),
 			consumer.WithInitFunc(initFuncStub(ch)),
 		)
@@ -506,6 +532,7 @@ func TestConsume(main *testing.T) {
 			h,
 			connCh,
 			consumer.WithLogger(l),
+			consumer.WithReadyCh(readyCh),
 			consumer.WithInitFunc(initFuncStub(ch)),
 		)
 		require.NoError(t, err)
@@ -558,6 +585,7 @@ func TestConsume(main *testing.T) {
 			h,
 			connCh,
 			consumer.WithLogger(l),
+			consumer.WithReadyCh(readyCh),
 			consumer.WithConsumeArgs("theConsumer", true, true, true, true, table),
 			consumer.WithInitFunc(initFuncStub(ch)),
 		)
@@ -610,6 +638,7 @@ func TestConsume(main *testing.T) {
 			"theQueue",
 			h,
 			connCh,
+			consumer.WithReadyCh(readyCh),
 			consumer.WithLogger(l),
 			consumer.WithInitFunc(initFuncStub(ch)),
 		)
@@ -675,6 +704,7 @@ func TestConsume(main *testing.T) {
 			h,
 			connCh,
 			consumer.WithLogger(l),
+			consumer.WithReadyCh(readyCh),
 			consumer.WithRetryPeriod(time.Millisecond),
 			consumer.WithInitFunc(initFuncStub(ch, newCh)),
 		)
@@ -733,6 +763,7 @@ func TestConsume(main *testing.T) {
 			h,
 			connCh,
 			consumer.WithLogger(l),
+			consumer.WithReadyCh(readyCh),
 			consumer.WithRetryPeriod(time.Millisecond),
 			consumer.WithInitFunc(initFuncStub(ch)),
 		)
@@ -785,6 +816,7 @@ func TestConsume(main *testing.T) {
 			h,
 			connCh,
 			consumer.WithLogger(l),
+			consumer.WithReadyCh(readyCh),
 			consumer.WithRetryPeriod(time.Millisecond),
 			consumer.WithInitFunc(initFuncStub(ch)),
 		)
@@ -834,7 +866,7 @@ func TestConsume(main *testing.T) {
 		newCancelCh := make(chan string)
 		newNsgCh := make(chan amqp.Delivery)
 		readyCh := make(chan struct{}, 1)
-		unreadyCh := make(chan error, 1)
+		unreadyCh := make(chan error, 2)
 
 		newConn := mock_consumer.NewMockAMQPConnection(ctrl)
 
@@ -852,14 +884,19 @@ func TestConsume(main *testing.T) {
 			h,
 			connCh,
 			consumer.WithLogger(l),
-			consumer.WithRetryPeriod(time.Millisecond),
+			consumer.WithReadyCh(readyCh),
+			consumer.WithUnreadyCh(unreadyCh),
+			consumer.WithRetryPeriod(time.Millisecond*1),
 			consumer.WithInitFunc(initFuncStub(ch, newCh)),
 		)
 		require.NoError(t, err)
 
 		assertReady(t, readyCh)
 		time.Sleep(time.Millisecond * 50)
+		assertUnready(t, amqp.ErrClosed.Error(), unreadyCh)
+
 		cancelCh <- "aTag"
+
 		assertUnready(t, "consumption canceled", unreadyCh)
 
 		connCh <- consumer.NewConnection(newConn, nil)
@@ -915,6 +952,7 @@ func TestConsume(main *testing.T) {
 			handlerStub(l),
 			connCh,
 			consumer.WithLogger(l),
+			consumer.WithReadyCh(readyCh),
 			consumer.WithRetryPeriod(time.Millisecond),
 			consumer.WithInitFunc(initFuncStub(ch)),
 		)
@@ -954,6 +992,7 @@ func TestConcurrency(main *testing.T) {
 		chCloseCh := make(chan *amqp.Error)
 		cancelCh := make(chan string)
 		msgCh := make(chan amqp.Delivery)
+		readyCh := make(chan struct{}, 1)
 
 		ch := mock_consumer.NewMockAMQPChannel(ctrl)
 		ch.EXPECT().Consume(any(), any(), any(), any(), any(), any(), any()).
@@ -984,7 +1023,6 @@ func TestConcurrency(main *testing.T) {
 		connCh := make(chan *consumer.Connection, 2)
 		connCh <- conn
 		connCh <- consumer.NewConnection(newConn, nil)
-		readyCh := make(chan struct{}, 1)
 
 		wg := &sync.WaitGroup{}
 		for i := 0; i < 10; i++ {
@@ -1002,6 +1040,7 @@ func TestConcurrency(main *testing.T) {
 			h,
 			connCh,
 			consumer.WithLogger(l),
+			consumer.WithReadyCh(readyCh),
 			consumer.WithRetryPeriod(time.Millisecond),
 			consumer.WithInitFunc(initFuncStub(ch, newCh)),
 		)
@@ -1062,6 +1101,7 @@ func TestConcurrency(main *testing.T) {
 			h,
 			connCh,
 			consumer.WithLogger(l),
+			consumer.WithReadyCh(readyCh),
 			consumer.WithRetryPeriod(time.Millisecond),
 			consumer.WithInitFunc(initFuncStub(ch)),
 		)
@@ -1155,6 +1195,7 @@ func TestConcurrency(main *testing.T) {
 			h,
 			connCh,
 			consumer.WithLogger(l),
+			consumer.WithReadyCh(readyCh),
 			consumer.WithRetryPeriod(time.Millisecond),
 			consumer.WithInitFunc(initFuncStub(ch, newCh)),
 		)
