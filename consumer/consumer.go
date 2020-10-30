@@ -307,27 +307,27 @@ func (c *Consumer) consumeState(ch AMQPChannel, connCloseCh <-chan struct{}) err
 	}()
 
 	var result error
-	for {
-		select {
-		case <-cancelCh:
-			c.logger.Printf("[DEBUG] consumption canceled")
-			result = fmt.Errorf("consumption canceled")
-		case <-chCloseCh:
-			c.logger.Printf("[DEBUG] channel closed")
-			result = errChannelClosed
-		case <-connCloseCh:
-			result = amqp.ErrClosed
-		case <-workerDoneCh:
-			result = fmt.Errorf("workers unexpectedly stopped")
-		case <-c.ctx.Done():
-			result = nil
-		}
 
-		workerCancelFunc()
-		<-workerDoneCh
-		c.close(ch)
-		return result
+	select {
+	case <-cancelCh:
+		c.logger.Printf("[DEBUG] consumption canceled")
+		result = fmt.Errorf("consumption canceled")
+	case <-chCloseCh:
+		c.logger.Printf("[DEBUG] channel closed")
+		result = errChannelClosed
+	case <-connCloseCh:
+		result = amqp.ErrClosed
+	case <-workerDoneCh:
+		result = fmt.Errorf("workers unexpectedly stopped")
+	case <-c.ctx.Done():
+		result = nil
 	}
+
+	workerCancelFunc()
+	<-workerDoneCh
+	c.close(ch)
+
+	return result
 }
 
 func (c *Consumer) waitRetry(err error) error {
