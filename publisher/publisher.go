@@ -54,7 +54,8 @@ type Publisher struct {
 
 	publishingCh chan Message
 
-	internalCh chan error
+	internalUnreadyCh chan error
+	internalReadyCh   chan struct{}
 }
 
 func New(
@@ -64,8 +65,9 @@ func New(
 	p := &Publisher{
 		connCh: connCh,
 
-		publishingCh: make(chan Message),
-		internalCh:   make(chan error),
+		publishingCh:      make(chan Message),
+		internalUnreadyCh: make(chan error),
+		internalReadyCh:   make(chan struct{}),
 	}
 
 	for _, opt := range opts {
@@ -141,15 +143,53 @@ func WithInitFunc(f func(conn AMQPConnection) (AMQPChannel, error)) Option {
 	}
 }
 
-func WithReadyCh(readyCh chan struct{}) Option {
+func WithNotify(readyCh chan struct{}, unreadyCh chan error) Option{
 	return func(p *Publisher) {
 		p.readyChs = append(p.readyChs, readyCh)
+		p.unreadyChs = append(p.unreadyChs, unreadyCh)
 	}
 }
 
-func WithUnreadyCh(unreadyCh chan error) Option {
-	return func(p *Publisher) {
-		p.unreadyChs = append(p.unreadyChs, unreadyCh)
+func (p *Publisher) Notify(readyCh chan struct{}, unreadyCh chan error) (<-chan struct{}, <-chan error) {
+	if cap(readyCh) == 0 {
+		panic("ready chan is unbuffered")
+	}
+	if cap(unreadyCh) == 0 {
+		panic("unready chan is unbuffered")
+	}
+
+	select {
+	case <-p.NotifyClosed():
+		close(unreadyCh)
+		return readyCh, unreadyCh
+	default:
+	}
+
+	p.mu.Lock()
+	p.readyChs = append(p.readyChs, readyCh)
+	p.unreadyChs = append(p.unreadyChs, unreadyCh)
+	p.mu.Unlock()
+
+	select {
+	case <-p.internalReadyCh:
+		select {
+		case readyCh <- struct{}{}:
+		default:
+		}
+
+		return readyCh, unreadyCh
+	case err, ok := <-p.internalUnreadyCh:
+		if !ok {
+			close(unreadyCh)
+			return readyCh, unreadyCh
+		}
+
+		select {
+		case unreadyCh <- err:
+		default:
+		}
+
+		return readyCh, unreadyCh
 	}
 }
 
@@ -171,7 +211,7 @@ func (p *Publisher) Go(msg Message) <-chan error {
 
 	var unreadyCh <-chan error
 	if msg.ErrOnUnready {
-		unreadyCh = p.internalCh
+		unreadyCh = p.internalUnreadyCh
 	}
 
 	select {
@@ -197,46 +237,6 @@ func (p *Publisher) Go(msg Message) <-chan error {
 
 func (p *Publisher) Close() {
 	p.cancelFunc()
-}
-
-func (p *Publisher) NotifyReady(readyCh chan struct{}) <-chan struct{} {
-	if cap(readyCh) == 0 {
-		panic("ready chan is unbuffered")
-	}
-
-	select {
-	case <-p.NotifyClosed():
-		return readyCh
-	default:
-		readyCh <- struct{}{}
-		p.mu.Lock()
-		p.readyChs = append(p.readyChs, readyCh)
-		p.mu.Unlock()
-
-		return readyCh
-	}
-}
-
-func (p *Publisher) NotifyUnready(unreadyCh chan error) <-chan error {
-	if cap(unreadyCh) == 0 {
-		panic("unready chan is unbuffered")
-	}
-
-	select {
-	case <-p.NotifyClosed():
-		close(unreadyCh)
-	default:
-		p.mu.Lock()
-		defer p.mu.Unlock()
-		p.unreadyChs = append(p.unreadyChs, unreadyCh)
-	}
-
-	select {
-	case err := <-p.internalCh:
-		unreadyCh <- err
-	}
-
-	return unreadyCh
 }
 
 func (p *Publisher) NotifyClosed() <-chan struct{} {
@@ -343,7 +343,7 @@ func (p *Publisher) pausedState(chFlowCh <-chan bool, connCloseCh <-chan struct{
 	p.notifyUnready(errFlowPaused)
 	for {
 		select {
-		case p.internalCh <- errFlowPaused:
+		case p.internalUnreadyCh <- errFlowPaused:
 		case resume := <-chFlowCh:
 			if resume {
 				p.logger.Printf("[INFO] publisher flow resumed")
@@ -400,7 +400,7 @@ func (p *Publisher) waitRetry(err error) error {
 
 	for {
 		select {
-		case p.internalCh <- err:
+		case p.internalUnreadyCh <- err:
 			continue
 		case <-timer.C:
 			return err
