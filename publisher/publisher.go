@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"strings"
 	"sync"
 	"time"
@@ -46,7 +47,7 @@ type Publisher struct {
 	initFunc    func(conn AMQPConnection) (AMQPChannel, error)
 	logger      logger.Logger
 
-	mu         *sync.Mutex
+	mu         sync.Mutex
 	readyChs   []chan struct{}
 	unreadyChs []chan error
 
@@ -66,6 +67,7 @@ func New(
 		connCh: connCh,
 
 		publishingCh:      make(chan Message),
+		closeCh:           make(chan struct{}),
 		internalUnreadyCh: make(chan error),
 		internalReadyCh:   make(chan struct{}),
 	}
@@ -143,7 +145,7 @@ func WithInitFunc(f func(conn AMQPConnection) (AMQPChannel, error)) Option {
 	}
 }
 
-func WithNotify(readyCh chan struct{}, unreadyCh chan error) Option{
+func WithNotify(readyCh chan struct{}, unreadyCh chan error) Option {
 	return func(p *Publisher) {
 		p.readyChs = append(p.readyChs, readyCh)
 		p.unreadyChs = append(p.unreadyChs, unreadyCh)
@@ -236,6 +238,7 @@ func (p *Publisher) Go(msg Message) <-chan error {
 }
 
 func (p *Publisher) Close() {
+	log.Println("[DEBUG TEST] publisher close")
 	p.cancelFunc()
 }
 
@@ -244,14 +247,17 @@ func (p *Publisher) NotifyClosed() <-chan struct{} {
 }
 
 func (p *Publisher) connectionState() {
+	log.Println("[DEBUG TEST] connectionState")
 	defer p.cancelFunc()
 	defer func() {
 		p.mu.Lock()
 		defer p.mu.Unlock()
 		for _, unreadyCh := range p.unreadyChs {
+			log.Println("[DEBUG TEST] close unready")
 			close(unreadyCh)
 		}
 	}()
+	defer close(p.closeCh)
 	defer p.logger.Printf("[DEBUG] publisher stopped")
 
 	var connErr error = amqp.ErrClosed
@@ -275,15 +281,12 @@ func (p *Publisher) connectionState() {
 			err := p.channelState(conn.AMQPConnection(), conn.NotifyClose())
 			if err != nil {
 				p.logger.Printf("[DEBUG] publisher unready")
-				p.notifyUnready(err)
-				connErr = err
 				continue
 			}
 
 			return
+		case p.internalUnreadyCh <- connErr:
 		case <-p.ctx.Done():
-			p.close(nil)
-
 			return
 		}
 	}
@@ -315,6 +318,7 @@ func (p *Publisher) publishState(ch AMQPChannel, connCloseCh <-chan struct{}) er
 	p.notifyReady()
 	for {
 		select {
+		case p.internalReadyCh <- struct{}{}:
 		case msg := <-p.publishingCh:
 			p.publish(ch, msg)
 		case <-chCloseCh:
