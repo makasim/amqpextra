@@ -277,6 +277,7 @@ func (p *Publisher) connectionState() {
 			err := p.channelState(conn.AMQPConnection(), conn.NotifyClose())
 			if err != nil {
 				p.logger.Printf("[DEBUG] publisher unready")
+				connErr = err
 				continue
 			}
 

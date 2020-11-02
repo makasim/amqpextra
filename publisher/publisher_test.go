@@ -230,9 +230,7 @@ func TestReconnection(main *testing.T) {
 		close(closeCh)
 		close(connCh)
 
-		time.Sleep(time.Millisecond * 20)
 		assertUnready(t, unreadyCh, amqp.ErrClosed.Error())
-		time.Sleep(time.Millisecond * 20)
 
 		p.Close()
 		assertClosed(t, p)
@@ -288,8 +286,10 @@ func TestReconnection(main *testing.T) {
 			Return(nil).
 			Times(1)
 
-		connCh, l, p := newPublisher(publisher.WithInitFunc(initFuncStub(ch, newCh)),
-			publisher.WithNotify(readyCh, unreadyCh))
+		connCh, l, p := newPublisher(
+			publisher.WithInitFunc(initFuncStub(ch, newCh)),
+			publisher.WithNotify(readyCh, unreadyCh),
+		)
 		defer p.Close()
 
 		amqpConn := mock_publisher.NewMockAMQPConnection(ctrl)
@@ -401,8 +401,11 @@ func TestUnreadyPublisher(main *testing.T) {
 		readyCh := make(chan struct{}, 1)
 		unreadyCh := make(chan error, 1)
 
-		p, err := publisher.New(connCh, publisher.WithLogger(l),
-			publisher.WithNotify(readyCh, unreadyCh))
+		p, err := publisher.New(
+			connCh,
+			publisher.WithLogger(l),
+			publisher.WithNotify(readyCh, unreadyCh),
+		)
 		require.NoError(t, err)
 		defer p.Close()
 
@@ -710,8 +713,10 @@ func TestReadyPublisher(main *testing.T) {
 		readyCh := make(chan struct{}, 1)
 		unreadyCh := make(chan error, 1)
 
-		connCh, l, p := newPublisher(publisher.WithInitFunc(initFuncStub(ch)),
-			publisher.WithNotify(readyCh, unreadyCh))
+		connCh, l, p := newPublisher(
+			publisher.WithInitFunc(initFuncStub(ch)),
+			publisher.WithNotify(readyCh, unreadyCh),
+		)
 		defer p.Close()
 
 		amqpConn := mock_publisher.NewMockAMQPConnection(ctrl)
@@ -830,7 +835,8 @@ func TestReadyPublisher(main *testing.T) {
 		unreadyCh := make(chan error, 1)
 		readyCh := make(chan struct{}, 1)
 
-		connCh, l, p := newPublisher(publisher.WithInitFunc(initFuncStub(ch)),
+		connCh, l, p := newPublisher(
+			publisher.WithInitFunc(initFuncStub(ch)),
 			publisher.WithNotify(readyCh, unreadyCh),
 		)
 		defer p.Close()
@@ -1176,7 +1182,8 @@ func TestClose(main *testing.T) {
 		unreadyCh := make(chan error, 1)
 		readyCh := make(chan struct{}, 1)
 
-		connCh, l, p := newPublisher(publisher.WithInitFunc(initFuncStub(ch)),
+		connCh, l, p := newPublisher(
+			publisher.WithInitFunc(initFuncStub(ch)),
 			publisher.WithNotify(readyCh, unreadyCh),
 		)
 		defer p.Close()
@@ -1327,7 +1334,8 @@ func TestConcurrency(main *testing.T) {
 			Return(amqp.ErrClosed).
 			Times(1)
 
-		connCh, l, p := newPublisher(publisher.WithInitFunc(initFuncStub(ch, newCh)),
+		connCh, l, p := newPublisher(
+			publisher.WithInitFunc(initFuncStub(ch, newCh)),
 			publisher.WithNotify(readyCh, unreadyCh),
 		)
 		defer p.Close()
