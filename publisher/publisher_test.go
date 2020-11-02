@@ -2,6 +2,7 @@ package publisher_test
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"testing"
 	"time"
@@ -18,28 +19,241 @@ import (
 )
 
 func TestNotify(main *testing.T) {
-	main.Run("ErroredWhenCapEqualZero", func(t *testing.T) {
+	main.Run("PanicIfReadyChUnbuffered", func(t *testing.T) {
+		defer goleak.VerifyNone(t)
 
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		readyCh := make(chan struct{})
+		unreadyCh := make(chan error, 1)
+
+		panicUnbufferedReady := func() {
+			_, _, p := newPublisher()
+			defer p.Close()
+			p.Notify(readyCh, unreadyCh)
+		}
+
+		require.Panics(t, panicUnbufferedReady)
 	})
 
-	main.Run("UnreadyWhileDialing", func(t *testing.T) {
+	main.Run("PanicIfUnreadyChUnbuffered", func(t *testing.T) {
+		defer goleak.VerifyNone(t)
 
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		readyCh := make(chan struct{}, 1)
+		unreadyCh := make(chan error)
+
+		panicUnbufferedUnready := func() {
+			_, _, p := newPublisher()
+			defer p.Close()
+			p.Notify(readyCh, unreadyCh)
+		}
+
+		require.Panics(t, panicUnbufferedUnready)
 	})
 
-	main.Run("ReadyAfterConnected", func(t *testing.T) {
+	main.Run("UnreadyWhileInit", func(t *testing.T) {
+		defer goleak.VerifyNone(t)
 
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		readyCh := make(chan struct{}, 1)
+		unreadyCh := make(chan error, 1)
+
+		amqpConn := mock_publisher.NewMockAMQPConnection(ctrl)
+
+		conn, l, p := newPublisher(
+			publisher.WithInitFunc(
+				func(conn publisher.AMQPConnection) (publisher.AMQPChannel, error) {
+					time.Sleep(time.Millisecond * 50)
+					return nil, errors.New("the error")
+				}),
+		)
+		defer p.Close()
+
+		_, newUnreadyCh := p.Notify(readyCh, unreadyCh)
+
+		conn <- publisher.NewConnection(amqpConn, nil)
+
+		assertUnreadyNotify(t, newUnreadyCh, amqp.ErrClosed.Error())
+		assertUnreadyNotify(t, newUnreadyCh, "the error")
+
+		expected := `[DEBUG] publisher starting
+[ERROR] init func: the error
+`
+		require.Equal(t, expected, l.Logs())
+	})
+
+	main.Run("ReadyIfConnected", func(t *testing.T) {
+		defer goleak.VerifyNone(t)
+
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		readyCh := make(chan struct{}, 1)
+		unreadyCh := make(chan error, 1)
+
+		amqpConn := mock_publisher.NewMockAMQPConnection(ctrl)
+		ch := mock_publisher.NewMockAMQPChannel(ctrl)
+
+		ch.EXPECT().NotifyClose(any()).Times(1)
+		ch.EXPECT().NotifyFlow(any()).Times(1)
+		ch.EXPECT().Close().AnyTimes()
+
+		conn, l, p := newPublisher(
+			publisher.WithInitFunc(
+				func(conn publisher.AMQPConnection) (publisher.AMQPChannel, error) {
+					return ch, nil
+				}),
+		)
+		defer p.Close()
+
+		newReadyCh, newUnreadyCh := p.Notify(readyCh, unreadyCh)
+
+		assertUnreadyNotify(t, newUnreadyCh, amqp.ErrClosed.Error())
+
+		conn <- publisher.NewConnection(amqpConn, nil)
+
+		time.Sleep(time.Millisecond * 10)
+
+		assertReadyNotify(t, newReadyCh)
+
+		expected := `[DEBUG] publisher starting
+[DEBUG] publisher ready
+`
+
+		require.Equal(t, expected, l.Logs())
 	})
 
 	main.Run("UnreadyWhileWaitRetry", func(t *testing.T) {
+		defer goleak.VerifyNone(t)
 
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		readyCh := make(chan struct{}, 1)
+		unreadyCh := make(chan error, 1)
+
+		amqpConn := mock_publisher.NewMockAMQPConnection(ctrl)
+
+		conn, l, p := newPublisher(
+			publisher.WithInitFunc(func(conn publisher.AMQPConnection) (publisher.AMQPChannel, error) {
+				return nil, fmt.Errorf("the error")
+			}),
+			publisher.WithRestartSleep(time.Millisecond*400),
+		)
+		defer p.Close()
+
+		_, newUnreadyCh := p.Notify(readyCh, unreadyCh)
+
+		assertUnreadyNotify(t, newUnreadyCh, amqp.ErrClosed.Error())
+
+		conn <- publisher.NewConnection(amqpConn, nil)
+
+		time.Sleep(time.Millisecond * 100)
+
+		assertUnreadyNotify(t, newUnreadyCh, "the error")
+
+		p.Close()
+
+		expected := `[DEBUG] publisher starting
+[ERROR] init func: the error
+`
+		require.Equal(t, expected, l.Logs())
 	})
 
 	main.Run("UnreadyAfterPaused", func(t *testing.T) {
+		defer goleak.VerifyNone(t)
 
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		readyCh := make(chan struct{}, 1)
+		unreadyCh := make(chan error, 1)
+
+		var chFlowCh chan bool
+
+		amqpConn := mock_publisher.NewMockAMQPConnection(ctrl)
+		ch := mock_publisher.NewMockAMQPChannel(ctrl)
+
+		ch.
+			EXPECT().
+			NotifyClose(any()).
+			AnyTimes()
+		ch.
+			EXPECT().
+			NotifyFlow(any()).
+			DoAndReturn(func(ch chan bool) chan bool {
+				chFlowCh = ch
+				return ch
+			}).
+			Times(1)
+		ch.
+			EXPECT().
+			Close().
+			AnyTimes()
+
+		connCh, l, p := newPublisher(
+			publisher.WithInitFunc(initFuncStub(ch)),
+		)
+		defer p.Close()
+
+		newReadyCh, newUnreadyCh := p.Notify(readyCh, unreadyCh)
+		assertUnreadyNotify(t, newUnreadyCh, amqp.ErrClosed.Error())
+
+		connCh <- publisher.NewConnection(amqpConn, nil)
+
+		assertReadyNotify(t, newReadyCh)
+
+		chFlowCh <- false
+
+		assertUnreadyNotify(t, unreadyCh, "publisher flow paused")
+
+		expected := `[DEBUG] publisher starting
+[DEBUG] publisher ready
+[WARN] publisher flow paused
+`
+		require.Equal(t, expected, l.Logs())
 	})
 
-	main.Run("UnreadyWhenClosed", func(t *testing.T) {
+	main.Run("UnreadyAfterClosed", func(t *testing.T) {
+		defer goleak.VerifyNone(t)
 
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		readyCh := make(chan struct{}, 1)
+		unreadyCh := make(chan error, 1)
+
+		ch := mock_publisher.NewMockAMQPChannel(ctrl)
+
+		ch.
+			EXPECT().
+			NotifyClose(any()).
+			AnyTimes()
+		ch.
+			EXPECT().
+			NotifyFlow(any()).
+			AnyTimes()
+		ch.
+			EXPECT().
+			Close().
+			AnyTimes()
+
+		_, _, p := newPublisher(
+			publisher.WithInitFunc(initFuncStub(ch)),
+		)
+
+		_, newUnreadyCh := p.Notify(readyCh, unreadyCh)
+
+		p.Close()
+		assertUnreadyNotify(t, newUnreadyCh, amqp.ErrClosed.Error())
+
+		assertUnready(t, unreadyCh, "permanently closed")
 	})
 }
 
@@ -1963,7 +2177,35 @@ func assertClosed(t *testing.T, p *publisher.Publisher) {
 	}
 }
 
+func assertReadyNotify(t *testing.T, readyCh <-chan struct{}) {
+	timer := time.NewTimer(time.Millisecond * 100)
+	defer timer.Stop()
+
+	select {
+	case <-readyCh:
+	case <-timer.C:
+		t.Fatal("publisher must be ready")
+	}
+}
+
 func assertUnready(t *testing.T, unreadyCh chan error, errString string) {
+	timer := time.NewTimer(time.Millisecond * 100)
+	defer timer.Stop()
+
+	select {
+	case actualErr, ok := <-unreadyCh:
+		if !ok {
+			require.Equal(t, "permanently closed", errString)
+			return
+		}
+
+		require.EqualError(t, actualErr, errString)
+	case <-timer.C:
+		t.Fatal("publisher must be unready")
+	}
+}
+
+func assertUnreadyNotify(t *testing.T, unreadyCh <-chan error, errString string) {
 	timer := time.NewTimer(time.Millisecond * 100)
 	defer timer.Stop()
 
