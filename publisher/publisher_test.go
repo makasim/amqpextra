@@ -17,6 +17,32 @@ import (
 	"github.com/makasim/amqpextra/publisher/mock_publisher"
 )
 
+func TestNotify(main *testing.T) {
+	main.Run("ErroredWhenCapEqualZero", func(t *testing.T) {
+
+	})
+
+	main.Run("UnreadyWhileDialing", func(t *testing.T) {
+
+	})
+
+	main.Run("ReadyAfterConnected", func(t *testing.T) {
+
+	})
+
+	main.Run("UnreadyWhileWaitRetry", func(t *testing.T) {
+
+	})
+
+	main.Run("UnreadyAfterPaused", func(t *testing.T) {
+
+	})
+
+	main.Run("UnreadyWhenClosed", func(t *testing.T) {
+
+	})
+}
+
 func TestReconnection(main *testing.T) {
 	main.Run("InitFuncRetry", func(t *testing.T) {
 		defer goleak.VerifyNone(t)
