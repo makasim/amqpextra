@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
 	"strings"
 	"sync"
 	"time"
@@ -152,7 +151,7 @@ func WithNotify(readyCh chan struct{}, unreadyCh chan error) Option {
 	}
 }
 
-func (p *Publisher) Notify(readyCh chan struct{}, unreadyCh chan error) (<-chan struct{}, <-chan error) {
+func (p *Publisher) Notify(readyCh chan struct{}, unreadyCh chan error) (ready <-chan struct{}, unready <-chan error) {
 	if cap(readyCh) == 0 {
 		panic("ready chan is unbuffered")
 	}
@@ -238,7 +237,6 @@ func (p *Publisher) Go(msg Message) <-chan error {
 }
 
 func (p *Publisher) Close() {
-	log.Println("[DEBUG TEST] publisher close")
 	p.cancelFunc()
 }
 
@@ -247,13 +245,11 @@ func (p *Publisher) NotifyClosed() <-chan struct{} {
 }
 
 func (p *Publisher) connectionState() {
-	log.Println("[DEBUG TEST] connectionState")
 	defer p.cancelFunc()
 	defer func() {
 		p.mu.Lock()
 		defer p.mu.Unlock()
 		for _, unreadyCh := range p.unreadyChs {
-			log.Println("[DEBUG TEST] close unready")
 			close(unreadyCh)
 		}
 	}()
@@ -261,8 +257,8 @@ func (p *Publisher) connectionState() {
 	defer p.logger.Printf("[DEBUG] publisher stopped")
 
 	var connErr error = amqp.ErrClosed
-	p.notifyUnready(connErr)
 	p.logger.Printf("[DEBUG] publisher starting")
+	p.notifyUnready(connErr)
 	for {
 		select {
 		case conn, ok := <-p.connCh:
