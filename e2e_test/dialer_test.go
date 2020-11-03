@@ -19,12 +19,11 @@ func TestDialerReconnectWhenClosedByClient(t *testing.T) {
 	defer goleak.VerifyNone(t)
 
 	readyCh := make(chan struct{}, 1)
-	unreadyCh := make(chan error, 1)
+	unreadyCh := make(chan error, 2)
 
 	dialer, err := amqpextra.NewDialer(
 		amqpextra.WithURL("amqp://guest:guest@rabbitmq:5672/amqpextra"),
-		amqpextra.WithReadyCh(readyCh),
-		amqpextra.WithUnreadyCh(unreadyCh),
+		amqpextra.WithNotify(readyCh, unreadyCh),
 	)
 	require.NoError(t, err)
 	defer dialer.Close()
@@ -54,8 +53,7 @@ func TestDialerReconnectWhenClosedByServer(t *testing.T) {
 		amqpextra.WithConnectionProperties(amqp.Table{
 			"connection_name": connName,
 		}),
-		amqpextra.WithReadyCh(readyCh),
-		amqpextra.WithUnreadyCh(unreadyCh),
+		amqpextra.WithNotify(readyCh, unreadyCh),
 	)
 	require.NoError(t, err)
 	defer dialer.Close()
