@@ -14,23 +14,30 @@ import (
 	"github.com/streadway/amqp"
 )
 
+// Option could be used to configure Dialer
 type Option func(c *Dialer)
 
+// AMQPConnection is an interface for streadway's *amqp.Connection
 type AMQPConnection interface {
 	NotifyClose(chan *amqp.Error) chan *amqp.Error
 	Close() error
 }
 
+// Connection provides access to streadway's *amqp.Connection as well as notification channels
+// A notification indicates that something wrong has happened to the connection.
+// The client should get a fresh connection from Dialer.
 type Connection struct {
 	amqpConn AMQPConnection
 	lostCh   chan struct{}
 	closeCh  chan struct{}
 }
 
+// AMQPConnection returns streadway's *amqp.Connection
 func (c *Connection) AMQPConnection() *amqp.Connection {
 	return c.amqpConn.(*amqp.Connection)
 }
 
+// NotifyLost notifies when current connection is lost and new once should be requested
 func (c *Connection) NotifyLost() chan struct{} {
 	return c.lostCh
 }
@@ -49,6 +56,9 @@ type config struct {
 	ctx         context.Context
 }
 
+// Dialer is responsible for keeping the connection up.
+// If connection is lost or closed. It tries dial a server again and again with some wait periods.
+// Dialer keep connection up until it Dialer.Close() method called or the context is cancelled.
 type Dialer struct {
 	config
 
@@ -67,6 +77,8 @@ type Dialer struct {
 	closedCh chan struct{}
 }
 
+// Dial returns established connection or an error.
+// It keeps retrying until timeout 30sec is reached.
 func Dial(opts ...Option) (*amqp.Connection, error) {
 	d, err := NewDialer(opts...)
 	if err != nil {
@@ -79,6 +91,7 @@ func Dial(opts ...Option) (*amqp.Connection, error) {
 	return d.Connection(ctx)
 }
 
+// NewDialer returns Dialer or a configuration error.
 func NewDialer(opts ...Option) (*Dialer, error) {
 	c := &Dialer{
 		config: config{
@@ -149,42 +162,52 @@ func NewDialer(opts ...Option) (*Dialer, error) {
 	return c, nil
 }
 
+// WithURL configure RabbitMQ servers to dial.
+// Dialer dials url by round-robbin
 func WithURL(urls ...string) Option {
 	return func(c *Dialer) {
 		c.amqpUrls = append(c.amqpUrls, urls...)
 	}
 }
 
+// WithAMQPDial configure dial function.
+// The function takes the url and amqp.Config and returns AMQPConnection.
 func WithAMQPDial(dial func(url string, c amqp.Config) (AMQPConnection, error)) Option {
 	return func(c *Dialer) {
 		c.amqpDial = dial
 	}
 }
 
+// WithLogger configure the logger used by Dialer
 func WithLogger(l logger.Logger) Option {
 	return func(c *Dialer) {
 		c.logger = l
 	}
 }
 
+// WithLogger configure Dialer context
+// The context could used later to stop Dialer
 func WithContext(ctx context.Context) Option {
 	return func(c *Dialer) {
 		c.config.ctx = ctx
 	}
 }
 
+// WithRetryPeriod configure how much time to wait before next dial attempt. Default: 5sec.
 func WithRetryPeriod(dur time.Duration) Option {
 	return func(c *Dialer) {
 		c.retryPeriod = dur
 	}
 }
 
+// WithConnectionProperties configure connection properties set on dial.
 func WithConnectionProperties(props amqp.Table) Option {
 	return func(c *Dialer) {
 		c.amqpConfig.Properties = props
 	}
 }
 
+// WithNotify() helps subscribe Dialer ready and unready events
 func WithNotify(readyCh chan struct{}, unreadyCh chan error) Option {
 	return func(c *Dialer) {
 		c.readyChs = append(c.readyChs, readyCh)
@@ -192,6 +215,11 @@ func WithNotify(readyCh chan struct{}, unreadyCh chan error) Option {
 	}
 }
 
+// ConnectionCh returns Connection channel.
+// The channel should be used to get established connections.
+// The client must subscribe on Connection.NotifyLost().
+// Once lost, client must stop using current connection and get new one from Connection channel.
+// Connection channel is closed when Dialer is closed. Don't forget to check for closed connection.
 func (c *Dialer) ConnectionCh() <-chan *Connection {
 	return c.connCh
 }
@@ -239,14 +267,20 @@ func (c *Dialer) Notify(readyCh chan struct{}, unreadyCh chan error) (ready <-ch
 	}
 }
 
+// NotifyClosed could be used to subscribe on Dialer closed event.
+// Dialer.ConnectionCh() could no longer be used after this point
 func (c *Dialer) NotifyClosed() <-chan struct{} {
 	return c.closedCh
 }
 
+// Close initiate Dialer close.
+// Subscribe Dialer.NotifyClosed() to know when it was finally closed.
 func (c *Dialer) Close() {
 	c.cancelFunc()
 }
 
+// Connection returns streadway's *amqp.Connection.
+// The client should subscribe on Dialer.NotifyReady(), Dialer.NotifyUnready() events in order to know when the connection is lost.
 func (c *Dialer) Connection(ctx context.Context) (*amqp.Connection, error) {
 	select {
 	case <-c.ctx.Done():
@@ -262,6 +296,7 @@ func (c *Dialer) Connection(ctx context.Context) (*amqp.Connection, error) {
 	}
 }
 
+// Consumer returns a consumer that support reconnection feature.
 func (c *Dialer) Consumer(queue string, handler consumer.Handler, opts ...consumer.Option) (*consumer.Consumer, error) {
 	opts = append([]consumer.Option{
 		consumer.WithLogger(c.logger),
@@ -271,6 +306,7 @@ func (c *Dialer) Consumer(queue string, handler consumer.Handler, opts ...consum
 	return NewConsumer(queue, handler, c.ConnectionCh(), opts...)
 }
 
+// Publisher returns a consumer that support reconnection feature.
 func (c *Dialer) Publisher(opts ...publisher.Option) (*publisher.Publisher, error) {
 	opts = append([]publisher.Option{
 		publisher.WithLogger(c.logger),
@@ -280,6 +316,11 @@ func (c *Dialer) Publisher(opts ...publisher.Option) (*publisher.Publisher, erro
 	return NewPublisher(c.ConnectionCh(), opts...)
 }
 
+// connectState is a starting point.
+// It chooses URL and dials the server.
+// Once connection is established it pass control to Dialer.connectedState()
+// If connection is closed or lost Dialer.connectedState() returns control back to Dialer.connectState()
+// Exits on Dialer.Close()
 func (c *Dialer) connectState() {
 	defer close(c.connCh)
 	defer close(c.closedCh)
@@ -328,7 +369,6 @@ func (c *Dialer) connectState() {
 	loop2:
 		for {
 			select {
-
 			case conn := <-connCh:
 				select {
 				case <-c.ctx.Done():
@@ -355,6 +395,9 @@ func (c *Dialer) connectState() {
 	}
 }
 
+// connectedState serves Dialer.ConnectionCh() and Dialer.Connection() methods.
+// It shares an established connection with all the clients who requests it.
+// Once connection is lost or closed it gives control back to Dialer.connectState().
 func (c *Dialer) connectedState(amqpConn AMQPConnection) error {
 	defer c.closeConn(amqpConn)
 
@@ -421,6 +464,7 @@ func (c *Dialer) waitRetry(err error) error {
 	for {
 		select {
 		case c.internalUnreadyCh <- err:
+			continue
 		case <-timer.C:
 			return err
 		case <-c.ctx.Done():

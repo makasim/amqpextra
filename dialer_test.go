@@ -124,6 +124,8 @@ func TestOptions(main *testing.T) {
 	})
 }
 
+
+
 func TestConnectState(main *testing.T) {
 	main.Run("CloseWhileDialingErrored", func(t *testing.T) {
 		defer goleak.VerifyNone(t)
