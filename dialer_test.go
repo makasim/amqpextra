@@ -128,17 +128,15 @@ func TestConnectState(main *testing.T) {
 	main.Run("CloseWhileDialingErrored", func(t *testing.T) {
 		defer goleak.VerifyNone(t)
 
-		ctrl := gomock.NewController(t)
-		defer ctrl.Finish()
-
 		l := logger.NewTest()
+		readyCh := make(chan struct{}, 1)
 		unreadyCh := make(chan error, 1)
 
 		dialer, err := amqpextra.NewDialer(
 			amqpextra.WithURL("amqp://rabbitmq.host"),
 			amqpextra.WithAMQPDial(amqpDialStub(time.Millisecond*150, fmt.Errorf("dialing errored"))),
 			amqpextra.WithLogger(l),
-			amqpextra.WithUnreadyCh(unreadyCh),
+			amqpextra.WithNotify(readyCh, unreadyCh),
 		)
 		require.NoError(t, err)
 
@@ -178,8 +176,7 @@ func TestConnectState(main *testing.T) {
 			amqpextra.WithURL("amqp://rabbitmq.host"),
 			amqpextra.WithAMQPDial(amqpDialStub(time.Millisecond*150, conn)),
 			amqpextra.WithLogger(l),
-			amqpextra.WithUnreadyCh(unreadyCh),
-			amqpextra.WithReadyCh(readyCh),
+			amqpextra.WithNotify(readyCh, unreadyCh),
 		)
 		require.NoError(t, err)
 
@@ -222,8 +219,7 @@ func TestConnectState(main *testing.T) {
 			amqpextra.WithAMQPDial(amqpDialStub(time.Millisecond*150, conn)),
 			amqpextra.WithLogger(l),
 			amqpextra.WithContext(ctx),
-			amqpextra.WithUnreadyCh(unreadyCh),
-			amqpextra.WithReadyCh(readyCh),
+			amqpextra.WithNotify(readyCh, unreadyCh),
 		)
 		require.NoError(t, err)
 
@@ -261,8 +257,7 @@ func TestConnectState(main *testing.T) {
 			amqpextra.WithURL("amqp://rabbitmq.host"),
 			amqpextra.WithAMQPDial(amqpDialStub(time.Millisecond*150, amqpConn)),
 			amqpextra.WithLogger(l),
-			amqpextra.WithUnreadyCh(unreadyCh),
-			amqpextra.WithReadyCh(readyCh),
+			amqpextra.WithNotify(readyCh, unreadyCh),
 		)
 		require.NoError(t, err)
 
@@ -288,11 +283,13 @@ func TestConnectState(main *testing.T) {
 		defer ctrl.Finish()
 
 		l := logger.NewTest()
+
 		unreadyCh := make(chan error, 10)
+		readyCh := make(chan struct{}, 1)
 
 		dialer, err := amqpextra.NewDialer(
 			amqpextra.WithURL("amqp://rabbitmq.host"),
-			amqpextra.WithUnreadyCh(unreadyCh),
+			amqpextra.WithNotify(readyCh, unreadyCh),
 			amqpextra.WithRetryPeriod(time.Millisecond*150),
 			amqpextra.WithAMQPDial(amqpDialStub(fmt.Errorf("the error"))),
 			amqpextra.WithLogger(l),
@@ -322,6 +319,7 @@ func TestConnectState(main *testing.T) {
 
 		l := logger.NewTest()
 		unreadyCh := make(chan error, 10)
+		readyCh := make(chan struct{}, 1)
 
 		ctx, cancelFunc := context.WithCancel(context.Background())
 		defer cancelFunc()
@@ -330,7 +328,7 @@ func TestConnectState(main *testing.T) {
 			amqpextra.WithURL("amqp://rabbitmq.host"),
 			amqpextra.WithAMQPDial(amqpDialStub(fmt.Errorf("the error"))),
 			amqpextra.WithRetryPeriod(time.Millisecond*150),
-			amqpextra.WithUnreadyCh(unreadyCh),
+			amqpextra.WithNotify(readyCh, unreadyCh),
 			amqpextra.WithLogger(l),
 			amqpextra.WithContext(ctx),
 		)
@@ -359,12 +357,13 @@ func TestConnectState(main *testing.T) {
 		defer ctrl.Finish()
 
 		l := logger.NewTest()
-		unreadyCh := make(chan error, 2)
+		unreadyCh := make(chan error, 10)
+		readyCh := make(chan struct{}, 1)
 		dialer, err := amqpextra.NewDialer(
 			amqpextra.WithURL("amqp://rabbitmq.host"),
 			amqpextra.WithAMQPDial(amqpDialStub(fmt.Errorf("the error"))),
 			amqpextra.WithRetryPeriod(time.Millisecond*150),
-			amqpextra.WithUnreadyCh(unreadyCh),
+			amqpextra.WithNotify(readyCh, unreadyCh),
 			amqpextra.WithLogger(l),
 		)
 		require.NoError(t, err)
@@ -402,8 +401,7 @@ func TestConnectState(main *testing.T) {
 
 		dialer, err := amqpextra.NewDialer(
 			amqpextra.WithURL("amqp://rabbitmq.host"),
-			amqpextra.WithUnreadyCh(unreadyCh),
-			amqpextra.WithReadyCh(readyCh),
+			amqpextra.WithNotify(readyCh, unreadyCh),
 			amqpextra.WithAMQPDial(amqpDialStub(fmt.Errorf("the error"), amqpConn)),
 			amqpextra.WithRetryPeriod(time.Millisecond*150),
 			amqpextra.WithLogger(l),
@@ -417,7 +415,7 @@ func TestConnectState(main *testing.T) {
 		time.Sleep(time.Millisecond * 50)
 		assertUnready(t, unreadyCh, "the error")
 
-		time.Sleep(time.Millisecond * 50)
+		time.Sleep(time.Millisecond * 20)
 		assertReady(t, readyCh)
 
 		conn := <-dialer.ConnectionCh()
@@ -519,6 +517,200 @@ func TestConnectState(main *testing.T) {
 	})
 }
 
+func TestNotify(main *testing.T) {
+	main.Run("PanicIfReadyChUnbuffered", func(t *testing.T) {
+		defer goleak.VerifyNone(t)
+
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		readyCh := make(chan struct{})
+		unreadyCh := make(chan error, 1)
+
+		amqpConn := mock_amqpextra.NewMockAMQPConnection(ctrl)
+
+		require.PanicsWithValue(t, "ready chan is unbuffered", func() {
+			d, _ := amqpextra.NewDialer(
+				amqpextra.WithAMQPDial(
+					amqpDialStub(amqpConn),
+				),
+			)
+			d.Notify(readyCh, unreadyCh)
+		})
+	})
+
+	main.Run("PanicIfUnreadyChUnbuffered", func(t *testing.T) {
+		defer goleak.VerifyNone(t)
+
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		readyCh := make(chan struct{}, 1)
+		unreadyCh := make(chan error)
+
+		amqpConn := mock_amqpextra.NewMockAMQPConnection(ctrl)
+
+		require.PanicsWithValue(t, "unready chan is unbuffered", func() {
+			d, _ := amqpextra.NewDialer(
+				amqpextra.WithAMQPDial(
+					amqpDialStub(amqpConn),
+				),
+			)
+			d.Notify(readyCh, unreadyCh)
+		})
+	})
+
+	main.Run("UnreadyWhileDial", func(t *testing.T) {
+		defer goleak.VerifyNone(t)
+
+		l := logger.NewTest()
+
+		readyCh := make(chan struct{}, 1)
+		unreadyCh := make(chan error, 1)
+
+		d, err := amqpextra.NewDialer(
+			amqpextra.WithURL("amqp://rabbitmq.host"),
+			amqpextra.WithLogger(l),
+			amqpextra.WithAMQPDial(
+				amqpDialStub(time.Millisecond*100, fmt.Errorf("the error")),
+			),
+		)
+		require.NoError(t, err)
+
+		time.Sleep(time.Millisecond * 20)
+
+		_, newUnreadyCh := d.Notify(readyCh, unreadyCh)
+
+		assertUnready(t, newUnreadyCh, amqp.ErrClosed.Error())
+		assertNoReady(t, readyCh)
+		assertUnready(t, newUnreadyCh, "the error")
+
+		d.Close()
+
+		expected := `[DEBUG] connection unready
+[DEBUG] dialing
+[DEBUG] connection unready: the error
+`
+		require.Equal(t, expected, l.Logs())
+	})
+
+	main.Run("ReadyIfConnected", func(t *testing.T) {
+		defer goleak.VerifyNone(t)
+
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		l := logger.NewTest()
+
+		readyCh := make(chan struct{}, 1)
+		unreadyCh := make(chan error, 1)
+
+		conn := mock_amqpextra.NewMockAMQPConnection(ctrl)
+		conn.EXPECT().NotifyClose(any()).AnyTimes()
+		conn.EXPECT().Close().AnyTimes()
+
+		d, err := amqpextra.NewDialer(
+			amqpextra.WithURL("amqp://rabbitmq.host"),
+			amqpextra.WithLogger(l),
+			amqpextra.WithAMQPDial(
+				amqpDialStub(conn),
+			),
+		)
+		require.NoError(t, err)
+		newReadyCh, newUnreadyCh := d.Notify(readyCh, unreadyCh)
+
+		time.Sleep(time.Millisecond * 20)
+
+		assertUnready(t, newUnreadyCh, amqp.ErrClosed.Error())
+		assertNoUnready(t, unreadyCh)
+		assertReady(t, newReadyCh)
+
+		d.Close()
+
+		expected := `[DEBUG] connection unready
+[DEBUG] dialing
+[DEBUG] connection ready
+`
+		require.Equal(t, expected, l.Logs())
+	})
+
+	main.Run("UnreadyWhileWaitRetry", func(t *testing.T) {
+		defer goleak.VerifyNone(t)
+
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		l := logger.NewTest()
+
+		readyCh := make(chan struct{}, 1)
+		unreadyCh := make(chan error, 1)
+
+		conn := mock_amqpextra.NewMockAMQPConnection(ctrl)
+		conn.EXPECT().NotifyClose(any()).AnyTimes()
+		conn.EXPECT().Close().AnyTimes()
+
+		d, err := amqpextra.NewDialer(
+			amqpextra.WithURL("amqp://rabbitmq.host"),
+			amqpextra.WithLogger(l),
+			amqpextra.WithAMQPDial(
+				amqpDialStub(errors.New("the error")),
+			),
+			amqpextra.WithRetryPeriod(time.Millisecond*50),
+		)
+		require.NoError(t, err)
+
+		_, newUnreadyCh := d.Notify(readyCh, unreadyCh)
+
+		time.Sleep(time.Millisecond * 20)
+		d.Close()
+
+		assertUnready(t, newUnreadyCh, amqp.ErrClosed.Error())
+
+		expected := `[DEBUG] connection unready
+[DEBUG] dialing
+[DEBUG] connection unready: the error
+[DEBUG] connection closed
+`
+		require.Equal(t, expected, l.Logs())
+	})
+
+	main.Run("UnreadyAfterClosed", func(t *testing.T) {
+		defer goleak.VerifyNone(t)
+
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		l := logger.NewTest()
+
+		readyCh := make(chan struct{}, 1)
+		unreadyCh := make(chan error, 1)
+
+		conn := mock_amqpextra.NewMockAMQPConnection(ctrl)
+		conn.EXPECT().NotifyClose(any()).AnyTimes()
+		conn.EXPECT().Close().AnyTimes()
+
+		d, err := amqpextra.NewDialer(
+			amqpextra.WithURL("amqp://rabbitmq.host"),
+			amqpextra.WithLogger(l),
+			amqpextra.WithAMQPDial(
+				amqpDialStub(time.Millisecond*10, conn),
+			),
+		)
+		require.NoError(t, err)
+
+		_, newUnreadyCh := d.Notify(readyCh, unreadyCh)
+		d.Close()
+		assertUnready(t, newUnreadyCh, amqp.ErrClosed.Error())
+		assertUnready(t, newUnreadyCh, "permanently closed")
+
+		expected := `[DEBUG] connection unready
+[DEBUG] dialing
+[DEBUG] connection closed
+`
+		require.Equal(t, expected, l.Logs())
+	})
+}
+
 func TestConnectedState(main *testing.T) {
 	main.Run("Ready", func(t *testing.T) {
 		defer goleak.VerifyNone(t)
@@ -530,13 +722,14 @@ func TestConnectedState(main *testing.T) {
 
 		closeCh := make(chan *amqp.Error)
 		readyCh := make(chan struct{}, 1)
+		unreadyCh := make(chan error, 1)
 		amqpConn := mock_amqpextra.NewMockAMQPConnection(ctrl)
 		amqpConn.EXPECT().Close().Return(nil)
 		amqpConn.EXPECT().NotifyClose(any()).Return(closeCh)
 
 		dialer, err := amqpextra.NewDialer(
 			amqpextra.WithURL("amqp://rabbitmq.host"),
-			amqpextra.WithReadyCh(readyCh),
+			amqpextra.WithNotify(readyCh, unreadyCh),
 			amqpextra.WithAMQPDial(amqpDialStub(amqpConn)),
 			amqpextra.WithLogger(l),
 		)
@@ -566,6 +759,7 @@ func TestConnectedState(main *testing.T) {
 
 		l := logger.NewTest()
 		readyCh := make(chan struct{}, 1)
+		unreadyCh := make(chan error, 1)
 		closeCh0 := make(chan *amqp.Error, 1)
 		amqpConn0 := mock_amqpextra.NewMockAMQPConnection(ctrl)
 		amqpConn0.EXPECT().NotifyClose(any()).Return(closeCh0)
@@ -577,7 +771,7 @@ func TestConnectedState(main *testing.T) {
 		amqpConn1.EXPECT().Close().Return(nil)
 
 		dialer, err := amqpextra.NewDialer(
-			amqpextra.WithReadyCh(readyCh),
+			amqpextra.WithNotify(readyCh, unreadyCh),
 			amqpextra.WithURL("amqp://rabbitmq.host"),
 			amqpextra.WithAMQPDial(amqpDialStub(amqpConn0, amqpConn1)),
 			amqpextra.WithLogger(l),
@@ -622,6 +816,7 @@ func TestConnectedState(main *testing.T) {
 
 		l := logger.NewTest()
 		readyCh := make(chan struct{}, 1)
+		unreadyCh := make(chan error, 1)
 		closeCh0 := make(chan *amqp.Error, 1)
 		amqpConn0 := mock_amqpextra.NewMockAMQPConnection(ctrl)
 		amqpConn0.EXPECT().NotifyClose(any()).Return(closeCh0)
@@ -634,7 +829,7 @@ func TestConnectedState(main *testing.T) {
 		amqpConn1.EXPECT().Close().Return(nil)
 
 		dialer, err := amqpextra.NewDialer(
-			amqpextra.WithReadyCh(readyCh),
+			amqpextra.WithNotify(readyCh, unreadyCh),
 			amqpextra.WithURL("amqp://rabbitmq.host"),
 			amqpextra.WithAMQPDial(amqpDialStub(amqpConn0, amqpConn1)),
 			amqpextra.WithLogger(l),
@@ -681,13 +876,14 @@ func TestConnectedState(main *testing.T) {
 		l := logger.NewTest()
 
 		readyCh := make(chan struct{}, 1)
+		unreadyCh := make(chan error, 1)
 		closeCh0 := make(chan *amqp.Error, 1)
 		amqpConn := mock_amqpextra.NewMockAMQPConnection(ctrl)
 		amqpConn.EXPECT().NotifyClose(any()).Return(closeCh0)
 		amqpConn.EXPECT().Close().Return(amqp.ErrClosed)
 
 		dialer, err := amqpextra.NewDialer(
-			amqpextra.WithReadyCh(readyCh),
+			amqpextra.WithNotify(readyCh, unreadyCh),
 			amqpextra.WithURL("amqp://rabbitmq.host"),
 			amqpextra.WithAMQPDial(amqpDialStub(amqpConn)),
 			amqpextra.WithLogger(l),
@@ -716,12 +912,13 @@ func TestConnectedState(main *testing.T) {
 		closeCh0 := make(chan *amqp.Error, 1)
 
 		readyCh := make(chan struct{}, 1)
+		unreadyCh := make(chan error, 1)
 		amqpConn := mock_amqpextra.NewMockAMQPConnection(ctrl)
 		amqpConn.EXPECT().NotifyClose(any()).Return(closeCh0)
 		amqpConn.EXPECT().Close().Return(fmt.Errorf("connection closed errored"))
 
 		dialer, err := amqpextra.NewDialer(
-			amqpextra.WithReadyCh(readyCh),
+			amqpextra.WithNotify(readyCh, unreadyCh),
 			amqpextra.WithURL("amqp://rabbitmq.host"),
 			amqpextra.WithAMQPDial(amqpDialStub(amqpConn)),
 			amqpextra.WithLogger(l),
@@ -741,7 +938,7 @@ func TestConnectedState(main *testing.T) {
 	})
 }
 
-func assertUnready(t *testing.T, unreadyCh chan error, errString string) {
+func assertUnready(t *testing.T, unreadyCh <-chan error, errString string) {
 	timer := time.NewTimer(time.Millisecond * 100)
 	defer timer.Stop()
 	select {
@@ -757,7 +954,7 @@ func assertUnready(t *testing.T, unreadyCh chan error, errString string) {
 	}
 }
 
-func assertReady(t *testing.T, readyCh chan struct{}) {
+func assertReady(t *testing.T, readyCh <-chan struct{}) {
 	timer := time.NewTimer(time.Millisecond * 100)
 	defer timer.Stop()
 	select {
@@ -767,6 +964,33 @@ func assertReady(t *testing.T, readyCh chan struct{}) {
 		}
 	case <-timer.C:
 		t.Fatal("dialer must be ready")
+	}
+}
+
+func assertNoReady(t *testing.T, readyCh <-chan struct{}) {
+	timer := time.NewTimer(time.Millisecond * 100)
+	defer timer.Stop()
+	select {
+	case _, ok := <-readyCh:
+		if !ok {
+			t.Fatal("dialer notify ready closed")
+		}
+		t.Fatal("dialer must be not ready")
+	case <-timer.C:
+	}
+}
+
+func assertNoUnready(t *testing.T, unready <-chan error) {
+	timer := time.NewTimer(time.Millisecond * 100)
+	defer timer.Stop()
+	select {
+	case _, ok := <-unready:
+		if !ok {
+			t.Fatal("dialer notify unready closed")
+		}
+
+		t.Fatal("dialer must be not ready")
+	case <-timer.C:
 	}
 }
 
