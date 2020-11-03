@@ -415,7 +415,7 @@ func TestConnectState(main *testing.T) {
 		time.Sleep(time.Millisecond * 50)
 		assertUnready(t, unreadyCh, "the error")
 
-		time.Sleep(time.Millisecond * 50)
+		time.Sleep(time.Millisecond * 20)
 		assertReady(t, readyCh)
 
 		conn := <-dialer.ConnectionCh()
@@ -576,12 +576,14 @@ func TestNotify(main *testing.T) {
 			),
 		)
 		require.NoError(t, err)
-		_, newUnreadyCh := d.Notify(readyCh, unreadyCh)
 
 		time.Sleep(time.Millisecond * 20)
 
-		assertUnreadyNotify(t, newUnreadyCh, amqp.ErrClosed.Error())
-		assertUnreadyNotify(t, newUnreadyCh, "the error")
+		_, newUnreadyCh := d.Notify(readyCh, unreadyCh)
+
+		assertUnready(t, newUnreadyCh, amqp.ErrClosed.Error())
+		assertNoReady(t, readyCh)
+		assertUnready(t, newUnreadyCh, "the error")
 
 		d.Close()
 
@@ -617,8 +619,11 @@ func TestNotify(main *testing.T) {
 		require.NoError(t, err)
 		newReadyCh, newUnreadyCh := d.Notify(readyCh, unreadyCh)
 
-		assertUnreadyNotify(t, newUnreadyCh, amqp.ErrClosed.Error())
-		assertReadyNotify(t, newReadyCh)
+		time.Sleep(time.Millisecond * 20)
+
+		assertUnready(t, newUnreadyCh, amqp.ErrClosed.Error())
+		assertNoUnready(t, unreadyCh)
+		assertReady(t, newReadyCh)
 
 		d.Close()
 
@@ -653,11 +658,13 @@ func TestNotify(main *testing.T) {
 			amqpextra.WithRetryPeriod(time.Millisecond*50),
 		)
 		require.NoError(t, err)
+
 		_, newUnreadyCh := d.Notify(readyCh, unreadyCh)
 
-		assertUnreadyNotify(t, newUnreadyCh, amqp.ErrClosed.Error())
-		d.Close()
 		time.Sleep(time.Millisecond * 20)
+		d.Close()
+
+		assertUnready(t, newUnreadyCh, amqp.ErrClosed.Error())
 
 		expected := `[DEBUG] connection unready
 [DEBUG] dialing
@@ -690,17 +697,14 @@ func TestNotify(main *testing.T) {
 			),
 		)
 		require.NoError(t, err)
-		newReadyCh, newUnreadyCh := d.Notify(readyCh, unreadyCh)
 
-		assertUnreadyNotify(t, newUnreadyCh, amqp.ErrClosed.Error())
-		time.Sleep(time.Millisecond * 20)
-		assertReadyNotify(t, newReadyCh)
+		_, newUnreadyCh := d.Notify(readyCh, unreadyCh)
 		d.Close()
-		assertUnreadyNotify(t, newUnreadyCh, "permanently closed")
+		assertUnready(t, newUnreadyCh, amqp.ErrClosed.Error())
+		assertUnready(t, newUnreadyCh, "permanently closed")
 
 		expected := `[DEBUG] connection unready
 [DEBUG] dialing
-[DEBUG] connection ready
 [DEBUG] connection closed
 `
 		require.Equal(t, expected, l.Logs())
@@ -934,7 +938,7 @@ func TestConnectedState(main *testing.T) {
 	})
 }
 
-func assertUnready(t *testing.T, unreadyCh chan error, errString string) {
+func assertUnready(t *testing.T, unreadyCh <-chan error, errString string) {
 	timer := time.NewTimer(time.Millisecond * 100)
 	defer timer.Stop()
 	select {
@@ -950,23 +954,7 @@ func assertUnready(t *testing.T, unreadyCh chan error, errString string) {
 	}
 }
 
-func assertUnreadyNotify(t *testing.T, unreadyCh <-chan error, errString string) {
-	timer := time.NewTimer(time.Millisecond * 100)
-	defer timer.Stop()
-	select {
-	case err, ok := <-unreadyCh:
-		if !ok {
-			require.Equal(t, "permanently closed", errString)
-			return
-		}
-
-		require.EqualError(t, err, errString)
-	case <-timer.C:
-		t.Fatal("dialer must be unready")
-	}
-}
-
-func assertReady(t *testing.T, readyCh chan struct{}) {
+func assertReady(t *testing.T, readyCh <-chan struct{}) {
 	timer := time.NewTimer(time.Millisecond * 100)
 	defer timer.Stop()
 	select {
@@ -979,7 +967,7 @@ func assertReady(t *testing.T, readyCh chan struct{}) {
 	}
 }
 
-func assertReadyNotify(t *testing.T, readyCh <-chan struct{}) {
+func assertNoReady(t *testing.T, readyCh <-chan struct{}) {
 	timer := time.NewTimer(time.Millisecond * 100)
 	defer timer.Stop()
 	select {
@@ -987,8 +975,22 @@ func assertReadyNotify(t *testing.T, readyCh <-chan struct{}) {
 		if !ok {
 			t.Fatal("dialer notify ready closed")
 		}
+		t.Fatal("dialer must be not ready")
 	case <-timer.C:
-		t.Fatal("dialer must be ready")
+	}
+}
+
+func assertNoUnready(t *testing.T, unready <-chan error) {
+	timer := time.NewTimer(time.Millisecond * 100)
+	defer timer.Stop()
+	select {
+	case _, ok := <-unready:
+		if !ok {
+			t.Fatal("dialer notify unready closed")
+		}
+
+		t.Fatal("dialer must be not ready")
+	case <-timer.C:
 	}
 }
 

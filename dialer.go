@@ -332,12 +332,11 @@ func (c *Dialer) connectState() {
 
 	c.logger.Printf("[DEBUG] connection unready")
 
-	connErr := amqp.ErrClosed
+	var connErr error = amqp.ErrClosed
 	c.notifyUnready(connErr)
 
 	for {
 		select {
-		case c.internalUnreadyCh <- connErr:
 		case <-c.ctx.Done():
 			return
 		default:
@@ -361,6 +360,8 @@ func (c *Dialer) connectState() {
 	loop2:
 		for {
 			select {
+			case c.internalUnreadyCh <- connErr:
+				continue
 			case conn := <-connCh:
 				select {
 				case <-c.ctx.Done():
@@ -378,6 +379,7 @@ func (c *Dialer) connectState() {
 			case err := <-errorCh:
 				c.logger.Printf("[DEBUG] connection unready: %v", err)
 				if retryErr := c.waitRetry(err); retryErr != nil {
+					connErr = retryErr
 					break loop2
 				}
 
@@ -405,6 +407,7 @@ func (c *Dialer) connectedState(amqpConn AMQPConnection) error {
 	for {
 		select {
 		case c.internalReadyCh <- struct{}{}:
+			continue
 		case c.connCh <- conn:
 			continue
 		case err, ok := <-internalCloseCh:
@@ -456,6 +459,7 @@ func (c *Dialer) waitRetry(err error) error {
 	for {
 		select {
 		case c.internalUnreadyCh <- err:
+			continue
 		case <-timer.C:
 			return err
 		case <-c.ctx.Done():
