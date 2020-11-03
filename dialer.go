@@ -57,14 +57,14 @@ type Dialer struct {
 
 	connCh chan *Connection
 
-	mu         *sync.Mutex
+	mu         sync.Mutex
 	readyChs   []chan struct{}
 	unreadyChs []chan error
 
-	internalReadyCh chan struct{}
+	internalReadyCh   chan struct{}
 	internalUnreadyCh chan error
 
-	closedCh   chan struct{}
+	closedCh chan struct{}
 }
 
 func Dial(opts ...Option) (*amqp.Connection, error) {
@@ -94,11 +94,10 @@ func NewDialer(opts ...Option) (*Dialer, error) {
 			retryPeriod: time.Second * 5,
 			logger:      logger.Discard,
 		},
-
-		mu: new(sync.Mutex),
-
-		connCh:   make(chan *Connection),
-		closedCh: make(chan struct{}),
+		internalUnreadyCh: make(chan error, 1),
+		internalReadyCh:   make(chan struct{}, 1),
+		connCh:            make(chan *Connection),
+		closedCh:          make(chan struct{}),
 	}
 
 	for _, opt := range opts {
@@ -240,7 +239,6 @@ func (c *Dialer) Notify(readyCh chan struct{}, unreadyCh chan error) (ready <-ch
 	}
 }
 
-
 func (c *Dialer) NotifyClosed() <-chan struct{} {
 	return c.closedCh
 }
@@ -302,8 +300,8 @@ func (c *Dialer) connectState() {
 	c.logger.Printf("[DEBUG] connection unready")
 
 	connErr := amqp.ErrClosed
-
 	c.notifyUnready(connErr)
+
 	for {
 		select {
 		case c.internalUnreadyCh <- connErr:
