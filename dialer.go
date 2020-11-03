@@ -1,4 +1,3 @@
-// Package amqpextra provides Dialer for dialing in case the connection lost.
 package amqpextra
 
 import (
@@ -15,30 +14,23 @@ import (
 	"github.com/streadway/amqp"
 )
 
-// Option could be used to configure Dialer
 type Option func(c *Dialer)
 
-// AMQPConnection is an interface for streadway's *amqp.Connection
 type AMQPConnection interface {
 	NotifyClose(chan *amqp.Error) chan *amqp.Error
 	Close() error
 }
 
-// Connection provides access to streadway's *amqp.Connection as well as notification channels
-// A notification indicates that something wrong has happened to the connection.
-// The client should get a fresh connection from Dialer.
 type Connection struct {
 	amqpConn AMQPConnection
 	lostCh   chan struct{}
 	closeCh  chan struct{}
 }
 
-// AMQPConnection returns streadway's *amqp.Connection
 func (c *Connection) AMQPConnection() *amqp.Connection {
 	return c.amqpConn.(*amqp.Connection)
 }
 
-// NotifyLost notifies when current connection is lost and new once should be requested
 func (c *Connection) NotifyLost() chan struct{} {
 	return c.lostCh
 }
@@ -68,10 +60,14 @@ type Dialer struct {
 
 	connCh chan *Connection
 
-	mu         *sync.Mutex
+	mu         sync.Mutex
 	readyChs   []chan struct{}
 	unreadyChs []chan error
-	closedCh   chan struct{}
+
+	internalReadyCh   chan struct{}
+	internalUnreadyCh chan error
+
+	closedCh chan struct{}
 }
 
 // Dial returns established connection or an error.
@@ -104,11 +100,10 @@ func NewDialer(opts ...Option) (*Dialer, error) {
 			retryPeriod: time.Second * 5,
 			logger:      logger.Discard,
 		},
-
-		mu: new(sync.Mutex),
-
-		connCh:   make(chan *Connection),
-		closedCh: make(chan struct{}),
+		internalUnreadyCh: make(chan error, 1),
+		internalReadyCh:   make(chan struct{}, 1),
+		connCh:            make(chan *Connection),
+		closedCh:          make(chan struct{}),
 	}
 
 	for _, opt := range opts {
@@ -205,16 +200,10 @@ func WithConnectionProperties(props amqp.Table) Option {
 	}
 }
 
-// WithReadyCh helps subscribe on Dialer ready events.
-func WithReadyCh(readyCh chan struct{}) Option {
+// WithNotify helps subscribe on Dialer ready/unready events.
+func WithNotify(readyCh chan struct{}, unreadyCh chan error) Option {
 	return func(c *Dialer) {
 		c.readyChs = append(c.readyChs, readyCh)
-	}
-}
-
-// WithReadyCh helps subscribe on Dialer unready events.
-func WithUnreadyCh(unreadyCh chan error) Option {
-	return func(c *Dialer) {
 		c.unreadyChs = append(c.unreadyChs, unreadyCh)
 	}
 }
@@ -228,25 +217,11 @@ func (c *Dialer) ConnectionCh() <-chan *Connection {
 	return c.connCh
 }
 
-// NotifyReady could be used to subscribe on Dialer ready events
-func (c *Dialer) NotifyReady(readyCh chan struct{}) <-chan struct{} {
+// Notify could be used to subscribe on Dialer ready/unready events
+func (c *Dialer) Notify(readyCh chan struct{}, unreadyCh chan error) (ready <-chan struct{}, unready <-chan error) {
 	if cap(readyCh) == 0 {
 		panic("ready chan is unbuffered")
 	}
-
-	select {
-	case <-c.NotifyClosed():
-		return readyCh
-	default:
-		c.mu.Lock()
-		defer c.mu.Unlock()
-		c.readyChs = append(c.readyChs, readyCh)
-		return readyCh
-	}
-}
-
-// NotifyReady could be used to subscribe on Dialer unready events
-func (c *Dialer) NotifyUnready(unreadyCh chan error) <-chan error {
 	if cap(unreadyCh) == 0 {
 		panic("unready chan is unbuffered")
 	}
@@ -254,23 +229,44 @@ func (c *Dialer) NotifyUnready(unreadyCh chan error) <-chan error {
 	select {
 	case <-c.NotifyClosed():
 		close(unreadyCh)
+		return readyCh, unreadyCh
 	default:
-		c.mu.Lock()
-		defer c.mu.Unlock()
-		c.unreadyChs = append(c.unreadyChs, unreadyCh)
 	}
 
-	return unreadyCh
+	c.mu.Lock()
+	c.readyChs = append(c.readyChs, readyCh)
+	c.unreadyChs = append(c.unreadyChs, unreadyCh)
+	c.mu.Unlock()
+
+	select {
+	case <-c.internalReadyCh:
+		select {
+		case readyCh <- struct{}{}:
+		default:
+		}
+
+		return readyCh, unreadyCh
+	case err, ok := <-c.internalUnreadyCh:
+		if !ok {
+			close(unreadyCh)
+			return readyCh, unreadyCh
+		}
+
+		select {
+		case unreadyCh <- err:
+		default:
+		}
+
+		return readyCh, unreadyCh
+	}
 }
 
-// NotifyReady could be used to subscribe on Dialer closed event.
+// NotifyClosed could be used to subscribe on Dialer closed event.
 // Dialer.ConnectionCh() could no longer be used after this point
 func (c *Dialer) NotifyClosed() <-chan struct{} {
 	return c.closedCh
 }
 
-// Close initiate Dialer close.
-// Subscribe Dialer.NotifyClosed() to know when it was finally closed.
 func (c *Dialer) Close() {
 	c.cancelFunc()
 }
@@ -336,9 +332,12 @@ func (c *Dialer) connectState() {
 
 	c.logger.Printf("[DEBUG] connection unready")
 
-	c.notifyUnready(amqp.ErrClosed)
+	connErr := amqp.ErrClosed
+	c.notifyUnready(connErr)
+
 	for {
 		select {
+		case c.internalUnreadyCh <- connErr:
 		case <-c.ctx.Done():
 			return
 		default:
@@ -405,6 +404,7 @@ func (c *Dialer) connectedState(amqpConn AMQPConnection) error {
 	c.notifyReady()
 	for {
 		select {
+		case c.internalReadyCh <- struct{}{}:
 		case c.connCh <- conn:
 			continue
 		case err, ok := <-internalCloseCh:
@@ -455,6 +455,7 @@ func (c *Dialer) waitRetry(err error) error {
 
 	for {
 		select {
+		case c.internalUnreadyCh <- err:
 		case <-timer.C:
 			return err
 		case <-c.ctx.Done():
