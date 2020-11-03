@@ -2,8 +2,10 @@ package publisher
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/makasim/amqpextra/logger"
@@ -44,10 +46,16 @@ type Publisher struct {
 	initFunc    func(conn AMQPConnection) (AMQPChannel, error)
 	logger      logger.Logger
 
+	mu         sync.Mutex
+	readyChs   []chan struct{}
+	unreadyChs []chan error
+
+	closeCh chan struct{}
+
 	publishingCh chan Message
-	closeCh      chan struct{}
-	readyCh      chan struct{}
-	unreadyCh    chan error
+
+	internalUnreadyCh chan error
+	internalReadyCh   chan struct{}
 }
 
 func New(
@@ -57,10 +65,10 @@ func New(
 	p := &Publisher{
 		connCh: connCh,
 
-		publishingCh: make(chan Message),
-		closeCh:      make(chan struct{}),
-		readyCh:      make(chan struct{}),
-		unreadyCh:    make(chan error),
+		publishingCh:      make(chan Message),
+		closeCh:           make(chan struct{}),
+		internalUnreadyCh: make(chan error),
+		internalReadyCh:   make(chan struct{}),
 	}
 
 	for _, opt := range opts {
@@ -75,6 +83,26 @@ func New(
 
 	if p.retryPeriod == 0 {
 		p.retryPeriod = time.Second * 5
+	}
+
+	for _, unreadyCh := range p.unreadyChs {
+		if unreadyCh == nil {
+			return nil, errors.New("unready chan must be not nil")
+		}
+
+		if cap(unreadyCh) == 0 {
+			return nil, errors.New("unready chan is unbuffered")
+		}
+	}
+
+	for _, readyCh := range p.readyChs {
+		if readyCh == nil {
+			return nil, errors.New("ready chan must be not nil")
+		}
+
+		if cap(readyCh) == 0 {
+			return nil, errors.New("ready chan is unbuffered")
+		}
 	}
 
 	if p.logger == nil {
@@ -116,6 +144,56 @@ func WithInitFunc(f func(conn AMQPConnection) (AMQPChannel, error)) Option {
 	}
 }
 
+func WithNotify(readyCh chan struct{}, unreadyCh chan error) Option {
+	return func(p *Publisher) {
+		p.readyChs = append(p.readyChs, readyCh)
+		p.unreadyChs = append(p.unreadyChs, unreadyCh)
+	}
+}
+
+func (p *Publisher) Notify(readyCh chan struct{}, unreadyCh chan error) (ready <-chan struct{}, unready <-chan error) {
+	if cap(readyCh) == 0 {
+		panic("ready chan is unbuffered")
+	}
+	if cap(unreadyCh) == 0 {
+		panic("unready chan is unbuffered")
+	}
+
+	select {
+	case <-p.NotifyClosed():
+		close(unreadyCh)
+		return readyCh, unreadyCh
+	default:
+	}
+
+	p.mu.Lock()
+	p.readyChs = append(p.readyChs, readyCh)
+	p.unreadyChs = append(p.unreadyChs, unreadyCh)
+	p.mu.Unlock()
+
+	select {
+	case <-p.internalReadyCh:
+		select {
+		case readyCh <- struct{}{}:
+		default:
+		}
+
+		return readyCh, unreadyCh
+	case err, ok := <-p.internalUnreadyCh:
+		if !ok {
+			close(unreadyCh)
+			return readyCh, unreadyCh
+		}
+
+		select {
+		case unreadyCh <- err:
+		default:
+		}
+
+		return readyCh, unreadyCh
+	}
+}
+
 func (p *Publisher) Publish(msg Message) error {
 	return <-p.Go(msg)
 }
@@ -134,7 +212,7 @@ func (p *Publisher) Go(msg Message) <-chan error {
 
 	var unreadyCh <-chan error
 	if msg.ErrOnUnready {
-		unreadyCh = p.NotifyUnready()
+		unreadyCh = p.internalUnreadyCh
 	}
 
 	select {
@@ -162,27 +240,25 @@ func (p *Publisher) Close() {
 	p.cancelFunc()
 }
 
-func (p *Publisher) NotifyReady() <-chan struct{} {
-	return p.readyCh
-}
-
-func (p *Publisher) NotifyUnready() <-chan error {
-	return p.unreadyCh
-}
-
 func (p *Publisher) NotifyClosed() <-chan struct{} {
 	return p.closeCh
 }
 
 func (p *Publisher) connectionState() {
 	defer p.cancelFunc()
-	defer close(p.unreadyCh)
+	defer func() {
+		p.mu.Lock()
+		defer p.mu.Unlock()
+		for _, unreadyCh := range p.unreadyChs {
+			close(unreadyCh)
+		}
+	}()
 	defer close(p.closeCh)
 	defer p.logger.Printf("[DEBUG] publisher stopped")
 
 	var connErr error = amqp.ErrClosed
-
 	p.logger.Printf("[DEBUG] publisher starting")
+	p.notifyUnready(connErr)
 	for {
 		select {
 		case conn, ok := <-p.connCh:
@@ -201,17 +277,13 @@ func (p *Publisher) connectionState() {
 			err := p.channelState(conn.AMQPConnection(), conn.NotifyClose())
 			if err != nil {
 				p.logger.Printf("[DEBUG] publisher unready")
-
 				connErr = err
 				continue
 			}
 
 			return
-
-		case p.unreadyCh <- connErr:
+		case p.internalUnreadyCh <- connErr:
 		case <-p.ctx.Done():
-			p.close(nil)
-
 			return
 		}
 	}
@@ -240,9 +312,10 @@ func (p *Publisher) publishState(ch AMQPChannel, connCloseCh <-chan struct{}) er
 	chFlowCh := ch.NotifyFlow(make(chan bool, 1))
 
 	p.logger.Printf("[DEBUG] publisher ready")
+	p.notifyReady()
 	for {
 		select {
-		case p.readyCh <- struct{}{}:
+		case p.internalReadyCh <- struct{}{}:
 		case msg := <-p.publishingCh:
 			p.publish(ch, msg)
 		case <-chCloseCh:
@@ -254,10 +327,11 @@ func (p *Publisher) publishState(ch AMQPChannel, connCloseCh <-chan struct{}) er
 			if resume {
 				continue
 			}
-
 			if err := p.pausedState(chFlowCh, connCloseCh, chCloseCh); err != nil {
 				return err
 			}
+			p.notifyReady()
+
 		case <-p.ctx.Done():
 			return nil
 		}
@@ -267,10 +341,10 @@ func (p *Publisher) publishState(ch AMQPChannel, connCloseCh <-chan struct{}) er
 func (p *Publisher) pausedState(chFlowCh <-chan bool, connCloseCh <-chan struct{}, chCloseCh chan *amqp.Error) error {
 	p.logger.Printf("[WARN] publisher flow paused")
 	errFlowPaused := fmt.Errorf("publisher flow paused")
-
+	p.notifyUnready(errFlowPaused)
 	for {
 		select {
-		case p.unreadyCh <- errFlowPaused:
+		case p.internalUnreadyCh <- errFlowPaused:
 		case resume := <-chFlowCh:
 			if resume {
 				p.logger.Printf("[INFO] publisher flow resumed")
@@ -323,14 +397,38 @@ func (p *Publisher) waitRetry(err error) error {
 		}
 	}()
 
+	p.notifyUnready(err)
+
 	for {
 		select {
-		case p.unreadyCh <- err:
+		case p.internalUnreadyCh <- err:
 			continue
 		case <-timer.C:
 			return err
 		case <-p.ctx.Done():
 			return nil
+		}
+	}
+}
+
+func (p *Publisher) notifyUnready(err error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	for _, ch := range p.unreadyChs {
+		select {
+		case ch <- err:
+		default:
+		}
+	}
+}
+
+func (p *Publisher) notifyReady() {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	for _, ch := range p.readyChs {
+		select {
+		case ch <- struct{}{}:
+		default:
 		}
 	}
 }
