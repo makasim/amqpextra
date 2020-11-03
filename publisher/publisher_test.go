@@ -22,37 +22,27 @@ func TestNotify(main *testing.T) {
 	main.Run("PanicIfReadyChUnbuffered", func(t *testing.T) {
 		defer goleak.VerifyNone(t)
 
-		ctrl := gomock.NewController(t)
-		defer ctrl.Finish()
-
 		readyCh := make(chan struct{})
 		unreadyCh := make(chan error, 1)
 
-		panicUnbufferedReady := func() {
+		require.PanicsWithValue(t, "ready chan is unbuffered", func() {
 			_, _, p := newPublisher()
 			defer p.Close()
 			p.Notify(readyCh, unreadyCh)
-		}
-
-		require.Panics(t, panicUnbufferedReady)
+		})
 	})
 
 	main.Run("PanicIfUnreadyChUnbuffered", func(t *testing.T) {
 		defer goleak.VerifyNone(t)
 
-		ctrl := gomock.NewController(t)
-		defer ctrl.Finish()
-
 		readyCh := make(chan struct{}, 1)
 		unreadyCh := make(chan error)
 
-		panicUnbufferedUnready := func() {
+		require.PanicsWithValue(t, "unready chan is unbuffered", func() {
 			_, _, p := newPublisher()
 			defer p.Close()
 			p.Notify(readyCh, unreadyCh)
-		}
-
-		require.Panics(t, panicUnbufferedUnready)
+		})
 	})
 
 	main.Run("UnreadyWhileInit", func(t *testing.T) {
@@ -166,7 +156,7 @@ func TestNotify(main *testing.T) {
 		require.Equal(t, expected, l.Logs())
 	})
 
-	main.Run("UnreadyAfterPaused", func(t *testing.T) {
+	main.Run("UnreadyWhilePaused", func(t *testing.T) {
 		defer goleak.VerifyNone(t)
 
 		ctrl := gomock.NewController(t)
