@@ -60,7 +60,7 @@ type Dialer struct {
 
 	connCh chan *Connection
 
-	mu         *sync.Mutex
+	mu         sync.Mutex
 	readyChs   []chan struct{}
 	unreadyChs []chan error
 
