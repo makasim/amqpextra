@@ -1,3 +1,4 @@
+// Package amqpextra provides Dialer for dialing in case the connection lost.
 package amqpextra
 
 import (
@@ -14,23 +15,30 @@ import (
 	"github.com/streadway/amqp"
 )
 
+// Option could be used to configure Dialer
 type Option func(c *Dialer)
 
+// AMQPConnection is an interface for streadway's *amqp.Connection
 type AMQPConnection interface {
 	NotifyClose(chan *amqp.Error) chan *amqp.Error
 	Close() error
 }
 
+// Connection provides access to streadway's *amqp.Connection as well as notification channels
+// A notification indicates that something wrong has happened to the connection.
+// The client should get a fresh connection from Dialer.
 type Connection struct {
 	amqpConn AMQPConnection
 	lostCh   chan struct{}
 	closeCh  chan struct{}
 }
 
+// AMQPConnection returns streadway's *amqp.Connection
 func (c *Connection) AMQPConnection() *amqp.Connection {
 	return c.amqpConn.(*amqp.Connection)
 }
 
+// NotifyLost notifies when current connection is lost and new once should be requested
 func (c *Connection) NotifyLost() chan struct{} {
 	return c.lostCh
 }
@@ -267,6 +275,8 @@ func (c *Dialer) NotifyClosed() <-chan struct{} {
 	return c.closedCh
 }
 
+// Close initiate Dialer close.
+// Subscribe Dialer.NotifyClosed() to know when it was finally closed.
 func (c *Dialer) Close() {
 	c.cancelFunc()
 }
