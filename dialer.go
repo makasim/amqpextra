@@ -58,7 +58,7 @@ type config struct {
 
 // Dialer is responsible for keeping the connection up.
 // If connection is lost or closed. It tries dial a server again and again with some wait periods.
-// Dialer keep connection up until it Dialer.Close() method called or the context is cancelled.
+// Dialer keep connection up until it Dialer.Close() method called or the context is canceled.
 type Dialer struct {
 	config
 
