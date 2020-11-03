@@ -159,6 +159,17 @@ func WithNotify(readyCh chan struct{}, unreadyCh chan error) Option {
 	}
 }
 
+func WithConsumeArgs(consumer string, autoAck, exclusive, noLocal, noWait bool, args amqp.Table) Option {
+	return func(c *Consumer) {
+		c.consumer = consumer
+		c.autoAck = autoAck
+		c.exclusive = exclusive
+		c.noLocal = noLocal
+		c.noWait = noWait
+		c.args = args
+	}
+}
+
 func (c *Consumer) Notify(readyCh chan struct{}, unreadyCh chan error) (ready <-chan struct{}, unready <-chan error) {
 	if cap(readyCh) == 0 {
 		panic("ready chan is unbuffered")
@@ -202,17 +213,6 @@ func (c *Consumer) Notify(readyCh chan struct{}, unreadyCh chan error) (ready <-
 	}
 }
 
-func WithConsumeArgs(consumer string, autoAck, exclusive, noLocal, noWait bool, args amqp.Table) Option {
-	return func(c *Consumer) {
-		c.consumer = consumer
-		c.autoAck = autoAck
-		c.exclusive = exclusive
-		c.noLocal = noLocal
-		c.noWait = noWait
-		c.args = args
-	}
-}
-
 func (c *Consumer) NotifyClosed() <-chan struct{} {
 	return c.closeCh
 }
@@ -239,6 +239,7 @@ func (c *Consumer) connectionState() {
 	for {
 		select {
 		case c.internalUnreadyCh <- connErr:
+			continue
 		case conn, ok := <-c.connCh:
 			if !ok {
 				return
@@ -317,20 +318,26 @@ func (c *Consumer) consumeState(ch AMQPChannel, connCloseCh <-chan struct{}) err
 
 	var result error
 
-	select {
-	case c.internalReadyCh <- struct{}{}:
-	case <-cancelCh:
-		c.logger.Printf("[DEBUG] consumption canceled")
-		result = fmt.Errorf("consumption canceled")
-	case <-chCloseCh:
-		c.logger.Printf("[DEBUG] channel closed")
-		result = errChannelClosed
-	case <-connCloseCh:
-		result = amqp.ErrClosed
-	case <-workerDoneCh:
-		result = fmt.Errorf("workers unexpectedly stopped")
-	case <-c.ctx.Done():
-		result = nil
+loop:
+	for {
+		select {
+		case c.internalReadyCh <- struct{}{}:
+			continue
+		case <-cancelCh:
+			c.logger.Printf("[DEBUG] consumption canceled")
+			result = fmt.Errorf("consumption canceled")
+		case <-chCloseCh:
+			c.logger.Printf("[DEBUG] channel closed")
+			result = errChannelClosed
+		case <-connCloseCh:
+			result = amqp.ErrClosed
+		case <-workerDoneCh:
+			result = fmt.Errorf("workers unexpectedly stopped")
+		case <-c.ctx.Done():
+			result = nil
+		default:
+			break loop
+		}
 	}
 
 	workerCancelFunc()
@@ -355,6 +362,7 @@ func (c *Consumer) waitRetry(err error) error {
 	for {
 		select {
 		case c.internalUnreadyCh <- err:
+			continue
 		case <-timer.C:
 			return err
 		case <-c.ctx.Done():
