@@ -459,7 +459,7 @@ func TestReconnection(main *testing.T) {
 
 		close(closeCh)
 		close(connCh)
-
+		time.Sleep(time.Millisecond * 10)
 		assertUnready(t, unreadyCh, amqp.ErrClosed.Error())
 
 		p.Close()
