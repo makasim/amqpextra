@@ -2053,12 +2053,12 @@ func TestFlowControl(main *testing.T) {
 
 		amqpConn := mock_publisher.NewMockAMQPConnection(ctrl)
 
+		assertUnready(t, unreadyCh, amqp.ErrClosed.Error())
+
 		connCh <- publisher.NewConnection(amqpConn, nil)
 		assertReady(t, readyCh)
 
 		chFlowCh <- false
-
-		assertUnready(t, unreadyCh, amqp.ErrClosed.Error())
 		assertUnready(t, unreadyCh, "publisher flow paused")
 
 		chCloseCh <- amqp.ErrClosed
