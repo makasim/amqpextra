@@ -21,6 +21,153 @@ import (
 	"go.uber.org/goleak"
 )
 
+func TestNotify(main *testing.T) {
+	main.Run("PanicIfReadyChUnbuffered", func(t *testing.T) {
+		defer goleak.VerifyNone(t)
+
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		readyCh := make(chan struct{})
+		unreadyCh := make(chan error, 1)
+
+		l := logger.NewTest()
+		connCh := make(chan *consumer.Connection, 1)
+		h := handlerStub(l)
+
+		require.PanicsWithValue(t, "ready chan is unbuffered", func() {
+			c, _ := consumer.New(
+				"foo",
+				h,
+				connCh,
+			)
+			defer c.Close()
+			c.Notify(readyCh, unreadyCh)
+		})
+	})
+
+	main.Run("PanicIfUnreadyChUnbuffered", func(t *testing.T) {
+		defer goleak.VerifyNone(t)
+
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		readyCh := make(chan struct{}, 1)
+		unreadyCh := make(chan error)
+
+		l := logger.NewTest()
+		connCh := make(chan *consumer.Connection, 1)
+		h := handlerStub(l)
+
+		require.PanicsWithValue(t, "unready chan is unbuffered", func() {
+			c, _ := consumer.New(
+				"foo",
+				h,
+				connCh,
+			)
+			defer c.Close()
+			c.Notify(readyCh, unreadyCh)
+		})
+	})
+
+	main.Run("UnreadyWhileInit", func(t *testing.T) {
+		defer goleak.VerifyNone(t)
+
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		l := logger.NewTest()
+		h := handlerStub(l)
+
+		connCh := make(chan *consumer.Connection, 1)
+		unreadyCh := make(chan error, 1)
+		readyCh := make(chan struct{}, 1)
+
+		conn := mock_consumer.NewMockAMQPConnection(ctrl)
+
+		c, err := consumer.New(
+			"foo",
+			h,
+			connCh,
+			consumer.WithInitFunc(func(conn consumer.AMQPConnection) (consumer.AMQPChannel, error) {
+				time.Sleep(time.Millisecond * 20)
+				return nil, fmt.Errorf("the error")
+			}),
+			consumer.WithRetryPeriod(time.Millisecond),
+			consumer.WithLogger(l),
+		)
+		require.NoError(t, err)
+
+		defer c.Close()
+
+		connCh <- consumer.NewConnection(conn, nil)
+
+		_, newUnreadyCh := c.Notify(readyCh, unreadyCh)
+		assertUnready(t, newUnreadyCh, amqp.ErrClosed.Error())
+
+		time.Sleep(time.Millisecond * 30)
+		assertUnready(t, newUnreadyCh, "the error")
+		c.Close()
+		assertClosed(t, c)
+
+		assert.Equal(t, `[DEBUG] consumer starting
+[ERROR] init func: the error
+[DEBUG] consumer unready
+[DEBUG] consumer stopped
+`, l.Logs())
+	})
+
+	main.Run("ReadyIfConnected", func(t *testing.T) {
+		defer goleak.VerifyNone(t)
+
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		l := logger.NewTest()
+		h := handlerStub(l)
+		ch := mock_consumer.NewMockAMQPChannel(ctrl)
+
+		ch.EXPECT().
+			Consume(any(), any(), any(), any(), any(), any(), any()).
+			AnyTimes()
+		ch.EXPECT().NotifyCancel(any()).
+			AnyTimes()
+		ch.EXPECT().
+			NotifyClose(any()).
+			AnyTimes()
+		ch.EXPECT().Close().AnyTimes()
+
+		connCh := make(chan *consumer.Connection, 1)
+		unreadyCh := make(chan error, 1)
+		readyCh := make(chan struct{}, 1)
+
+		conn := mock_consumer.NewMockAMQPConnection(ctrl)
+
+		c, err := consumer.New(
+			"foo",
+			h,
+			connCh,
+			consumer.WithInitFunc(initFuncStub(ch)),
+			consumer.WithLogger(l),
+		)
+		require.NoError(t, err)
+
+		defer c.Close()
+
+		newReadyCh, _ := c.Notify(readyCh, unreadyCh)
+		connCh <- consumer.NewConnection(conn, nil)
+		assertReady(t, newReadyCh)
+
+		c.Close()
+
+		assert.Equal(t, `[DEBUG] consumer starting
+[DEBUG] consumer ready
+[DEBUG] worker starting
+`, l.Logs())
+	})
+
+}
+
 func TestUnready(main *testing.T) {
 	main.Run("CloseByMethod", func(t *testing.T) {
 		defer goleak.VerifyNone(t)
@@ -1243,7 +1390,7 @@ func TestConcurrency(main *testing.T) {
 	})
 }
 
-func assertUnready(t *testing.T, unreadyCh chan error, errString string) {
+func assertUnready(t *testing.T, unreadyCh <-chan error, errString string) {
 	timer := time.NewTimer(time.Millisecond * 100)
 	defer timer.Stop()
 
@@ -1256,11 +1403,11 @@ func assertUnready(t *testing.T, unreadyCh chan error, errString string) {
 
 		require.EqualError(t, err, errString)
 	case <-timer.C:
-		t.Fatal("publisher must be unready")
+		t.Fatal("consumer must be unready")
 	}
 }
 
-func assertReady(t *testing.T, readyCh chan struct{}) {
+func assertReady(t *testing.T, readyCh <-chan struct{}) {
 	timer := time.NewTimer(time.Millisecond * 100)
 	defer timer.Stop()
 
