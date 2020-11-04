@@ -662,9 +662,10 @@ func TestNotify(main *testing.T) {
 		_, newUnreadyCh := d.Notify(readyCh, unreadyCh)
 
 		time.Sleep(time.Millisecond * 20)
-		d.Close()
-
 		assertUnready(t, newUnreadyCh, amqp.ErrClosed.Error())
+
+		d.Close()
+		assertClosed(t, d)
 
 		expected := `[DEBUG] connection unready
 [DEBUG] dialing
