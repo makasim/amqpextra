@@ -159,10 +159,14 @@ func TestNotify(main *testing.T) {
 		assertReady(t, newReadyCh)
 
 		c.Close()
+		assertClosed(t, c)
 
 		assert.Equal(t, `[DEBUG] consumer starting
 [DEBUG] consumer ready
 [DEBUG] worker starting
+[DEBUG] worker stopped
+[DEBUG] consumer unready
+[DEBUG] consumer stopped
 `, l.Logs())
 	})
 
