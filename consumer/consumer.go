@@ -66,6 +66,9 @@ func New(
 		handler: handler,
 		connCh:  connCh,
 
+		internalUnreadyCh: make(chan error, 1),
+		internalReadyCh:   make(chan struct{}, 1),
+
 		closeCh: make(chan struct{}),
 	}
 
@@ -318,7 +321,6 @@ func (c *Consumer) consumeState(ch AMQPChannel, connCloseCh <-chan struct{}) err
 
 	var result error
 
-loop:
 	for {
 		select {
 		case c.internalReadyCh <- struct{}{}:
@@ -335,16 +337,14 @@ loop:
 			result = fmt.Errorf("workers unexpectedly stopped")
 		case <-c.ctx.Done():
 			result = nil
-		default:
-			break loop
 		}
+
+		workerCancelFunc()
+		<-workerDoneCh
+		c.close(ch)
+
+		return result
 	}
-
-	workerCancelFunc()
-	<-workerDoneCh
-	c.close(ch)
-
-	return result
 }
 
 func (c *Consumer) waitRetry(err error) error {
