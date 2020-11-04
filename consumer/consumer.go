@@ -66,8 +66,8 @@ func New(
 		handler: handler,
 		connCh:  connCh,
 
-		internalUnreadyCh: make(chan error, 1),
-		internalReadyCh:   make(chan struct{}, 1),
+		internalUnreadyCh: make(chan error),
+		internalReadyCh:   make(chan struct{}),
 
 		closeCh: make(chan struct{}),
 	}

@@ -69,8 +69,8 @@ func TestNotify(main *testing.T) {
 
 		conn <- publisher.NewConnection(amqpConn, nil)
 
-		assertUnreadyNotify(t, newUnreadyCh, amqp.ErrClosed.Error())
-		assertUnreadyNotify(t, newUnreadyCh, "the error")
+		assertUnready(t, newUnreadyCh, amqp.ErrClosed.Error())
+		assertUnready(t, newUnreadyCh, "the error")
 
 		expected := `[DEBUG] publisher starting
 [ERROR] init func: the error
@@ -104,13 +104,13 @@ func TestNotify(main *testing.T) {
 
 		newReadyCh, newUnreadyCh := p.Notify(readyCh, unreadyCh)
 
-		assertUnreadyNotify(t, newUnreadyCh, amqp.ErrClosed.Error())
+		assertUnready(t, newUnreadyCh, amqp.ErrClosed.Error())
 
 		conn <- publisher.NewConnection(amqpConn, nil)
 
 		time.Sleep(time.Millisecond * 10)
 
-		assertReadyNotify(t, newReadyCh)
+		assertReady(t, newReadyCh)
 
 		expected := `[DEBUG] publisher starting
 [DEBUG] publisher ready
@@ -140,13 +140,13 @@ func TestNotify(main *testing.T) {
 
 		_, newUnreadyCh := p.Notify(readyCh, unreadyCh)
 
-		assertUnreadyNotify(t, newUnreadyCh, amqp.ErrClosed.Error())
+		assertUnready(t, newUnreadyCh, amqp.ErrClosed.Error())
 
 		conn <- publisher.NewConnection(amqpConn, nil)
 
 		time.Sleep(time.Millisecond * 100)
 
-		assertUnreadyNotify(t, newUnreadyCh, "the error")
+		assertUnready(t, newUnreadyCh, "the error")
 
 		p.Close()
 
@@ -193,15 +193,15 @@ func TestNotify(main *testing.T) {
 		defer p.Close()
 
 		newReadyCh, newUnreadyCh := p.Notify(readyCh, unreadyCh)
-		assertUnreadyNotify(t, newUnreadyCh, amqp.ErrClosed.Error())
+		assertUnready(t, newUnreadyCh, amqp.ErrClosed.Error())
 
 		connCh <- publisher.NewConnection(amqpConn, nil)
 
-		assertReadyNotify(t, newReadyCh)
+		assertReady(t, newReadyCh)
 
 		chFlowCh <- false
 
-		assertUnreadyNotify(t, unreadyCh, "publisher flow paused")
+		assertUnready(t, unreadyCh, "publisher flow paused")
 
 		expected := `[DEBUG] publisher starting
 [DEBUG] publisher ready
@@ -241,7 +241,7 @@ func TestNotify(main *testing.T) {
 		_, newUnreadyCh := p.Notify(readyCh, unreadyCh)
 
 		p.Close()
-		assertUnreadyNotify(t, newUnreadyCh, amqp.ErrClosed.Error())
+		assertUnready(t, newUnreadyCh, amqp.ErrClosed.Error())
 
 		assertUnready(t, unreadyCh, "permanently closed")
 	})
@@ -454,18 +454,17 @@ func TestReconnection(main *testing.T) {
 
 		closeCh := make(chan struct{})
 		conn := publisher.NewConnection(amqpConn, closeCh)
+
+		emptyUnreadyCh(unreadyCh)
+
 		connCh <- conn
-
 		assertReady(t, readyCh)
-
-		select {
-		case <-unreadyCh:
-		default:
-		}
 
 		close(closeCh)
 		close(connCh)
-		time.Sleep(time.Millisecond * 10)
+		assertUnready(t, unreadyCh, amqp.ErrClosed.Error())
+
+		time.Sleep(time.Millisecond * 50)
 		p.Close()
 		assertClosed(t, p)
 		assertUnready(t, unreadyCh, "permanently closed")
@@ -2149,7 +2148,7 @@ func TestFlowControl(main *testing.T) {
 	})
 }
 
-func assertReady(t *testing.T, readyCh chan struct{}) {
+func assertReady(t *testing.T, readyCh <-chan struct{}) {
 	timer := time.NewTimer(time.Millisecond * 100)
 	defer timer.Stop()
 
@@ -2171,18 +2170,7 @@ func assertClosed(t *testing.T, p *publisher.Publisher) {
 	}
 }
 
-func assertReadyNotify(t *testing.T, readyCh <-chan struct{}) {
-	timer := time.NewTimer(time.Millisecond * 100)
-	defer timer.Stop()
-
-	select {
-	case <-readyCh:
-	case <-timer.C:
-		t.Fatal("publisher must be ready")
-	}
-}
-
-func assertUnready(t *testing.T, unreadyCh chan error, errString string) {
+func assertUnready(t *testing.T, unreadyCh <-chan error, errString string) {
 	timer := time.NewTimer(time.Millisecond * 100)
 	defer timer.Stop()
 
@@ -2199,20 +2187,10 @@ func assertUnready(t *testing.T, unreadyCh chan error, errString string) {
 	}
 }
 
-func assertUnreadyNotify(t *testing.T, unreadyCh <-chan error, errString string) {
-	timer := time.NewTimer(time.Millisecond * 100)
-	defer timer.Stop()
-
+func emptyUnreadyCh(unreadyCh <-chan error) {
 	select {
-	case actualErr, ok := <-unreadyCh:
-		if !ok {
-			require.Equal(t, "permanently closed", errString)
-			return
-		}
-
-		require.EqualError(t, actualErr, errString)
-	case <-timer.C:
-		t.Fatal("publisher must be unready")
+	case <-unreadyCh:
+	default:
 	}
 }
 
