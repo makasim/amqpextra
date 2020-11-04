@@ -455,13 +455,17 @@ func TestReconnection(main *testing.T) {
 		closeCh := make(chan struct{})
 		conn := publisher.NewConnection(amqpConn, closeCh)
 		connCh <- conn
+
 		assertReady(t, readyCh)
+
+		select {
+		case <-unreadyCh:
+		default:
+		}
 
 		close(closeCh)
 		close(connCh)
 		time.Sleep(time.Millisecond * 10)
-		assertUnready(t, unreadyCh, amqp.ErrClosed.Error())
-
 		p.Close()
 		assertClosed(t, p)
 		assertUnready(t, unreadyCh, "permanently closed")
