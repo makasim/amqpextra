@@ -67,8 +67,8 @@ func New(
 
 		publishingCh:      make(chan Message),
 		closeCh:           make(chan struct{}),
-		internalUnreadyCh: make(chan error),
-		internalReadyCh:   make(chan struct{}),
+		internalUnreadyCh: make(chan error, 1),
+		internalReadyCh:   make(chan struct{}, 1),
 	}
 
 	for _, opt := range opts {
@@ -265,7 +265,6 @@ func (p *Publisher) connectionState() {
 			if !ok {
 				return
 			}
-
 			select {
 			case <-conn.NotifyClose():
 				continue
@@ -273,7 +272,6 @@ func (p *Publisher) connectionState() {
 				return
 			default:
 			}
-
 			err := p.channelState(conn.AMQPConnection(), conn.NotifyClose())
 			if err != nil {
 				p.logger.Printf("[DEBUG] publisher unready")
@@ -316,6 +314,7 @@ func (p *Publisher) publishState(ch AMQPChannel, connCloseCh <-chan struct{}) er
 	for {
 		select {
 		case p.internalReadyCh <- struct{}{}:
+			continue
 		case msg := <-p.publishingCh:
 			p.publish(ch, msg)
 		case <-chCloseCh:
@@ -345,6 +344,7 @@ func (p *Publisher) pausedState(chFlowCh <-chan bool, connCloseCh <-chan struct{
 	for {
 		select {
 		case p.internalUnreadyCh <- errFlowPaused:
+			continue
 		case resume := <-chFlowCh:
 			if resume {
 				p.logger.Printf("[INFO] publisher flow resumed")
