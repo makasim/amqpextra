@@ -74,8 +74,12 @@ func TestNotify(main *testing.T) {
 		assertUnready(t, newUnreadyCh, amqp.ErrClosed.Error())
 		assertUnready(t, newUnreadyCh, "the error")
 
+		p.Close()
+		assertClosed(t, p)
+
 		expected := `[DEBUG] publisher starting
 [ERROR] init func: the error
+[DEBUG] publisher stopped
 `
 		require.Equal(t, expected, l.Logs())
 	})
@@ -114,8 +118,12 @@ func TestNotify(main *testing.T) {
 
 		assertReady(t, newReadyCh)
 
+		p.Close()
+		assertClosed(t, p)
+
 		expected := `[DEBUG] publisher starting
 [DEBUG] publisher ready
+[DEBUG] publisher stopped
 `
 
 		require.Equal(t, expected, l.Logs())
@@ -151,9 +159,11 @@ func TestNotify(main *testing.T) {
 		assertUnready(t, newUnreadyCh, "the error")
 
 		p.Close()
+		assertClosed(t, p)
 
 		expected := `[DEBUG] publisher starting
 [ERROR] init func: the error
+[DEBUG] publisher stopped
 `
 		require.Equal(t, expected, l.Logs())
 	})
@@ -205,9 +215,14 @@ func TestNotify(main *testing.T) {
 
 		assertUnready(t, unreadyCh, "publisher flow paused")
 
+		p.Close()
+		assertClosed(t, p)
+
 		expected := `[DEBUG] publisher starting
 [DEBUG] publisher ready
 [WARN] publisher flow paused
+[DEBUG] publisher unready
+[DEBUG] publisher stopped
 `
 		require.Equal(t, expected, l.Logs())
 	})
@@ -242,9 +257,10 @@ func TestNotify(main *testing.T) {
 
 		_, newUnreadyCh := p.Notify(readyCh, unreadyCh)
 
-		p.Close()
 		assertUnready(t, newUnreadyCh, amqp.ErrClosed.Error())
 
+		p.Close()
+		assertClosed(t, p)
 		assertUnready(t, unreadyCh, "permanently closed")
 	})
 }
