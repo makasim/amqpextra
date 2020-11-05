@@ -13,7 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/goleak"
 
-	"log"
+	"runtime/debug"
 
 	"github.com/makasim/amqpextra/logger"
 	"github.com/makasim/amqpextra/publisher"
@@ -2055,14 +2055,12 @@ func TestFlowControl(main *testing.T) {
 
 		amqpConn := mock_publisher.NewMockAMQPConnection(ctrl)
 
-		log.Print(1)
 		assertUnready(t, unreadyCh, amqp.ErrClosed.Error())
 
 		connCh <- publisher.NewConnection(amqpConn, nil)
 		assertReady(t, readyCh)
 
 		chFlowCh <- false
-		log.Print(2)
 		assertUnready(t, unreadyCh, "publisher flow paused")
 
 		chCloseCh <- amqp.ErrClosed
@@ -2187,6 +2185,7 @@ func assertUnready(t *testing.T, unreadyCh <-chan error, errString string) {
 
 		require.EqualError(t, actualErr, errString)
 	case <-timer.C:
+		debug.PrintStack()
 		t.Fatal("publisher must be unready")
 	}
 }
