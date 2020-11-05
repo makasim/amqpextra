@@ -52,9 +52,7 @@ type Publisher struct {
 	readyChs   []chan struct{}
 	unreadyChs []chan error
 
-	confirmation bool
-
-	conformationChs []AMQPChannel
+	conformationCh chan<- chan error
 
 	closeCh chan struct{}
 
@@ -115,6 +113,10 @@ func New(
 		p.logger = logger.Discard
 	}
 
+	if cap(p.conformationCh) <= 1 {
+		return nil, errors.New("conformationCh buff size must be greater than 1")
+	}
+
 	if p.initFunc == nil {
 		p.initFunc = func(conn AMQPConnection) (AMQPChannel, error) {
 			return conn.(*amqp.Connection).Channel()
@@ -157,9 +159,9 @@ func WithNotify(readyCh chan struct{}, unreadyCh chan error) Option {
 	}
 }
 
-func WihConfirmation(confirmation bool) Option {
+func WithConfirmation(buffSize uint) Option {
 	return func(p *Publisher) {
-		p.confirmation = confirmation
+		p.conformationCh = make(chan chan error, buffSize)
 	}
 }
 
@@ -307,6 +309,13 @@ func (p *Publisher) channelState(conn AMQPConnection, connCloseCh <-chan struct{
 			return p.waitRetry(err)
 		}
 
+		if p.conformationCh != nil {
+			err := ch.Confirm(false)
+			if err != nil {
+				return p.waitRetry(err)
+			}
+		}
+
 		err = p.publishState(ch, connCloseCh)
 		if err == errChannelClosed {
 			continue
@@ -322,15 +331,6 @@ func (p *Publisher) publishState(ch AMQPChannel, connCloseCh <-chan struct{}) er
 	chCloseCh := ch.NotifyClose(make(chan *amqp.Error, 1))
 	chFlowCh := ch.NotifyFlow(make(chan bool, 1))
 
-	if p.confirmation {
-		err := ch.Confirm(false)
-		if err != nil {
-			return fmt.Errorf("[ERROR] confirm.select: %s", err)
-		}
-
-		p.appendConfirmationCh(ch)
-	}
-
 	p.logger.Printf("[DEBUG] publisher ready")
 	p.notifyReady()
 	for {
@@ -338,13 +338,7 @@ func (p *Publisher) publishState(ch AMQPChannel, connCloseCh <-chan struct{}) er
 		case p.internalReadyCh <- struct{}{}:
 			continue
 		case msg := <-p.publishingCh:
-
-			if p.confirmation {
-				p.publishConfirm(msg)
-			} else {
-				p.publish(ch, msg)
-			}
-
+			p.publish(ch, msg)
 		case <-chCloseCh:
 			p.logger.Printf("[DEBUG] channel closed")
 			return errChannelClosed
@@ -404,35 +398,19 @@ func (p *Publisher) publish(ch AMQPChannel, msg Message) {
 		msg.Publishing,
 	)
 
-	p.reply(msg.ResultCh, result)
-}
-
-func (p *Publisher) publishConfirm(msg Message) {
-	for _, ch := range p.conformationChs {
-		select {
-		case <-msg.Context.Done():
-			p.reply(msg.ResultCh, fmt.Errorf("message: %v", msg.Context.Err()))
-		default:
-		}
-		confirmationCh := ch.NotifyPublish(make(chan amqp.Confirmation, 1))
-
-		result := ch.Publish(
-			msg.Exchange,
-			msg.Key,
-			msg.Mandatory,
-			msg.Immediate,
-			msg.Publishing,
-		)
-
-		<-confirmationCh
+	if result != nil {
 		p.reply(msg.ResultCh, result)
+		return
 	}
-}
 
-func (p *Publisher) appendConfirmationCh(ch AMQPChannel) {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	p.conformationChs = append(p.conformationChs, ch)
+	if p.conformationCh != nil {
+		select {
+		case p.conformationCh <- msg.ResultCh:
+		case <-p.ctx.Done():
+			p.reply(msg.ResultCh, p.ctx.Err())
+			return
+		}
+	}
 }
 
 func (p *Publisher) reply(resultCh chan error, result error) {
