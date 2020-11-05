@@ -13,6 +13,8 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/goleak"
 
+	"log"
+
 	"github.com/makasim/amqpextra/logger"
 	"github.com/makasim/amqpextra/publisher"
 	"github.com/makasim/amqpextra/publisher/mock_publisher"
@@ -2053,12 +2055,14 @@ func TestFlowControl(main *testing.T) {
 
 		amqpConn := mock_publisher.NewMockAMQPConnection(ctrl)
 
+		log.Print(1)
 		assertUnready(t, unreadyCh, amqp.ErrClosed.Error())
 
 		connCh <- publisher.NewConnection(amqpConn, nil)
 		assertReady(t, readyCh)
 
 		chFlowCh <- false
+		log.Print(2)
 		assertUnready(t, unreadyCh, "publisher flow paused")
 
 		chCloseCh <- amqp.ErrClosed
