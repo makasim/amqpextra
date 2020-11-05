@@ -29,8 +29,7 @@ func TestPublishWhileConnectionClosed(t *testing.T) {
 	unreadyCh := make(chan error, 1)
 	dialer, err := amqpextra.NewDialer(
 		amqpextra.WithURL("amqp://guest:guest@rabbitmq:5672/amqpextra"),
-		amqpextra.WithReadyCh(readyCh),
-		amqpextra.WithUnreadyCh(unreadyCh),
+		amqpextra.WithNotify(readyCh, unreadyCh),
 		amqpextra.WithConnectionProperties(amqp.Table{
 			"connection_name": connName,
 		}),

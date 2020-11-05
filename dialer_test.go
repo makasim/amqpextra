@@ -586,10 +586,12 @@ func TestNotify(main *testing.T) {
 		assertUnready(t, newUnreadyCh, "the error")
 
 		d.Close()
+		assertClosed(t, d)
 
 		expected := `[DEBUG] connection unready
 [DEBUG] dialing
 [DEBUG] connection unready: the error
+[DEBUG] connection closed
 `
 		require.Equal(t, expected, l.Logs())
 	})
@@ -626,10 +628,12 @@ func TestNotify(main *testing.T) {
 		assertReady(t, newReadyCh)
 
 		d.Close()
+		assertClosed(t, d)
 
 		expected := `[DEBUG] connection unready
 [DEBUG] dialing
 [DEBUG] connection ready
+[DEBUG] connection closed
 `
 		require.Equal(t, expected, l.Logs())
 	})
@@ -662,9 +666,10 @@ func TestNotify(main *testing.T) {
 		_, newUnreadyCh := d.Notify(readyCh, unreadyCh)
 
 		time.Sleep(time.Millisecond * 20)
-		d.Close()
-
 		assertUnready(t, newUnreadyCh, amqp.ErrClosed.Error())
+
+		d.Close()
+		assertClosed(t, d)
 
 		expected := `[DEBUG] connection unready
 [DEBUG] dialing
@@ -699,8 +704,10 @@ func TestNotify(main *testing.T) {
 		require.NoError(t, err)
 
 		_, newUnreadyCh := d.Notify(readyCh, unreadyCh)
-		d.Close()
 		assertUnready(t, newUnreadyCh, amqp.ErrClosed.Error())
+
+		d.Close()
+		assertClosed(t, d)
 		assertUnready(t, newUnreadyCh, "permanently closed")
 
 		expected := `[DEBUG] connection unready

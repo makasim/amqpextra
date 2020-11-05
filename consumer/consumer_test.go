@@ -21,6 +21,157 @@ import (
 	"go.uber.org/goleak"
 )
 
+func TestNotify(main *testing.T) {
+	main.Run("PanicIfReadyChUnbuffered", func(t *testing.T) {
+		defer goleak.VerifyNone(t)
+
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		readyCh := make(chan struct{})
+		unreadyCh := make(chan error, 1)
+
+		l := logger.NewTest()
+		connCh := make(chan *consumer.Connection, 1)
+		h := handlerStub(l)
+
+		require.PanicsWithValue(t, "ready chan is unbuffered", func() {
+			c, _ := consumer.New(
+				"foo",
+				h,
+				connCh,
+			)
+			defer c.Close()
+			c.Notify(readyCh, unreadyCh)
+		})
+	})
+
+	main.Run("PanicIfUnreadyChUnbuffered", func(t *testing.T) {
+		defer goleak.VerifyNone(t)
+
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		readyCh := make(chan struct{}, 1)
+		unreadyCh := make(chan error)
+
+		l := logger.NewTest()
+		connCh := make(chan *consumer.Connection, 1)
+		h := handlerStub(l)
+
+		require.PanicsWithValue(t, "unready chan is unbuffered", func() {
+			c, _ := consumer.New(
+				"foo",
+				h,
+				connCh,
+			)
+			defer c.Close()
+			c.Notify(readyCh, unreadyCh)
+		})
+	})
+
+	main.Run("UnreadyWhileInit", func(t *testing.T) {
+		defer goleak.VerifyNone(t)
+
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		l := logger.NewTest()
+		h := handlerStub(l)
+
+		connCh := make(chan *consumer.Connection, 1)
+		unreadyCh := make(chan error, 1)
+		readyCh := make(chan struct{}, 1)
+
+		conn := mock_consumer.NewMockAMQPConnection(ctrl)
+
+		c, err := consumer.New(
+			"foo",
+			h,
+			connCh,
+			consumer.WithInitFunc(func(conn consumer.AMQPConnection) (consumer.AMQPChannel, error) {
+				time.Sleep(time.Millisecond * 20)
+				return nil, fmt.Errorf("the error")
+			}),
+			consumer.WithRetryPeriod(time.Millisecond),
+			consumer.WithLogger(l),
+		)
+		require.NoError(t, err)
+
+		defer c.Close()
+
+		connCh <- consumer.NewConnection(conn, nil)
+
+		_, newUnreadyCh := c.Notify(readyCh, unreadyCh)
+		assertUnready(t, newUnreadyCh, amqp.ErrClosed.Error())
+
+		time.Sleep(time.Millisecond * 30)
+		assertUnready(t, newUnreadyCh, "the error")
+		c.Close()
+		assertClosed(t, c)
+
+		assert.Equal(t, `[DEBUG] consumer starting
+[ERROR] init func: the error
+[DEBUG] consumer unready
+[DEBUG] consumer stopped
+`, l.Logs())
+	})
+
+	main.Run("ReadyIfConnected", func(t *testing.T) {
+		defer goleak.VerifyNone(t)
+
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		l := logger.NewTest()
+		h := handlerStub(l)
+		ch := mock_consumer.NewMockAMQPChannel(ctrl)
+
+		ch.EXPECT().
+			Consume(any(), any(), any(), any(), any(), any(), any()).
+			AnyTimes()
+		ch.EXPECT().NotifyCancel(any()).
+			AnyTimes()
+		ch.EXPECT().
+			NotifyClose(any()).
+			AnyTimes()
+		ch.EXPECT().Close().AnyTimes()
+
+		connCh := make(chan *consumer.Connection, 1)
+		unreadyCh := make(chan error, 1)
+		readyCh := make(chan struct{}, 1)
+
+		conn := mock_consumer.NewMockAMQPConnection(ctrl)
+
+		c, err := consumer.New(
+			"foo",
+			h,
+			connCh,
+			consumer.WithInitFunc(initFuncStub(ch)),
+			consumer.WithLogger(l),
+		)
+		require.NoError(t, err)
+
+		defer c.Close()
+
+		newReadyCh, _ := c.Notify(readyCh, unreadyCh)
+		connCh <- consumer.NewConnection(conn, nil)
+		assertReady(t, newReadyCh)
+
+		c.Close()
+		assertClosed(t, c)
+
+		assert.Equal(t, `[DEBUG] consumer starting
+[DEBUG] consumer ready
+[DEBUG] worker starting
+[DEBUG] worker stopped
+[DEBUG] consumer unready
+[DEBUG] consumer stopped
+`, l.Logs())
+	})
+
+}
+
 func TestUnready(main *testing.T) {
 	main.Run("CloseByMethod", func(t *testing.T) {
 		defer goleak.VerifyNone(t)
@@ -33,13 +184,14 @@ func TestUnready(main *testing.T) {
 
 		connCh := make(chan *consumer.Connection, 1)
 		unreadyCh := make(chan error, 1)
+		readyCh := make(chan struct{}, 1)
 
 		c, err := consumer.New(
 			"foo",
 			h,
 			connCh,
 			consumer.WithLogger(l),
-			consumer.WithUnreadyCh(unreadyCh),
+			consumer.WithNotify(readyCh, unreadyCh),
 		)
 		require.NoError(t, err)
 
@@ -66,13 +218,14 @@ func TestUnready(main *testing.T) {
 
 		connCh := make(chan *consumer.Connection, 1)
 		unreadyCh := make(chan error, 1)
+		readyCh := make(chan struct{}, 1)
 
 		c, err := consumer.New("foo",
 			h,
 			connCh,
 			consumer.WithLogger(l),
 			consumer.WithContext(ctx),
-			consumer.WithUnreadyCh(unreadyCh),
+			consumer.WithNotify(readyCh, unreadyCh),
 		)
 		require.NoError(t, err)
 
@@ -96,12 +249,13 @@ func TestUnready(main *testing.T) {
 
 		connCh := make(chan *consumer.Connection, 1)
 		unreadyCh := make(chan error, 1)
+		readyCh := make(chan struct{}, 1)
 
 		c, err := consumer.New("foo",
 			h,
 			connCh,
 			consumer.WithLogger(l),
-			consumer.WithUnreadyCh(unreadyCh),
+			consumer.WithNotify(readyCh, unreadyCh),
 		)
 		require.NoError(t, err)
 
@@ -127,6 +281,7 @@ func TestUnready(main *testing.T) {
 
 		connCh := make(chan *consumer.Connection, 1)
 		unreadyCh := make(chan error, 1)
+		readyCh := make(chan struct{}, 1)
 
 		c, err := consumer.New(
 			"foo",
@@ -134,7 +289,7 @@ func TestUnready(main *testing.T) {
 			connCh,
 			consumer.WithLogger(l),
 			consumer.WithRetryPeriod(time.Millisecond*400),
-			consumer.WithUnreadyCh(unreadyCh),
+			consumer.WithNotify(readyCh, unreadyCh),
 			consumer.WithInitFunc(func(conn consumer.AMQPConnection) (consumer.AMQPChannel, error) {
 				return nil, fmt.Errorf("the error")
 			}),
@@ -168,13 +323,14 @@ func TestUnready(main *testing.T) {
 
 		connCh := make(chan *consumer.Connection, 1)
 		unreadyCh := make(chan error, 1)
+		readyCh := make(chan struct{}, 1)
 
 		c, err := consumer.New(
 			"foo",
 			h,
 			connCh,
 			consumer.WithLogger(l),
-			consumer.WithUnreadyCh(unreadyCh),
+			consumer.WithNotify(readyCh, unreadyCh),
 			consumer.WithRetryPeriod(time.Millisecond*400),
 			consumer.WithInitFunc(func(conn consumer.AMQPConnection) (consumer.AMQPChannel, error) {
 				return nil, fmt.Errorf("the error")
@@ -209,13 +365,14 @@ func TestUnready(main *testing.T) {
 
 		connCh := make(chan *consumer.Connection, 1)
 		unreadyCh := make(chan error, 1)
+		readyCh := make(chan struct{}, 1)
 
 		c, err := consumer.New(
 			"foo",
 			h,
 			connCh,
 			consumer.WithLogger(l),
-			consumer.WithUnreadyCh(unreadyCh),
+			consumer.WithNotify(readyCh, unreadyCh),
 			consumer.WithRetryPeriod(time.Millisecond*400),
 			consumer.WithInitFunc(func(conn consumer.AMQPConnection) (consumer.AMQPChannel, error) {
 				return nil, fmt.Errorf("the error")
@@ -252,6 +409,7 @@ func TestUnready(main *testing.T) {
 
 		connCh := make(chan *consumer.Connection, 1)
 		unreadyCh := make(chan error, 1)
+		readyCh := make(chan struct{}, 1)
 
 		c, err := consumer.New(
 			"foo",
@@ -259,7 +417,7 @@ func TestUnready(main *testing.T) {
 			connCh,
 			consumer.WithLogger(l),
 			consumer.WithRetryPeriod(time.Millisecond*400),
-			consumer.WithUnreadyCh(unreadyCh),
+			consumer.WithNotify(readyCh, unreadyCh),
 			consumer.WithInitFunc(func(conn consumer.AMQPConnection) (consumer.AMQPChannel, error) {
 				return nil, fmt.Errorf("the error")
 			}),
@@ -293,13 +451,14 @@ func TestUnready(main *testing.T) {
 
 		connCh := make(chan *consumer.Connection, 1)
 		unreadyCh := make(chan error, 1)
+		readyCh := make(chan struct{}, 1)
 
 		c, err := consumer.New(
 			"foo",
 			h,
 			connCh,
 			consumer.WithLogger(l),
-			consumer.WithUnreadyCh(unreadyCh),
+			consumer.WithNotify(readyCh, unreadyCh),
 			consumer.WithRetryPeriod(time.Millisecond*400),
 			consumer.WithInitFunc(func(conn consumer.AMQPConnection) (consumer.AMQPChannel, error) {
 				return nil, fmt.Errorf("the error")
@@ -333,13 +492,14 @@ func TestUnready(main *testing.T) {
 
 		connCh := make(chan *consumer.Connection, 1)
 		unreadyCh := make(chan error, 1)
+		readyCh := make(chan struct{}, 1)
 
 		c, err := consumer.New(
 			"foo",
 			h,
 			connCh,
 			consumer.WithLogger(l),
-			consumer.WithUnreadyCh(unreadyCh),
+			consumer.WithNotify(readyCh, unreadyCh),
 			consumer.WithRetryPeriod(time.Millisecond*400),
 			consumer.WithInitFunc(func(conn consumer.AMQPConnection) (consumer.AMQPChannel, error) {
 				return nil, fmt.Errorf("the error")
@@ -378,12 +538,13 @@ func TestUnready(main *testing.T) {
 
 		connCh := make(chan *consumer.Connection, 1)
 		unreadyCh := make(chan error, 1)
+		readyCh := make(chan struct{}, 1)
 
 		c, err := consumer.New(
 			"foo",
 			h,
 			connCh,
-			consumer.WithUnreadyCh(unreadyCh),
+			consumer.WithNotify(readyCh, unreadyCh),
 			consumer.WithLogger(l),
 			consumer.WithRetryPeriod(time.Millisecond*400),
 			consumer.WithInitFunc(initFuncStub(ch)),
@@ -420,13 +581,14 @@ func TestUnready(main *testing.T) {
 
 		connCh := make(chan *consumer.Connection, 1)
 		unreadyCh := make(chan error, 1)
+		readyCh := make(chan struct{}, 1)
 
 		c, err := consumer.New(
 			"foo",
 			h,
 			connCh,
 			consumer.WithLogger(l),
-			consumer.WithUnreadyCh(unreadyCh),
+			consumer.WithNotify(readyCh, unreadyCh),
 			consumer.WithRetryPeriod(time.Millisecond*400),
 			consumer.WithInitFunc(initFuncStub(ch)),
 		)
@@ -461,7 +623,7 @@ func TestConsume(main *testing.T) {
 		cancelCh := make(chan string)
 		msgCh := make(chan amqp.Delivery)
 		readyCh := make(chan struct{}, 1)
-
+		unreadyCh := make(chan error, 1)
 		ch := mock_consumer.NewMockAMQPChannel(ctrl)
 		ch.EXPECT().Consume(any(), any(), any(), any(), any(), any(), any()).
 			Return(msgCh, nil).Times(1)
@@ -480,7 +642,7 @@ func TestConsume(main *testing.T) {
 			"foo",
 			h,
 			connCh,
-			consumer.WithReadyCh(readyCh),
+			consumer.WithNotify(readyCh, unreadyCh),
 			consumer.WithLogger(l),
 			consumer.WithInitFunc(initFuncStub(ch)),
 		)
@@ -511,6 +673,7 @@ func TestConsume(main *testing.T) {
 		chCloseCh := make(chan *amqp.Error)
 		cancelCh := make(chan string)
 		readyCh := make(chan struct{}, 1)
+		unreadyCh := make(chan error, 1)
 		msgCh := make(chan amqp.Delivery)
 
 		ch := mock_consumer.NewMockAMQPChannel(ctrl)
@@ -532,7 +695,7 @@ func TestConsume(main *testing.T) {
 			h,
 			connCh,
 			consumer.WithLogger(l),
-			consumer.WithReadyCh(readyCh),
+			consumer.WithNotify(readyCh, unreadyCh),
 			consumer.WithInitFunc(initFuncStub(ch)),
 		)
 		require.NoError(t, err)
@@ -562,6 +725,7 @@ func TestConsume(main *testing.T) {
 		chCloseCh := make(chan *amqp.Error)
 		cancelCh := make(chan string)
 		readyCh := make(chan struct{}, 1)
+		unreadyCh := make(chan error, 1)
 		msgCh := make(chan amqp.Delivery)
 
 		table := amqp.Table{"foo": "fooVal"}
@@ -585,7 +749,7 @@ func TestConsume(main *testing.T) {
 			h,
 			connCh,
 			consumer.WithLogger(l),
-			consumer.WithReadyCh(readyCh),
+			consumer.WithNotify(readyCh, unreadyCh),
 			consumer.WithConsumeArgs("theConsumer", true, true, true, true, table),
 			consumer.WithInitFunc(initFuncStub(ch)),
 		)
@@ -617,6 +781,7 @@ func TestConsume(main *testing.T) {
 		cancelCh := make(chan string)
 		msgCh := make(chan amqp.Delivery)
 		readyCh := make(chan struct{}, 1)
+		unreadyCh := make(chan error, 1)
 
 		ch := mock_consumer.NewMockAMQPChannel(ctrl)
 		ch.EXPECT().Consume(any(), any(), any(), any(), any(), any(), any()).
@@ -638,7 +803,7 @@ func TestConsume(main *testing.T) {
 			"theQueue",
 			h,
 			connCh,
-			consumer.WithReadyCh(readyCh),
+			consumer.WithNotify(readyCh, unreadyCh),
 			consumer.WithLogger(l),
 			consumer.WithInitFunc(initFuncStub(ch)),
 		)
@@ -698,13 +863,14 @@ func TestConsume(main *testing.T) {
 		connCh := make(chan *consumer.Connection, 1)
 		connCh <- consumer.NewConnection(conn, nil)
 		readyCh := make(chan struct{}, 1)
+		unreadyCh := make(chan error, 1)
 
 		c, err := consumer.New(
 			"theQueue",
 			h,
 			connCh,
 			consumer.WithLogger(l),
-			consumer.WithReadyCh(readyCh),
+			consumer.WithNotify(readyCh, unreadyCh),
 			consumer.WithRetryPeriod(time.Millisecond),
 			consumer.WithInitFunc(initFuncStub(ch, newCh)),
 		)
@@ -743,6 +909,7 @@ func TestConsume(main *testing.T) {
 		cancelCh := make(chan string)
 		msgCh := make(chan amqp.Delivery)
 		readyCh := make(chan struct{}, 1)
+		unreadyCh := make(chan error, 1)
 
 		ch := mock_consumer.NewMockAMQPChannel(ctrl)
 		ch.EXPECT().Consume(any(), any(), any(), any(), any(), any(), any()).
@@ -763,7 +930,7 @@ func TestConsume(main *testing.T) {
 			h,
 			connCh,
 			consumer.WithLogger(l),
-			consumer.WithReadyCh(readyCh),
+			consumer.WithNotify(readyCh, unreadyCh),
 			consumer.WithRetryPeriod(time.Millisecond),
 			consumer.WithInitFunc(initFuncStub(ch)),
 		)
@@ -810,13 +977,14 @@ func TestConsume(main *testing.T) {
 		connCh := make(chan *consumer.Connection, 1)
 		connCh <- consumer.NewConnection(conn, nil)
 		readyCh := make(chan struct{}, 1)
+		unreadyCh := make(chan error, 1)
 
 		c, err := consumer.New(
 			"theQueue",
 			h,
 			connCh,
 			consumer.WithLogger(l),
-			consumer.WithReadyCh(readyCh),
+			consumer.WithNotify(readyCh, unreadyCh),
 			consumer.WithRetryPeriod(time.Millisecond),
 			consumer.WithInitFunc(initFuncStub(ch)),
 		)
@@ -884,8 +1052,7 @@ func TestConsume(main *testing.T) {
 			h,
 			connCh,
 			consumer.WithLogger(l),
-			consumer.WithReadyCh(readyCh),
-			consumer.WithUnreadyCh(unreadyCh),
+			consumer.WithNotify(readyCh, unreadyCh),
 			consumer.WithRetryPeriod(time.Millisecond),
 			consumer.WithInitFunc(initFuncStub(ch, newCh)),
 		)
@@ -945,6 +1112,7 @@ func TestConsume(main *testing.T) {
 
 		connCh := make(chan *consumer.Connection, 1)
 		readyCh := make(chan struct{}, 1)
+		unreadyCh := make(chan error, 1)
 		connCh <- consumer.NewConnection(conn, nil)
 
 		c, err := consumer.New(
@@ -952,7 +1120,7 @@ func TestConsume(main *testing.T) {
 			handlerStub(l),
 			connCh,
 			consumer.WithLogger(l),
-			consumer.WithReadyCh(readyCh),
+			consumer.WithNotify(readyCh, unreadyCh),
 			consumer.WithRetryPeriod(time.Millisecond),
 			consumer.WithInitFunc(initFuncStub(ch)),
 		)
@@ -993,6 +1161,7 @@ func TestConcurrency(main *testing.T) {
 		cancelCh := make(chan string)
 		msgCh := make(chan amqp.Delivery)
 		readyCh := make(chan struct{}, 1)
+		unreadyCh := make(chan error, 1)
 
 		ch := mock_consumer.NewMockAMQPChannel(ctrl)
 		ch.EXPECT().Consume(any(), any(), any(), any(), any(), any(), any()).
@@ -1040,7 +1209,7 @@ func TestConcurrency(main *testing.T) {
 			h,
 			connCh,
 			consumer.WithLogger(l),
-			consumer.WithReadyCh(readyCh),
+			consumer.WithNotify(readyCh, unreadyCh),
 			consumer.WithRetryPeriod(time.Millisecond),
 			consumer.WithInitFunc(initFuncStub(ch, newCh)),
 		)
@@ -1095,13 +1264,14 @@ func TestConcurrency(main *testing.T) {
 		connCh := make(chan *consumer.Connection, 2)
 		connCh <- consumer.NewConnection(conn, nil)
 		readyCh := make(chan struct{}, 1)
+		unreadyCh := make(chan error, 1)
 
 		c, err := consumer.New(
 			"theQueue",
 			h,
 			connCh,
 			consumer.WithLogger(l),
-			consumer.WithReadyCh(readyCh),
+			consumer.WithNotify(readyCh, unreadyCh),
 			consumer.WithRetryPeriod(time.Millisecond),
 			consumer.WithInitFunc(initFuncStub(ch)),
 		)
@@ -1178,6 +1348,7 @@ func TestConcurrency(main *testing.T) {
 		connCh := make(chan *consumer.Connection, 2)
 		connCh <- consumer.NewConnection(conn, nil)
 		readyCh := make(chan struct{}, 1)
+		unreadyCh := make(chan error, 1)
 
 		wg := &sync.WaitGroup{}
 		for i := 0; i < 10; i++ {
@@ -1195,7 +1366,7 @@ func TestConcurrency(main *testing.T) {
 			h,
 			connCh,
 			consumer.WithLogger(l),
-			consumer.WithReadyCh(readyCh),
+			consumer.WithNotify(readyCh, unreadyCh),
 			consumer.WithRetryPeriod(time.Millisecond),
 			consumer.WithInitFunc(initFuncStub(ch, newCh)),
 		)
@@ -1223,7 +1394,7 @@ func TestConcurrency(main *testing.T) {
 	})
 }
 
-func assertUnready(t *testing.T, unreadyCh chan error, errString string) {
+func assertUnready(t *testing.T, unreadyCh <-chan error, errString string) {
 	timer := time.NewTimer(time.Millisecond * 100)
 	defer timer.Stop()
 
@@ -1236,11 +1407,11 @@ func assertUnready(t *testing.T, unreadyCh chan error, errString string) {
 
 		require.EqualError(t, err, errString)
 	case <-timer.C:
-		t.Fatal("publisher must be unready")
+		t.Fatal("consumer must be unready")
 	}
 }
 
-func assertReady(t *testing.T, readyCh chan struct{}) {
+func assertReady(t *testing.T, readyCh <-chan struct{}) {
 	timer := time.NewTimer(time.Millisecond * 100)
 	defer timer.Stop()
 

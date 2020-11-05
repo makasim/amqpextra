@@ -37,8 +37,9 @@ func TestConsumeWhileConnectionClosed(t *testing.T) {
 	require.NoError(t, err)
 	connName := fmt.Sprintf("amqpextra-test-%d-%d", time.Now().UnixNano(), rnum)
 	readyCh := make(chan struct{}, 1)
+	unreadyCh := make(chan error, 1)
 	dialer, err := amqpextra.NewDialer(
-		amqpextra.WithReadyCh(readyCh),
+		amqpextra.WithNotify(readyCh, unreadyCh),
 		amqpextra.WithURL("amqp://guest:guest@rabbitmq:5672/amqpextra"),
 		amqpextra.WithConnectionProperties(amqp.Table{
 			"connection_name": connName,

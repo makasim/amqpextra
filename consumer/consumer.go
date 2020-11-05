@@ -43,6 +43,9 @@ type Consumer struct {
 	unreadyChs []chan error
 	readyChs   []chan struct{}
 
+	internalUnreadyCh chan error
+	internalReadyCh   chan struct{}
+
 	queue     string
 	consumer  string
 	autoAck   bool
@@ -62,6 +65,9 @@ func New(
 		queue:   queue,
 		handler: handler,
 		connCh:  connCh,
+
+		internalUnreadyCh: make(chan error),
+		internalReadyCh:   make(chan struct{}),
 
 		closeCh: make(chan struct{}),
 	}
@@ -119,18 +125,6 @@ func New(
 	return c, nil
 }
 
-func WithReadyCh(readyCh chan struct{}) Option {
-	return func(c *Consumer) {
-		c.readyChs = append(c.readyChs, readyCh)
-	}
-}
-
-func WithUnreadyCh(unreadyCh chan error) Option {
-	return func(c *Consumer) {
-		c.unreadyChs = append(c.unreadyChs, unreadyCh)
-	}
-}
-
 func WithLogger(l logger.Logger) Option {
 	return func(c *Consumer) {
 		c.logger = l
@@ -161,6 +155,13 @@ func WithWorker(w Worker) Option {
 	}
 }
 
+func WithNotify(readyCh chan struct{}, unreadyCh chan error) Option {
+	return func(c *Consumer) {
+		c.readyChs = append(c.readyChs, readyCh)
+		c.unreadyChs = append(c.unreadyChs, unreadyCh)
+	}
+}
+
 func WithConsumeArgs(consumer string, autoAck, exclusive, noLocal, noWait bool, args amqp.Table) Option {
 	return func(c *Consumer) {
 		c.consumer = consumer
@@ -172,23 +173,10 @@ func WithConsumeArgs(consumer string, autoAck, exclusive, noLocal, noWait bool, 
 	}
 }
 
-func (c *Consumer) NotifyReady(readyCh chan struct{}) <-chan struct{} {
+func (c *Consumer) Notify(readyCh chan struct{}, unreadyCh chan error) (ready <-chan struct{}, unready <-chan error) {
 	if cap(readyCh) == 0 {
 		panic("ready chan is unbuffered")
 	}
-
-	select {
-	case <-c.NotifyClosed():
-		return readyCh
-	default:
-		c.mu.Lock()
-		defer c.mu.Unlock()
-		c.readyChs = append(c.readyChs, readyCh)
-		return readyCh
-	}
-}
-
-func (c *Consumer) NotifyUnready(unreadyCh chan error) <-chan error {
 	if cap(unreadyCh) == 0 {
 		panic("unready chan is unbuffered")
 	}
@@ -196,13 +184,36 @@ func (c *Consumer) NotifyUnready(unreadyCh chan error) <-chan error {
 	select {
 	case <-c.NotifyClosed():
 		close(unreadyCh)
+		return readyCh, unreadyCh
 	default:
-		c.mu.Lock()
-		defer c.mu.Unlock()
-		c.unreadyChs = append(c.unreadyChs, unreadyCh)
 	}
 
-	return unreadyCh
+	c.mu.Lock()
+	c.readyChs = append(c.readyChs, readyCh)
+	c.unreadyChs = append(c.unreadyChs, unreadyCh)
+	c.mu.Unlock()
+
+	select {
+	case <-c.internalReadyCh:
+		select {
+		case readyCh <- struct{}{}:
+		default:
+		}
+
+		return readyCh, unreadyCh
+	case err, ok := <-c.internalUnreadyCh:
+		if !ok {
+			close(unreadyCh)
+			return readyCh, unreadyCh
+		}
+
+		select {
+		case unreadyCh <- err:
+		default:
+		}
+
+		return readyCh, unreadyCh
+	}
 }
 
 func (c *Consumer) NotifyClosed() <-chan struct{} {
@@ -230,6 +241,8 @@ func (c *Consumer) connectionState() {
 	c.notifyUnready(connErr)
 	for {
 		select {
+		case c.internalUnreadyCh <- connErr:
+			continue
 		case conn, ok := <-c.connCh:
 			if !ok {
 				return
@@ -308,26 +321,30 @@ func (c *Consumer) consumeState(ch AMQPChannel, connCloseCh <-chan struct{}) err
 
 	var result error
 
-	select {
-	case <-cancelCh:
-		c.logger.Printf("[DEBUG] consumption canceled")
-		result = fmt.Errorf("consumption canceled")
-	case <-chCloseCh:
-		c.logger.Printf("[DEBUG] channel closed")
-		result = errChannelClosed
-	case <-connCloseCh:
-		result = amqp.ErrClosed
-	case <-workerDoneCh:
-		result = fmt.Errorf("workers unexpectedly stopped")
-	case <-c.ctx.Done():
-		result = nil
+	for {
+		select {
+		case c.internalReadyCh <- struct{}{}:
+			continue
+		case <-cancelCh:
+			c.logger.Printf("[DEBUG] consumption canceled")
+			result = fmt.Errorf("consumption canceled")
+		case <-chCloseCh:
+			c.logger.Printf("[DEBUG] channel closed")
+			result = errChannelClosed
+		case <-connCloseCh:
+			result = amqp.ErrClosed
+		case <-workerDoneCh:
+			result = fmt.Errorf("workers unexpectedly stopped")
+		case <-c.ctx.Done():
+			result = nil
+		}
+
+		workerCancelFunc()
+		<-workerDoneCh
+		c.close(ch)
+
+		return result
 	}
-
-	workerCancelFunc()
-	<-workerDoneCh
-	c.close(ch)
-
-	return result
 }
 
 func (c *Consumer) waitRetry(err error) error {
@@ -344,6 +361,8 @@ func (c *Consumer) waitRetry(err error) error {
 
 	for {
 		select {
+		case c.internalUnreadyCh <- err:
+			continue
 		case <-timer.C:
 			return err
 		case <-c.ctx.Done():
