@@ -233,7 +233,7 @@ func (p *Publisher) Go(msg Message) <-chan error {
 
 	select {
 	case <-p.closeCh:
-		p.reply(msg.ResultCh, fmt.Errorf("publisher stopped"))
+		msg.ResultCh <- fmt.Errorf("publisher stopped")
 		return msg.ResultCh
 	default:
 	}
@@ -241,12 +241,12 @@ func (p *Publisher) Go(msg Message) <-chan error {
 	select {
 	case p.publishingCh <- msg:
 	case <-msg.Context.Done():
-		p.reply(msg.ResultCh, fmt.Errorf("message: %v", msg.Context.Err()))
+		msg.ResultCh <- fmt.Errorf("message: %v", msg.Context.Err())
 	// noinspection GoNilness
 	case <-unreadyCh:
-		p.reply(msg.ResultCh, fmt.Errorf("publisher not ready"))
+		msg.ResultCh <- fmt.Errorf("publisher not ready")
 	case <-p.ctx.Done():
-		p.reply(msg.ResultCh, fmt.Errorf("publisher stopped"))
+		msg.ResultCh <- fmt.Errorf("publisher stopped")
 	}
 
 	return msg.ResultCh
@@ -336,21 +336,20 @@ func (p *Publisher) channelState(conn AMQPConnection, connCloseCh <-chan struct{
 }
 
 func (p *Publisher) handleConfirmations(resultChCh chan chan error, confirmationCh chan amqp.Confirmation) {
+	p.logger.Printf("[DEBUG] handle confirmation started")
+	defer p.logger.Printf("[DEBUG] handle confirmation stopped")
 	for {
 		select {
 		case c, ok := <-confirmationCh:
 			if !ok {
-				p.logger.Printf("[WARN] confirmation closed")
-
-				p.emptyConfirmationCh(confirmationCh)
 				for {
 					select {
 					case resultCh := <-resultChCh:
 						resultCh <- amqp.ErrClosed
 						continue
 					default:
+						return
 					}
-					return
 				}
 			}
 
@@ -362,17 +361,6 @@ func (p *Publisher) handleConfirmations(resultChCh chan chan error, confirmation
 				resultCh <- fmt.Errorf("not delivered")
 			}
 		}
-	}
-}
-
-func (*Publisher) emptyConfirmationCh(confirmationCh chan amqp.Confirmation) {
-	for {
-		select {
-		case <-confirmationCh:
-			continue
-		default:
-		}
-		break
 	}
 }
 
@@ -435,7 +423,7 @@ func (p *Publisher) pausedState(chFlowCh <-chan bool, connCloseCh <-chan struct{
 func (p *Publisher) publish(ch AMQPChannel, msg Message, resultChCh chan chan error) {
 	select {
 	case <-msg.Context.Done():
-		p.reply(msg.ResultCh, fmt.Errorf("message: %v", msg.Context.Err()))
+		msg.ResultCh <- fmt.Errorf("message: %v", msg.Context.Err())
 	default:
 	}
 
@@ -447,31 +435,21 @@ func (p *Publisher) publish(ch AMQPChannel, msg Message, resultChCh chan chan er
 		msg.Publishing,
 	)
 
-	if result != nil {
-		p.reply(msg.ResultCh, result)
-		return
-	}
-
 	if !p.confirmation {
-		p.reply(msg.ResultCh, result)
+		msg.ResultCh <- result
 		return
 	}
 
-	if p.confirmation {
-		select {
-		case resultChCh <- msg.ResultCh:
-		case <-p.ctx.Done():
-			p.reply(msg.ResultCh, p.ctx.Err())
-			return
-		}
+	if result != nil {
+		msg.ResultCh <- result
+		return
 	}
-}
 
-func (p *Publisher) reply(resultCh chan error, result error) {
-	if resultCh != nil {
-		resultCh <- result
-	} else if result != nil {
-		p.logger.Printf("[ERROR] %v", result)
+	select {
+	case resultChCh <- msg.ResultCh:
+	case <-p.ctx.Done():
+		msg.ResultCh <- p.ctx.Err()
+		return
 	}
 }
 
