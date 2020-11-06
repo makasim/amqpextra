@@ -339,18 +339,18 @@ func (p *Publisher) handlerConfirms(resultChCh chan chan error, confirmationCh c
 	for {
 		select {
 		case c, ok := <-confirmationCh:
-			resultCh := <-resultChCh
-
 			if !ok {
 				p.logger.Printf("[WARN] confirmation closed")
 
 				p.emptyConfirmationCh(confirmationCh)
 
-				for range resultChCh {
+				for resultCh := range resultChCh {
 					resultCh <- amqp.ErrClosed
 				}
 				return
 			}
+
+			resultCh := <-resultChCh
 
 			if c.Ack {
 				resultCh <- nil
