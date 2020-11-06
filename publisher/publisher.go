@@ -343,11 +343,15 @@ func (p *Publisher) handlerConfirms(resultChCh chan chan error, confirmationCh c
 				p.logger.Printf("[WARN] confirmation closed")
 
 				p.emptyConfirmationCh(confirmationCh)
-
-				for resultCh := range resultChCh {
-					resultCh <- amqp.ErrClosed
+				for {
+					select {
+					case resultCh := <-resultChCh:
+						resultCh <- amqp.ErrClosed
+						continue
+					default:
+					}
+					return
 				}
-				return
 			}
 
 			resultCh := <-resultChCh
@@ -373,7 +377,6 @@ func (*Publisher) emptyConfirmationCh(confirmationCh chan amqp.Confirmation) {
 }
 
 func (p *Publisher) publishState(ch AMQPChannel, connCloseCh <-chan struct{}, resultChCh chan chan error) error {
-
 	chCloseCh := ch.NotifyClose(make(chan *amqp.Error, 1))
 	chFlowCh := ch.NotifyFlow(make(chan bool, 1))
 
