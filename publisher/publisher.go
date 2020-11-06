@@ -322,7 +322,7 @@ func (p *Publisher) channelState(conn AMQPConnection, connCloseCh <-chan struct{
 			confirmationCh := ch.NotifyPublish(make(chan amqp.Confirmation, p.confirmationBuffer))
 			resultChCh = make(chan chan error, p.confirmationBuffer)
 
-			go p.handlerConfirms(resultChCh, confirmationCh)
+			go p.handleConfirmations(resultChCh, confirmationCh)
 		}
 
 		err = p.publishState(ch, connCloseCh, resultChCh)
@@ -335,7 +335,7 @@ func (p *Publisher) channelState(conn AMQPConnection, connCloseCh <-chan struct{
 	}
 }
 
-func (p *Publisher) handlerConfirms(resultChCh chan chan error, confirmationCh chan amqp.Confirmation) {
+func (p *Publisher) handleConfirmations(resultChCh chan chan error, confirmationCh chan amqp.Confirmation) {
 	for {
 		select {
 		case c, ok := <-confirmationCh:
