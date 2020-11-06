@@ -2,7 +2,6 @@ package publisher
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -92,21 +91,21 @@ func New(
 
 	for _, unreadyCh := range p.unreadyChs {
 		if unreadyCh == nil {
-			return nil, errors.New("unready chan must be not nil")
+			return nil, fmt.Errorf("unready chan must be not nil")
 		}
 
 		if cap(unreadyCh) == 0 {
-			return nil, errors.New("unready chan is unbuffered")
+			return nil, fmt.Errorf("unready chan is unbuffered")
 		}
 	}
 
 	for _, readyCh := range p.readyChs {
 		if readyCh == nil {
-			return nil, errors.New("ready chan must be not nil")
+			return nil, fmt.Errorf("ready chan must be not nil")
 		}
 
 		if cap(readyCh) == 0 {
-			return nil, errors.New("ready chan is unbuffered")
+			return nil, fmt.Errorf("ready chan is unbuffered")
 		}
 	}
 
@@ -115,7 +114,7 @@ func New(
 	}
 
 	if p.confirmation && p.confirmationBuffer <= 1 {
-		return nil, errors.New("confirmation buffer size must be greater than 1")
+		return nil, fmt.Errorf("confirmation buffer size must be greater than 1")
 	}
 
 	if p.initFunc == nil {
