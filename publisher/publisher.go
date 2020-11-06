@@ -114,7 +114,7 @@ func New(
 		p.logger = logger.Discard
 	}
 
-	if p.confirmationBuffer <= 1 {
+	if p.confirmation && p.confirmationBuffer <= 1 {
 		return nil, errors.New("confirmation buffer size must be greater than 1")
 	}
 
