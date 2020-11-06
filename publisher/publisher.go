@@ -52,7 +52,8 @@ type Publisher struct {
 	readyChs   []chan struct{}
 	unreadyChs []chan error
 
-	conformationCh chan<- chan error
+	confirmation       bool
+	confirmationBuffer uint
 
 	closeCh chan struct{}
 
@@ -113,8 +114,8 @@ func New(
 		p.logger = logger.Discard
 	}
 
-	if cap(p.conformationCh) <= 1 {
-		return nil, errors.New("conformationCh buff size must be greater than 1")
+	if p.confirmationBuffer <= 1 {
+		return nil, errors.New("confirmationBuffSize buff size must be greater than 1")
 	}
 
 	if p.initFunc == nil {
@@ -159,9 +160,10 @@ func WithNotify(readyCh chan struct{}, unreadyCh chan error) Option {
 	}
 }
 
-func WithConfirmation(buffSize uint) Option {
+func WithConfirmation(buffer uint) Option {
 	return func(p *Publisher) {
-		p.conformationCh = make(chan chan error, buffSize)
+		p.confirmationBuffer = buffer
+		p.confirmation = true
 	}
 }
 
@@ -309,14 +311,20 @@ func (p *Publisher) channelState(conn AMQPConnection, connCloseCh <-chan struct{
 			return p.waitRetry(err)
 		}
 
-		if p.conformationCh != nil {
+		var resultChCh chan chan error
+		var confirmationCh chan amqp.Confirmation
+
+		if p.confirmation {
 			err := ch.Confirm(false)
 			if err != nil {
 				return p.waitRetry(err)
 			}
+
+			confirmationCh = ch.NotifyPublish(make(chan amqp.Confirmation, p.confirmationBuffer))
+			resultChCh = make(chan chan error, p.confirmationBuffer)
 		}
 
-		err = p.publishState(ch, connCloseCh)
+		err = p.publishState(ch, connCloseCh, resultChCh, confirmationCh)
 		if err == errChannelClosed {
 			continue
 		}
@@ -326,7 +334,7 @@ func (p *Publisher) channelState(conn AMQPConnection, connCloseCh <-chan struct{
 	}
 }
 
-func (p *Publisher) publishState(ch AMQPChannel, connCloseCh <-chan struct{}) error {
+func (p *Publisher) publishState(ch AMQPChannel, connCloseCh <-chan struct{}, resultChCh chan chan error, confirmationCh chan amqp.Confirmation) error {
 
 	chCloseCh := ch.NotifyClose(make(chan *amqp.Error, 1))
 	chFlowCh := ch.NotifyFlow(make(chan bool, 1))
@@ -335,10 +343,24 @@ func (p *Publisher) publishState(ch AMQPChannel, connCloseCh <-chan struct{}) er
 	p.notifyReady()
 	for {
 		select {
+		case c, ok := <-confirmationCh:
+
+			if !ok {
+				p.logger.Printf("[WARN] confirmation closed")
+			}
+
+			resultCh := <-resultChCh
+
+			if c.Ack {
+				resultCh <- nil
+			} else {
+				resultCh <- fmt.Errorf("not delivered")
+			}
+
 		case p.internalReadyCh <- struct{}{}:
 			continue
 		case msg := <-p.publishingCh:
-			p.publish(ch, msg)
+			p.publish(ch, msg, resultChCh)
 		case <-chCloseCh:
 			p.logger.Printf("[DEBUG] channel closed")
 			return errChannelClosed
@@ -383,7 +405,7 @@ func (p *Publisher) pausedState(chFlowCh <-chan bool, connCloseCh <-chan struct{
 	}
 }
 
-func (p *Publisher) publish(ch AMQPChannel, msg Message) {
+func (p *Publisher) publish(ch AMQPChannel, msg Message, resultChCh chan chan error) {
 	select {
 	case <-msg.Context.Done():
 		p.reply(msg.ResultCh, fmt.Errorf("message: %v", msg.Context.Err()))
@@ -403,9 +425,9 @@ func (p *Publisher) publish(ch AMQPChannel, msg Message) {
 		return
 	}
 
-	if p.conformationCh != nil {
+	if p.confirmation {
 		select {
-		case p.conformationCh <- msg.ResultCh:
+		case resultChCh = <-msg.ResultCh:
 		case <-p.ctx.Done():
 			p.reply(msg.ResultCh, p.ctx.Err())
 			return
@@ -414,14 +436,6 @@ func (p *Publisher) publish(ch AMQPChannel, msg Message) {
 }
 
 func (p *Publisher) reply(resultCh chan error, result error) {
-	if resultCh != nil {
-		resultCh <- result
-	} else if result != nil {
-		p.logger.Printf("[ERROR] %v", result)
-	}
-}
-
-func (p *Publisher) replyConfirm(resultCh chan error, confirmationCh chan amqp.Confirmation, result error) {
 	if resultCh != nil {
 		resultCh <- result
 	} else if result != nil {
