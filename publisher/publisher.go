@@ -323,6 +323,7 @@ func (p *Publisher) channelState(conn AMQPConnection, connCloseCh <-chan struct{
 			}
 
 			confirmationCh := ch.NotifyPublish(make(chan amqp.Confirmation, p.confirmationBuffer))
+
 			resultChCh = make(chan chan error, p.confirmationBuffer)
 
 			go p.handleConfirmations(resultChCh, confirmationCh)
@@ -363,6 +364,8 @@ func (p *Publisher) handleConfirmations(resultChCh chan chan error, confirmation
 			} else {
 				resultCh <- fmt.Errorf("not delivered")
 			}
+		default:
+			return
 		}
 	}
 }
