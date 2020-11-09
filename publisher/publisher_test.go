@@ -2166,6 +2166,33 @@ func TestFlowControl(main *testing.T) {
 	})
 }
 
+func TestPublisherConfirms(main *testing.T) {
+	main.Run("ErrorIfBufferLessThanOne", func(t *testing.T) {
+		defer goleak.VerifyNone(t)
+
+		connCh := make(chan *publisher.Connection)
+		_, err := publisher.New(connCh, publisher.WithConfirmation(1))
+		require.EqualError(t, err, "confirmation buffer size must be greater than 1")
+	})
+
+	main.Run("WaitIfChannelConfirmErrored", func(t *testing.T) {
+
+	})
+
+	main.Run("ResultNilIfAckIsTrue", func(t *testing.T) {
+
+	})
+
+	main.Run("ResultErroredIfAckIsFalse", func(t *testing.T) {
+
+	})
+
+	main.Run("ResultErroredIfChannelClosed", func(t *testing.T) {
+
+	})
+
+}
+
 func assertReady(t *testing.T, readyCh <-chan struct{}) {
 	timer := time.NewTimer(time.Millisecond * 100)
 	defer timer.Stop()
