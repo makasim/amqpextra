@@ -2,7 +2,6 @@ package e2e_test
 
 import (
 	"fmt"
-	"log"
 	"math/big"
 	"testing"
 
@@ -125,23 +124,6 @@ waitOpened:
 
 	dialer.Close()
 	<-pub.NotifyClosed()
-}
-
-func assertConfirms(t *testing.T, result chan error) {
-	timer := time.NewTimer(time.Millisecond * 1000)
-	defer timer.Stop()
-
-	select {
-	case err, ok := <-result:
-		if !ok {
-			log.Fatal("result closed")
-		}
-		if err != nil {
-
-		}
-	case <-timer.C:
-		t.Fatal("results must be received")
-	}
 }
 
 func assertPublisherReady(t *testing.T, readyCh chan struct{}) {
