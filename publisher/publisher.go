@@ -160,7 +160,9 @@ func WithNotify(readyCh chan struct{}, unreadyCh chan error) Option {
 }
 
 // WithConfirmation tells publisher to turn on publisher confirm mode.
-// The buffer option tells how many messages might be in-flight. Once limit is reached no new messages could be published. The confirmation result is returned via msg.ResultCh.
+// The buffer option tells how many messages might be in-flight.
+// Once limit is reached no new messages could be published.
+// The confirmation result is returned via msg.ResultCh.
 func WithConfirmation(buffer uint) Option {
 	return func(p *Publisher) {
 		p.confirmationBuffer = buffer
