@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"sync"
 	"testing"
 	"time"
 
@@ -2338,14 +2337,13 @@ func TestPublisherConfirms(main *testing.T) {
 		require.Equal(t, expected, l.Logs())
 	})
 
-	main.Run("ResultErroredIfConfirmationClosed", func(t *testing.T) {
+	main.Run("AllMessagesGetConfirmationWhenConnectionClosed", func(t *testing.T) {
 		defer goleak.VerifyNone(t)
 
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
 
-		var buffSize uint = 10
-		confirmationCh := make(chan amqp.Confirmation, buffSize)
+		confirmationCh := make(chan amqp.Confirmation, 4)
 
 		ch := mock_publisher.NewMockAMQPChannel(ctrl)
 
@@ -2353,11 +2351,10 @@ func TestPublisherConfirms(main *testing.T) {
 			NotifyPublish(any()).
 			Return(confirmationCh).
 			Times(1)
-
 		ch.EXPECT().
 			Publish(any(), any(), any(), any(), any()).
 			Return(nil).
-			AnyTimes()
+			Times(4)
 		ch.EXPECT().
 			NotifyClose(any()).
 			AnyTimes()
@@ -2368,42 +2365,36 @@ func TestPublisherConfirms(main *testing.T) {
 
 		readyCh := make(chan struct{}, 1)
 		unreadyCh := make(chan error, 1)
-		closeCh := make(chan struct{})
+		connCloseCh := make(chan struct{})
 
 		connCh, l, p := newPublisher(
-			publisher.WithConfirmation(buffSize),
+			publisher.WithConfirmation(4),
 			publisher.WithInitFunc(initFuncStub(ch)),
 			publisher.WithNotify(readyCh, unreadyCh),
 		)
 		defer p.Close()
 
 		amqpConn := mock_publisher.NewMockAMQPConnection(ctrl)
-		connCh <- publisher.NewConnection(amqpConn, closeCh)
+		connCh <- publisher.NewConnection(amqpConn, connCloseCh)
 		assertReady(t, readyCh)
 
-		for i := 0; i < int(buffSize); i++ {
-			confirmationCh <- amqp.Confirmation{
-				Ack: true,
-			}
-			if i == 5 {
-				break
-			}
-		}
+		resultCh := make(chan error, 4)
+		p.Go(publisher.Message{ResultCh: resultCh})
+		p.Go(publisher.Message{ResultCh: resultCh})
+		p.Go(publisher.Message{ResultCh: resultCh})
+		p.Go(publisher.Message{ResultCh: resultCh})
 
-		wg := &sync.WaitGroup{}
-		for i := 0; i < int(buffSize); i++ {
-			wg.Add(1)
-			if i == 5 {
-				close(confirmationCh)
-			}
-			go func(wg *sync.WaitGroup) {
-				defer wg.Done()
-				<-p.Go(publisher.Message{})
-			}(wg)
-		}
-		fmt.Println(1)
-		wg.Wait()
-		fmt.Println(2)
+		confirmationCh <- amqp.Confirmation{Ack: true}
+		confirmationCh <- amqp.Confirmation{Ack: true}
+
+		close(connCloseCh)
+		close(confirmationCh)
+
+		require.NoError(t, waitResult(resultCh, time.Millisecond*100))
+		require.NoError(t, waitResult(resultCh, time.Millisecond*100))
+		require.EqualError(t, waitResult(resultCh, time.Millisecond*100), amqp.ErrClosed.Error())
+		require.EqualError(t, waitResult(resultCh, time.Millisecond*100), amqp.ErrClosed.Error())
+
 		p.Close()
 		assertClosed(t, p)
 
@@ -2411,6 +2402,7 @@ func TestPublisherConfirms(main *testing.T) {
 [DEBUG] publisher ready
 [DEBUG] handle confirmation started
 [DEBUG] handle confirmation stopped
+[DEBUG] publisher unready
 [DEBUG] publisher stopped
 `
 		require.Equal(t, expected, l.Logs())

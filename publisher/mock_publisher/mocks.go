@@ -71,6 +71,20 @@ func (mr *MockAMQPChannelMockRecorder) Close() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Close", reflect.TypeOf((*MockAMQPChannel)(nil).Close))
 }
 
+// Confirm mocks base method.
+func (m *MockAMQPChannel) Confirm(arg0 bool) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Confirm", arg0)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Confirm indicates an expected call of Confirm.
+func (mr *MockAMQPChannelMockRecorder) Confirm(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Confirm", reflect.TypeOf((*MockAMQPChannel)(nil).Confirm), arg0)
+}
+
 // NotifyClose mocks base method.
 func (m *MockAMQPChannel) NotifyClose(arg0 chan *amqp.Error) chan *amqp.Error {
 	m.ctrl.T.Helper()
@@ -97,6 +111,20 @@ func (m *MockAMQPChannel) NotifyFlow(arg0 chan bool) chan bool {
 func (mr *MockAMQPChannelMockRecorder) NotifyFlow(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NotifyFlow", reflect.TypeOf((*MockAMQPChannel)(nil).NotifyFlow), arg0)
+}
+
+// NotifyPublish mocks base method.
+func (m *MockAMQPChannel) NotifyPublish(arg0 chan amqp.Confirmation) chan amqp.Confirmation {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "NotifyPublish", arg0)
+	ret0, _ := ret[0].(chan amqp.Confirmation)
+	return ret0
+}
+
+// NotifyPublish indicates an expected call of NotifyPublish.
+func (mr *MockAMQPChannelMockRecorder) NotifyPublish(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NotifyPublish", reflect.TypeOf((*MockAMQPChannel)(nil).NotifyPublish), arg0)
 }
 
 // Publish mocks base method.

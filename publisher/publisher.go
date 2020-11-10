@@ -316,6 +316,7 @@ func (p *Publisher) channelState(conn AMQPConnection, connCloseCh <-chan struct{
 
 		var resultChCh chan chan error
 
+		confirmationCloseCh := make(chan struct{})
 		if p.confirmation {
 			err := ch.Confirm(false)
 			if err != nil {
@@ -326,7 +327,9 @@ func (p *Publisher) channelState(conn AMQPConnection, connCloseCh <-chan struct{
 
 			resultChCh = make(chan chan error, p.confirmationBuffer)
 
-			go p.handleConfirmations(resultChCh, confirmationCh)
+			go p.handleConfirmations(resultChCh, confirmationCh, confirmationCloseCh)
+		} else {
+			close(confirmationCloseCh)
 		}
 
 		err = p.publishState(ch, connCloseCh, resultChCh)
@@ -335,12 +338,26 @@ func (p *Publisher) channelState(conn AMQPConnection, connCloseCh <-chan struct{
 		}
 
 		p.close(ch)
+		<-confirmationCloseCh
+
 		return err
 	}
 }
 
-func (p *Publisher) handleConfirmations(resultChCh chan chan error, confirmationCh chan amqp.Confirmation) {
+func (p *Publisher) handleConfirmations(
+	resultChCh chan chan error,
+	confirmationCh chan amqp.Confirmation,
+	confirmationCloseCh chan struct{},
+) {
+	select {
+	case <-p.internalReadyCh:
+	case <-p.internalUnreadyCh:
+		p.logger.Printf("[ERROR] handle confirmation unexpected unready")
+		return
+	}
+
 	p.logger.Printf("[DEBUG] handle confirmation started")
+	defer close(confirmationCloseCh)
 	defer p.logger.Printf("[DEBUG] handle confirmation stopped")
 	for {
 		select {
@@ -358,14 +375,11 @@ func (p *Publisher) handleConfirmations(resultChCh chan chan error, confirmation
 			}
 
 			resultCh := <-resultChCh
-
 			if c.Ack {
 				resultCh <- nil
 			} else {
 				resultCh <- fmt.Errorf("not delivered")
 			}
-		default:
-			return
 		}
 	}
 }
