@@ -85,7 +85,6 @@ func TestPublishConfirms(t *testing.T) {
 
 	dialer, err := amqpextra.NewDialer(
 		amqpextra.WithURL("amqp://guest:guest@rabbitmq:5672/amqpextra"),
-
 	)
 	require.NoError(t, err)
 	defer dialer.Close()
@@ -94,11 +93,6 @@ func TestPublishConfirms(t *testing.T) {
 		publisher.WithConfirmation(10),
 	)
 	require.NoError(t, err)
-
-	ticker := time.NewTicker(time.Millisecond * 100)
-	defer ticker.Stop()
-	timer := time.NewTicker(time.Second * 5)
-	defer timer.Stop()
 
 	for i := 0; i < 10; i++ {
 		msg := publisher.Message{}
