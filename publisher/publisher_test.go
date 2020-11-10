@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
 	"testing"
 	"time"
 
@@ -2183,6 +2184,7 @@ func TestPublisherConfirms(main *testing.T) {
 
 		ch := mock_publisher.NewMockAMQPChannel(ctrl)
 		ch.EXPECT().Confirm(false).Return(fmt.Errorf("the error")).Times(1)
+		ch.EXPECT().Close().Times(1)
 		defer ch.Close()
 
 		connCh := make(chan *publisher.Connection)
@@ -2228,7 +2230,6 @@ func TestPublisherConfirms(main *testing.T) {
 		ch.EXPECT().Publish(any(), any(), any(), any(), any()).Return(nil).AnyTimes()
 		ch.EXPECT().NotifyClose(any()).DoAndReturn(
 			func(ch chan *amqp.Error) chan *amqp.Error {
-				time.Sleep(time.Millisecond * 10)
 				return ch
 			},
 		).AnyTimes()
@@ -2269,8 +2270,8 @@ func TestPublisherConfirms(main *testing.T) {
 		assertClosed(t, p)
 
 		expected := `[DEBUG] publisher starting
-[DEBUG] handle confirmation started
 [DEBUG] publisher ready
+[DEBUG] handle confirmation started
 [DEBUG] handle confirmation stopped
 [DEBUG] publisher stopped
 `
@@ -2290,12 +2291,7 @@ func TestPublisherConfirms(main *testing.T) {
 		defer ch.Close()
 		ch.EXPECT().NotifyPublish(any()).Return(confirmationCh).Times(1)
 		ch.EXPECT().Publish(any(), any(), any(), any(), any()).Return(nil).AnyTimes()
-		ch.EXPECT().NotifyClose(any()).DoAndReturn(
-			func(ch chan *amqp.Error) chan *amqp.Error {
-				time.Sleep(time.Millisecond * 10)
-				return ch
-			},
-		).AnyTimes()
+		ch.EXPECT().NotifyClose(any()).Times(1)
 		ch.EXPECT().NotifyFlow(any()).AnyTimes()
 		ch.EXPECT().Confirm(false).Return(nil)
 		ch.EXPECT().Close().AnyTimes()
@@ -2318,7 +2314,7 @@ func TestPublisherConfirms(main *testing.T) {
 
 		amqpConn := mock_publisher.NewMockAMQPConnection(ctrl)
 
-		for i := 0; i < 10; i++ {
+		for i := 0; i < int(buffSize); i++ {
 			go func() {
 				chResult := <-p.Go(publisher.Message{})
 				require.EqualError(t, chResult, "not delivered")
@@ -2329,12 +2325,13 @@ func TestPublisherConfirms(main *testing.T) {
 		assertReady(t, readyCh)
 
 		time.Sleep(time.Millisecond * 100)
+
 		p.Close()
 		assertClosed(t, p)
 
 		expected := `[DEBUG] publisher starting
-[DEBUG] handle confirmation started
 [DEBUG] publisher ready
+[DEBUG] handle confirmation started
 [DEBUG] handle confirmation stopped
 [DEBUG] publisher stopped
 `
@@ -2348,32 +2345,22 @@ func TestPublisherConfirms(main *testing.T) {
 		defer ctrl.Finish()
 
 		var buffSize uint = 10
-		chConfirmed := make(chan amqp.Confirmation, buffSize)
+		confirmationCh := make(chan amqp.Confirmation, buffSize)
 
 		ch := mock_publisher.NewMockAMQPChannel(ctrl)
+
 		ch.EXPECT().
 			NotifyPublish(any()).
-			DoAndReturn(
-				func(_ chan amqp.Confirmation) chan amqp.Confirmation {
-					for i := 0; i < int(buffSize); i++ {
-						chConfirmed <- amqp.Confirmation{}
-					}
-
-					return chConfirmed
-				}).
+			Return(confirmationCh).
 			Times(1)
+
 		ch.EXPECT().
 			Publish(any(), any(), any(), any(), any()).
 			Return(nil).
 			AnyTimes()
 		ch.EXPECT().
 			NotifyClose(any()).
-			DoAndReturn(
-				func(ch chan *amqp.Error) chan *amqp.Error {
-					time.Sleep(time.Millisecond * 10)
-					return ch
-				},
-			).AnyTimes()
+			AnyTimes()
 
 		ch.EXPECT().NotifyFlow(any()).AnyTimes()
 		ch.EXPECT().Confirm(false).Return(nil)
@@ -2394,23 +2381,36 @@ func TestPublisherConfirms(main *testing.T) {
 		connCh <- publisher.NewConnection(amqpConn, closeCh)
 		assertReady(t, readyCh)
 
-		for i := 0; i < 10; i++ {
-			go func() {
-				result := p.Publish(publisher.Message{})
-				fmt.Println(result)
-				require.EqualError(t, result, amqp.ErrClosed.Error())
-			}()
+		for i := 0; i < int(buffSize); i++ {
+			confirmationCh <- amqp.Confirmation{
+				Ack: true,
+			}
+			if i == 5 {
+				break
+			}
 		}
 
-		time.Sleep(time.Millisecond * 100)
-
+		wg := &sync.WaitGroup{}
+		for i := 0; i < int(buffSize); i++ {
+			wg.Add(1)
+			if i == 5 {
+				close(confirmationCh)
+			}
+			go func(wg *sync.WaitGroup) {
+				defer wg.Done()
+				<-p.Go(publisher.Message{})
+			}(wg)
+		}
+		fmt.Println(1)
+		wg.Wait()
+		fmt.Println(2)
 		p.Close()
 		assertClosed(t, p)
 
 		expected := `[DEBUG] publisher starting
+[DEBUG] publisher ready
 [DEBUG] handle confirmation started
 [DEBUG] handle confirmation stopped
-[DEBUG] publisher ready
 [DEBUG] publisher stopped
 `
 		require.Equal(t, expected, l.Logs())
