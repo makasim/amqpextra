@@ -83,39 +83,23 @@ waitOpened:
 func TestPublishConfirms(t *testing.T) {
 	defer goleak.VerifyNone(t)
 
-	rnum, err := rand.Int(rand.Reader, big.NewInt(10000000))
-	require.NoError(t, err)
-	connName := fmt.Sprintf("amqpextra-test-%d-%d", time.Now().UnixNano(), rnum)
-
 	dialer, err := amqpextra.NewDialer(
 		amqpextra.WithURL("amqp://guest:guest@rabbitmq:5672/amqpextra"),
-		amqpextra.WithConnectionProperties(amqp.Table{
-			"connection_name": connName,
-		}),
+
 	)
+	require.NoError(t, err)
+	defer dialer.Close()
 
 	pub, err := dialer.Publisher(
 		publisher.WithConfirmation(10),
 	)
 	require.NoError(t, err)
-	defer dialer.Close()
 
 	ticker := time.NewTicker(time.Millisecond * 100)
 	defer ticker.Stop()
 	timer := time.NewTicker(time.Second * 5)
 	defer timer.Stop()
 
-waitOpened:
-	for {
-		select {
-		case <-ticker.C:
-			if rabbitmq.IsOpened(connName) {
-				break waitOpened
-			}
-		case <-timer.C:
-			t.Fatalf("connection %s is not opened", connName)
-		}
-	}
 	for i := 0; i < 10; i++ {
 		msg := publisher.Message{}
 		err = pub.Publish(msg)

@@ -2220,51 +2220,52 @@ func TestPublisherConfirms(main *testing.T) {
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
 
-		var buffSize uint = 10
-		confirmationCh := make(chan amqp.Confirmation, buffSize)
+		confirmationCh := make(chan amqp.Confirmation, 2)
 
 		ch := mock_publisher.NewMockAMQPChannel(ctrl)
-		defer ch.Close()
-		ch.EXPECT().NotifyPublish(any()).Return(confirmationCh).Times(1)
-		ch.EXPECT().Publish(any(), any(), any(), any(), any()).Return(nil).AnyTimes()
-		ch.EXPECT().NotifyClose(any()).DoAndReturn(
-			func(ch chan *amqp.Error) chan *amqp.Error {
-				return ch
-			},
-		).AnyTimes()
+
+		ch.EXPECT().
+			NotifyPublish(any()).
+			Return(confirmationCh).
+			Times(1)
+		ch.EXPECT().
+			Publish(any(), any(), any(), any(), any()).
+			Return(nil).
+			Times(2)
+		ch.EXPECT().
+			NotifyClose(any()).
+			AnyTimes()
+
 		ch.EXPECT().NotifyFlow(any()).AnyTimes()
 		ch.EXPECT().Confirm(false).Return(nil)
 		ch.EXPECT().Close().AnyTimes()
-
-		for i := 0; i < int(buffSize); i++ {
-			confirmationCh <- amqp.Confirmation{
-				Ack: true,
-			}
-		}
 
 		readyCh := make(chan struct{}, 1)
 		unreadyCh := make(chan error, 1)
 
 		connCh, l, p := newPublisher(
-			publisher.WithConfirmation(buffSize),
+			publisher.WithConfirmation(2),
 			publisher.WithInitFunc(initFuncStub(ch)),
 			publisher.WithNotify(readyCh, unreadyCh),
 		)
 		defer p.Close()
 
 		amqpConn := mock_publisher.NewMockAMQPConnection(ctrl)
-
-		for i := 0; i < 10; i++ {
-			go func() {
-				chResult := <-p.Go(publisher.Message{})
-				require.NoError(t, chResult)
-			}()
-		}
-
 		connCh <- publisher.NewConnection(amqpConn, nil)
 		assertReady(t, readyCh)
 
-		time.Sleep(time.Millisecond * 100)
+		resultCh := make(chan error, 2)
+		p.Go(publisher.Message{ResultCh: resultCh})
+		p.Go(publisher.Message{ResultCh: resultCh})
+
+		confirmationCh <- amqp.Confirmation{Ack: true}
+		confirmationCh <- amqp.Confirmation{Ack: true}
+
+		close(confirmationCh)
+
+		require.NoError(t, waitResult(resultCh, time.Millisecond*100))
+		require.NoError(t, waitResult(resultCh, time.Millisecond*100))
+
 		p.Close()
 		assertClosed(t, p)
 
@@ -2283,47 +2284,53 @@ func TestPublisherConfirms(main *testing.T) {
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
 
-		var buffSize uint = 10
-		confirmationCh := make(chan amqp.Confirmation, buffSize)
+		confirmationCh := make(chan amqp.Confirmation, 2)
 
 		ch := mock_publisher.NewMockAMQPChannel(ctrl)
-		defer ch.Close()
-		ch.EXPECT().NotifyPublish(any()).Return(confirmationCh).Times(1)
-		ch.EXPECT().Publish(any(), any(), any(), any(), any()).Return(nil).AnyTimes()
-		ch.EXPECT().NotifyClose(any()).Times(1)
+
+		ch.EXPECT().
+			NotifyPublish(any()).
+			Return(confirmationCh).
+			Times(1)
+		ch.EXPECT().
+			Publish(any(), any(), any(), any(), any()).
+			Return(nil).
+			Times(2)
+		ch.EXPECT().
+			NotifyClose(any()).
+			AnyTimes()
+
 		ch.EXPECT().NotifyFlow(any()).AnyTimes()
 		ch.EXPECT().Confirm(false).Return(nil)
 		ch.EXPECT().Close().AnyTimes()
 
-		for i := 0; i < int(buffSize); i++ {
-			confirmationCh <- amqp.Confirmation{
-				Ack: false,
-			}
-		}
-
 		readyCh := make(chan struct{}, 1)
 		unreadyCh := make(chan error, 1)
+		connCloseCh := make(chan struct{})
 
 		connCh, l, p := newPublisher(
-			publisher.WithConfirmation(buffSize),
+			publisher.WithConfirmation(2),
 			publisher.WithInitFunc(initFuncStub(ch)),
 			publisher.WithNotify(readyCh, unreadyCh),
 		)
 		defer p.Close()
 
 		amqpConn := mock_publisher.NewMockAMQPConnection(ctrl)
-
-		for i := 0; i < int(buffSize); i++ {
-			go func() {
-				chResult := <-p.Go(publisher.Message{})
-				require.EqualError(t, chResult, "not delivered")
-			}()
-		}
-
-		connCh <- publisher.NewConnection(amqpConn, nil)
+		connCh <- publisher.NewConnection(amqpConn, connCloseCh)
 		assertReady(t, readyCh)
 
-		time.Sleep(time.Millisecond * 100)
+		resultCh := make(chan error, 2)
+		p.Go(publisher.Message{ResultCh: resultCh})
+		p.Go(publisher.Message{ResultCh: resultCh})
+
+		confirmationCh <- amqp.Confirmation{Ack: false}
+		confirmationCh <- amqp.Confirmation{Ack: false}
+
+		close(connCloseCh)
+		close(confirmationCh)
+
+		require.EqualError(t, waitResult(resultCh, time.Millisecond*100), "not delivered")
+		require.EqualError(t, waitResult(resultCh, time.Millisecond*100), "not delivered")
 
 		p.Close()
 		assertClosed(t, p)
@@ -2332,12 +2339,13 @@ func TestPublisherConfirms(main *testing.T) {
 [DEBUG] publisher ready
 [DEBUG] handle confirmation started
 [DEBUG] handle confirmation stopped
+[DEBUG] publisher unready
 [DEBUG] publisher stopped
 `
 		require.Equal(t, expected, l.Logs())
 	})
 
-	main.Run("AllMessagesGetConfirmationWhenConnectionClosed", func(t *testing.T) {
+	main.Run("ResultErroredWhenConfirmationClosed", func(t *testing.T) {
 		defer goleak.VerifyNone(t)
 
 		ctrl := gomock.NewController(t)
@@ -2396,6 +2404,100 @@ func TestPublisherConfirms(main *testing.T) {
 		require.EqualError(t, waitResult(resultCh, time.Millisecond*100), amqp.ErrClosed.Error())
 
 		p.Close()
+		assertClosed(t, p)
+
+		expected := `[DEBUG] publisher starting
+[DEBUG] publisher ready
+[DEBUG] handle confirmation started
+[DEBUG] handle confirmation stopped
+[DEBUG] publisher unready
+[DEBUG] publisher stopped
+`
+		require.Equal(t, expected, l.Logs())
+	})
+
+	main.Run("AllMessagesGetConfirmationWhenConnectionClosed", func(t *testing.T) {
+		defer goleak.VerifyNone(t)
+
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		confirmationCh := make(chan amqp.Confirmation, 4)
+		var chCloseCh chan *amqp.Error
+		ch := mock_publisher.NewMockAMQPChannel(ctrl)
+
+		ch.EXPECT().
+			NotifyPublish(any()).
+			Return(confirmationCh).
+			Times(1)
+		ch.EXPECT().
+			Publish(any(), any(), any(), any(), any()).
+			Return(nil).
+			Times(4)
+		ch.EXPECT().
+			NotifyClose(any()).
+			DoAndReturn(func(receiver chan *amqp.Error) chan *amqp.Error {
+				chCloseCh = receiver
+				return receiver
+			}).
+			AnyTimes()
+
+		ch.EXPECT().NotifyFlow(any()).AnyTimes()
+		ch.EXPECT().Confirm(false).Return(nil)
+		ch.EXPECT().Close().AnyTimes()
+
+		newCh := mock_publisher.NewMockAMQPChannel(ctrl)
+		newCh.EXPECT().Confirm(false).Return(nil).AnyTimes()
+		newCh.EXPECT().NotifyPublish(any()).AnyTimes()
+		newCh.EXPECT().Close().AnyTimes()
+
+		newCh.
+			EXPECT().
+			NotifyClose(any()).
+			DoAndReturn(notifyCloseStub()).
+			AnyTimes()
+		newCh.
+			EXPECT().
+			NotifyFlow(any()).
+			DoAndReturn(notifyFlowStub()).
+			AnyTimes()
+
+		readyCh := make(chan struct{}, 1)
+		unreadyCh := make(chan error, 1)
+		connCloseCh := make(chan struct{})
+
+		connCh, l, p := newPublisher(
+			publisher.WithConfirmation(4),
+			publisher.WithInitFunc(initFuncStub(ch, newCh)),
+			publisher.WithNotify(readyCh, unreadyCh),
+		)
+		defer p.Close()
+
+		amqpConn := mock_publisher.NewMockAMQPConnection(ctrl)
+		connCh <- publisher.NewConnection(amqpConn, connCloseCh)
+
+		assertReady(t, readyCh)
+
+		resultCh := make(chan error, 4)
+		p.Go(publisher.Message{ResultCh: resultCh})
+		p.Go(publisher.Message{ResultCh: resultCh})
+		p.Go(publisher.Message{ResultCh: resultCh})
+		p.Go(publisher.Message{ResultCh: resultCh})
+
+		confirmationCh <- amqp.Confirmation{Ack: true}
+		confirmationCh <- amqp.Confirmation{Ack: true}
+
+		close(chCloseCh)
+		close(confirmationCh)
+
+		require.NoError(t, waitResult(resultCh, time.Millisecond*100))
+		require.NoError(t, waitResult(resultCh, time.Millisecond*100))
+		require.EqualError(t, waitResult(resultCh, time.Millisecond*100), amqp.ErrClosed.Error())
+		require.EqualError(t, waitResult(resultCh, time.Millisecond*100), amqp.ErrClosed.Error())
+
+		p.Close()
+
+		time.Sleep(time.Millisecond * 100)
 		assertClosed(t, p)
 
 		expected := `[DEBUG] publisher starting
