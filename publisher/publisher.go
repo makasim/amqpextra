@@ -350,17 +350,17 @@ func (p *Publisher) channelState(conn AMQPConnection, connCloseCh <-chan struct{
 func (p *Publisher) handleConfirmations(
 	resultChCh chan chan error,
 	confirmationCh chan amqp.Confirmation,
-	closeCh chan struct{},
-	doneCh chan struct{},
+	confirmationCloseCh,
+	confirmationDoneCh chan struct{},
 ) {
-	defer close(doneCh)
+	defer close(confirmationDoneCh)
 
 	select {
 	case <-p.internalReadyCh:
 	case <-p.internalUnreadyCh:
 		p.logger.Printf("[ERROR] handle confirmation unexpected unready")
 		return
-	case <-closeCh:
+	case <-confirmationCloseCh:
 		return
 	}
 
@@ -383,11 +383,11 @@ loop:
 			}
 
 			continue
-		case <-closeCh:
+		case <-confirmationCloseCh:
 			break loop
 		}
 	}
-	<-closeCh
+	<-confirmationCloseCh
 	for {
 		select {
 		case resultCh := <-resultChCh:
