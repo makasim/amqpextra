@@ -317,6 +317,7 @@ func (p *Publisher) channelState(conn AMQPConnection, connCloseCh <-chan struct{
 		var resultChCh chan chan error
 
 		confirmationCloseCh := make(chan struct{})
+		confirmationDoneCh := make(chan struct{})
 		if p.confirmation {
 			err := ch.Confirm(false)
 			if err != nil {
@@ -327,18 +328,20 @@ func (p *Publisher) channelState(conn AMQPConnection, connCloseCh <-chan struct{
 
 			resultChCh = make(chan chan error, p.confirmationBuffer)
 
-			go p.handleConfirmations(resultChCh, confirmationCh, confirmationCloseCh)
+			go p.handleConfirmations(resultChCh, confirmationCh, confirmationCloseCh, confirmationDoneCh)
 		} else {
-			close(confirmationCloseCh)
+			close(confirmationDoneCh)
 		}
 
 		err = p.publishState(ch, connCloseCh, resultChCh)
+		close(confirmationCloseCh)
 		if err == errChannelClosed {
+			<-confirmationDoneCh
 			continue
 		}
 
 		p.close(ch)
-		<-confirmationCloseCh
+		<-confirmationDoneCh
 
 		return err
 	}
@@ -347,31 +350,29 @@ func (p *Publisher) channelState(conn AMQPConnection, connCloseCh <-chan struct{
 func (p *Publisher) handleConfirmations(
 	resultChCh chan chan error,
 	confirmationCh chan amqp.Confirmation,
-	confirmationCloseCh chan struct{},
+	closeCh chan struct{},
+	doneCh chan struct{},
 ) {
+	defer close(doneCh)
+
 	select {
 	case <-p.internalReadyCh:
 	case <-p.internalUnreadyCh:
 		p.logger.Printf("[ERROR] handle confirmation unexpected unready")
 		return
+	case <-closeCh:
+		return
 	}
 
 	p.logger.Printf("[DEBUG] handle confirmation started")
-	defer close(confirmationCloseCh)
 	defer p.logger.Printf("[DEBUG] handle confirmation stopped")
+
+loop:
 	for {
 		select {
 		case c, ok := <-confirmationCh:
 			if !ok {
-				for {
-					select {
-					case resultCh := <-resultChCh:
-						resultCh <- amqp.ErrClosed
-						continue
-					default:
-						return
-					}
-				}
+				break loop
 			}
 
 			resultCh := <-resultChCh
@@ -380,6 +381,20 @@ func (p *Publisher) handleConfirmations(
 			} else {
 				resultCh <- fmt.Errorf("confirmation: nack")
 			}
+
+			continue
+		case <-closeCh:
+			break loop
+		}
+	}
+	<-closeCh
+	for {
+		select {
+		case resultCh := <-resultChCh:
+			resultCh <- amqp.ErrClosed
+			continue
+		default:
+			return
 		}
 	}
 }

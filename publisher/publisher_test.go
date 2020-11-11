@@ -2423,9 +2423,12 @@ func TestPublisherConfirms(main *testing.T) {
 		chCloseCh := make(chan *amqp.Error, 1)
 		ch := mock_publisher.NewMockAMQPChannel(ctrl)
 
+		secondConfirmationCh := make(chan amqp.Confirmation, 4)
+		secondChCloseCh := make(chan *amqp.Error, 1)
+
 		ch.EXPECT().
 			NotifyPublish(any()).
-			DoAndReturn(confirmationChStub(confirmationCh)).
+			DoAndReturn(confirmationChStub(confirmationCh, secondConfirmationCh)).
 			Times(2)
 		ch.EXPECT().
 			Publish(any(), any(), any(), any(), any()).
@@ -2433,7 +2436,7 @@ func TestPublisherConfirms(main *testing.T) {
 			Times(4)
 		ch.EXPECT().
 			NotifyClose(any()).
-			Return(chCloseCh).
+			DoAndReturn(chCloseChStub(chCloseCh, secondChCloseCh)).
 			AnyTimes()
 
 		ch.EXPECT().NotifyFlow(any()).AnyTimes()
@@ -2464,7 +2467,7 @@ func TestPublisherConfirms(main *testing.T) {
 		confirmationCh <- amqp.Confirmation{Ack: true}
 		confirmationCh <- amqp.Confirmation{Ack: true}
 
-		close(confirmationCh)
+		time.Sleep(time.Millisecond * 100)
 		close(chCloseCh)
 		assertUnready(t, unreadyCh, amqp.ErrClosed.Error())
 
@@ -2472,6 +2475,8 @@ func TestPublisherConfirms(main *testing.T) {
 		require.NoError(t, waitResult(resultCh, time.Millisecond*100))
 		require.EqualError(t, waitResult(resultCh, time.Millisecond*100), amqp.ErrClosed.Error())
 		require.EqualError(t, waitResult(resultCh, time.Millisecond*100), amqp.ErrClosed.Error())
+		assertReady(t, readyCh)
+		time.Sleep(time.Millisecond * 100)
 
 		p.Close()
 		assertClosed(t, p)
@@ -2479,8 +2484,11 @@ func TestPublisherConfirms(main *testing.T) {
 		expected := `[DEBUG] publisher starting
 [DEBUG] publisher ready
 [DEBUG] handle confirmation started
-[DEBUG] handle confirmation stopped
 [DEBUG] channel closed
+[DEBUG] handle confirmation stopped
+[DEBUG] publisher ready
+[DEBUG] handle confirmation started
+[DEBUG] handle confirmation stopped
 [DEBUG] publisher stopped
 `
 		require.Equal(t, expected, l.Logs())
@@ -2575,14 +2583,26 @@ func notifyFlowStub() func(_ chan bool) chan bool {
 		return ch
 	}
 }
+
 func confirmationChStub(chs ...interface{}) func(chan amqp.Confirmation) chan amqp.Confirmation {
 	index := 0
 	return func(ch chan amqp.Confirmation) chan amqp.Confirmation {
 		switch curr := chs[index].(type) {
 		case chan amqp.Confirmation:
-			if index == 1 {
-				close(curr)
-			}
+			index++
+			return curr
+		default:
+			panic(fmt.Sprintf("unexpected type given: %T", chs[index]))
+		}
+	}
+}
+
+func chCloseChStub(chs ...interface{}) func(chan *amqp.Error) chan *amqp.Error {
+	index := 0
+	return func(ch chan *amqp.Error) chan *amqp.Error {
+		switch curr := chs[index].(type) {
+		case chan *amqp.Error:
+			index++
 			return curr
 		default:
 			panic(fmt.Sprintf("unexpected type given: %T", chs[index]))
