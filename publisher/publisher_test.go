@@ -578,10 +578,7 @@ func TestReconnection(main *testing.T) {
 		ch.
 			EXPECT().
 			NotifyClose(any()).
-			DoAndReturn(func(receiver chan *amqp.Error) chan *amqp.Error {
-				chCloseCh = receiver
-				return receiver
-			}).
+			DoAndReturn(chCloseChStub(chCloseCh)).
 			Times(1)
 		ch.
 			EXPECT().
@@ -1631,16 +1628,13 @@ func TestConcurrency(main *testing.T) {
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
 
-		var chCloseCh chan *amqp.Error
+		chCloseCh := make(chan *amqp.Error)
 
 		ch := mock_publisher.NewMockAMQPChannel(ctrl)
 		ch.
 			EXPECT().
 			NotifyClose(any()).
-			DoAndReturn(func(receiver chan *amqp.Error) chan *amqp.Error {
-				chCloseCh = receiver
-				return receiver
-			}).
+			DoAndReturn(chCloseChStub(chCloseCh)).
 			Times(1)
 		ch.
 			EXPECT().
@@ -2227,7 +2221,7 @@ func TestPublisherConfirms(main *testing.T) {
 
 		ch.EXPECT().
 			NotifyPublish(any()).
-			Return(confirmationCh).
+			DoAndReturn(confirmationChStub(confirmationCh)).
 			Times(1)
 		ch.EXPECT().
 			Publish(any(), any(), any(), any(), any()).
@@ -2289,7 +2283,7 @@ func TestPublisherConfirms(main *testing.T) {
 
 		ch.EXPECT().
 			NotifyPublish(any()).
-			Return(confirmationCh).
+			DoAndReturn(confirmationChStub(confirmationCh)).
 			Times(1)
 		ch.EXPECT().
 			Publish(any(), any(), any(), any(), any()).
@@ -2353,7 +2347,7 @@ func TestPublisherConfirms(main *testing.T) {
 
 		ch.EXPECT().
 			NotifyPublish(any()).
-			Return(confirmationCh).
+			DoAndReturn(confirmationChStub(confirmationCh)).
 			Times(1)
 		ch.EXPECT().
 			Publish(any(), any(), any(), any(), any()).
