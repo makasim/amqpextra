@@ -5,59 +5,58 @@
 package mock_publisher
 
 import (
-	reflect "reflect"
-
 	gomock "github.com/golang/mock/gomock"
 	amqp "github.com/streadway/amqp"
+	reflect "reflect"
 )
 
-// MockAMQPConnection is a mock of AMQPConnection interface.
+// MockAMQPConnection is a mock of AMQPConnection interface
 type MockAMQPConnection struct {
 	ctrl     *gomock.Controller
 	recorder *MockAMQPConnectionMockRecorder
 }
 
-// MockAMQPConnectionMockRecorder is the mock recorder for MockAMQPConnection.
+// MockAMQPConnectionMockRecorder is the mock recorder for MockAMQPConnection
 type MockAMQPConnectionMockRecorder struct {
 	mock *MockAMQPConnection
 }
 
-// NewMockAMQPConnection creates a new mock instance.
+// NewMockAMQPConnection creates a new mock instance
 func NewMockAMQPConnection(ctrl *gomock.Controller) *MockAMQPConnection {
 	mock := &MockAMQPConnection{ctrl: ctrl}
 	mock.recorder = &MockAMQPConnectionMockRecorder{mock}
 	return mock
 }
 
-// EXPECT returns an object that allows the caller to indicate expected use.
+// EXPECT returns an object that allows the caller to indicate expected use
 func (m *MockAMQPConnection) EXPECT() *MockAMQPConnectionMockRecorder {
 	return m.recorder
 }
 
-// MockAMQPChannel is a mock of AMQPChannel interface.
+// MockAMQPChannel is a mock of AMQPChannel interface
 type MockAMQPChannel struct {
 	ctrl     *gomock.Controller
 	recorder *MockAMQPChannelMockRecorder
 }
 
-// MockAMQPChannelMockRecorder is the mock recorder for MockAMQPChannel.
+// MockAMQPChannelMockRecorder is the mock recorder for MockAMQPChannel
 type MockAMQPChannelMockRecorder struct {
 	mock *MockAMQPChannel
 }
 
-// NewMockAMQPChannel creates a new mock instance.
+// NewMockAMQPChannel creates a new mock instance
 func NewMockAMQPChannel(ctrl *gomock.Controller) *MockAMQPChannel {
 	mock := &MockAMQPChannel{ctrl: ctrl}
 	mock.recorder = &MockAMQPChannelMockRecorder{mock}
 	return mock
 }
 
-// EXPECT returns an object that allows the caller to indicate expected use.
+// EXPECT returns an object that allows the caller to indicate expected use
 func (m *MockAMQPChannel) EXPECT() *MockAMQPChannelMockRecorder {
 	return m.recorder
 }
 
-// Close mocks base method.
+// Close mocks base method
 func (m *MockAMQPChannel) Close() error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Close")
@@ -65,13 +64,27 @@ func (m *MockAMQPChannel) Close() error {
 	return ret0
 }
 
-// Close indicates an expected call of Close.
+// Close indicates an expected call of Close
 func (mr *MockAMQPChannelMockRecorder) Close() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Close", reflect.TypeOf((*MockAMQPChannel)(nil).Close))
 }
 
-// NotifyClose mocks base method.
+// Confirm mocks base method
+func (m *MockAMQPChannel) Confirm(arg0 bool) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Confirm", arg0)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Confirm indicates an expected call of Confirm
+func (mr *MockAMQPChannelMockRecorder) Confirm(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Confirm", reflect.TypeOf((*MockAMQPChannel)(nil).Confirm), arg0)
+}
+
+// NotifyClose mocks base method
 func (m *MockAMQPChannel) NotifyClose(arg0 chan *amqp.Error) chan *amqp.Error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "NotifyClose", arg0)
@@ -79,13 +92,13 @@ func (m *MockAMQPChannel) NotifyClose(arg0 chan *amqp.Error) chan *amqp.Error {
 	return ret0
 }
 
-// NotifyClose indicates an expected call of NotifyClose.
+// NotifyClose indicates an expected call of NotifyClose
 func (mr *MockAMQPChannelMockRecorder) NotifyClose(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NotifyClose", reflect.TypeOf((*MockAMQPChannel)(nil).NotifyClose), arg0)
 }
 
-// NotifyFlow mocks base method.
+// NotifyFlow mocks base method
 func (m *MockAMQPChannel) NotifyFlow(arg0 chan bool) chan bool {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "NotifyFlow", arg0)
@@ -93,13 +106,27 @@ func (m *MockAMQPChannel) NotifyFlow(arg0 chan bool) chan bool {
 	return ret0
 }
 
-// NotifyFlow indicates an expected call of NotifyFlow.
+// NotifyFlow indicates an expected call of NotifyFlow
 func (mr *MockAMQPChannelMockRecorder) NotifyFlow(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NotifyFlow", reflect.TypeOf((*MockAMQPChannel)(nil).NotifyFlow), arg0)
 }
 
-// Publish mocks base method.
+// NotifyPublish mocks base method
+func (m *MockAMQPChannel) NotifyPublish(arg0 chan amqp.Confirmation) chan amqp.Confirmation {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "NotifyPublish", arg0)
+	ret0, _ := ret[0].(chan amqp.Confirmation)
+	return ret0
+}
+
+// NotifyPublish indicates an expected call of NotifyPublish
+func (mr *MockAMQPChannelMockRecorder) NotifyPublish(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NotifyPublish", reflect.TypeOf((*MockAMQPChannel)(nil).NotifyPublish), arg0)
+}
+
+// Publish mocks base method
 func (m *MockAMQPChannel) Publish(arg0, arg1 string, arg2, arg3 bool, arg4 amqp.Publishing) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Publish", arg0, arg1, arg2, arg3, arg4)
@@ -107,7 +134,7 @@ func (m *MockAMQPChannel) Publish(arg0, arg1 string, arg2, arg3 bool, arg4 amqp.
 	return ret0
 }
 
-// Publish indicates an expected call of Publish.
+// Publish indicates an expected call of Publish
 func (mr *MockAMQPChannelMockRecorder) Publish(arg0, arg1, arg2, arg3, arg4 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Publish", reflect.TypeOf((*MockAMQPChannel)(nil).Publish), arg0, arg1, arg2, arg3, arg4)
