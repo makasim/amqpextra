@@ -80,6 +80,30 @@ waitOpened:
 	<-p.NotifyClosed()
 }
 
+func TestPublishConfirms(t *testing.T) {
+	defer goleak.VerifyNone(t)
+
+	dialer, err := amqpextra.NewDialer(
+		amqpextra.WithURL("amqp://guest:guest@rabbitmq:5672/amqpextra"),
+	)
+	require.NoError(t, err)
+	defer dialer.Close()
+
+	pub, err := dialer.Publisher(
+		publisher.WithConfirmation(10),
+	)
+	require.NoError(t, err)
+
+	for i := 0; i < 10; i++ {
+		msg := publisher.Message{}
+		err = pub.Publish(msg)
+		require.NoError(t, err, "result must be nil")
+	}
+
+	dialer.Close()
+	<-pub.NotifyClosed()
+}
+
 func assertPublisherReady(t *testing.T, readyCh chan struct{}) {
 	timer := time.NewTimer(time.Millisecond * 2000)
 	defer timer.Stop()
