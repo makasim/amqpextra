@@ -1970,9 +1970,9 @@ func TestFlowControl(main *testing.T) {
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
 
-		var chFlowCh chan bool
+		chFlowCh := make(chan bool)
 		readyCh := make(chan struct{}, 1)
-		unreadyCh := make(chan error, 1)
+		unreadyCh := make(chan error, 2)
 
 		ch := mock_publisher.NewMockAMQPChannel(ctrl)
 		ch.
@@ -1983,10 +1983,7 @@ func TestFlowControl(main *testing.T) {
 		ch.
 			EXPECT().
 			NotifyFlow(any()).
-			DoAndReturn(func(ch chan bool) chan bool {
-				chFlowCh = ch
-				return ch
-			}).
+			Return(chFlowCh).
 			Times(1)
 		ch.
 			EXPECT().
@@ -2099,7 +2096,7 @@ func TestFlowControl(main *testing.T) {
 
 		var chFlowCh chan bool
 		readyCh := make(chan struct{}, 1)
-		unreadyCh := make(chan error, 1)
+		unreadyCh := make(chan error, 2)
 
 		ch := mock_publisher.NewMockAMQPChannel(ctrl)
 		ch.
