@@ -2,7 +2,6 @@ package consumer
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -21,6 +20,8 @@ type AMQPChannel interface {
 	Consume(queue, consumer string, autoAck, exclusive, noLocal, noWait bool, args amqp.Table) (<-chan amqp.Delivery, error)
 	NotifyClose(receiver chan *amqp.Error) chan *amqp.Error
 	NotifyCancel(c chan string) chan string
+	QueueDeclare(name string, durable, autoDelete, exclusive, noWait bool, args amqp.Table) (amqp.Queue, error)
+	QueueBind(name, key, exchange string, noWait bool, args amqp.Table) error
 	Close() error
 }
 
@@ -46,7 +47,11 @@ type Consumer struct {
 	internalUnreadyCh chan error
 	internalReadyCh   chan struct{}
 
-	queue     string
+	exchange   string
+	routingKey string
+
+	queue string
+
 	consumer  string
 	autoAck   bool
 	exclusive bool
@@ -56,15 +61,11 @@ type Consumer struct {
 }
 
 func New(
-	queue string,
-	handler Handler,
 	connCh <-chan *Connection,
 	opts ...Option,
 ) (*Consumer, error) {
 	c := &Consumer{
-		queue:   queue,
-		handler: handler,
-		connCh:  connCh,
+		connCh: connCh,
 
 		internalUnreadyCh: make(chan error),
 		internalReadyCh:   make(chan struct{}),
@@ -78,21 +79,21 @@ func New(
 
 	for _, unreadyCh := range c.unreadyChs {
 		if unreadyCh == nil {
-			return nil, errors.New("unready chan must be not nil")
+			return nil, fmt.Errorf("unready chan must be not nil")
 		}
 
 		if cap(unreadyCh) == 0 {
-			return nil, errors.New("unready chan is unbuffered")
+			return nil, fmt.Errorf("unready chan is unbuffered")
 		}
 	}
 
 	for _, readyCh := range c.readyChs {
 		if readyCh == nil {
-			return nil, errors.New("ready chan must be not nil")
+			return nil, fmt.Errorf("ready chan must be not nil")
 		}
 
 		if cap(readyCh) == 0 {
-			return nil, errors.New("ready chan is unbuffered")
+			return nil, fmt.Errorf("ready chan is unbuffered")
 		}
 	}
 
@@ -110,14 +111,45 @@ func New(
 		c.logger = logger.Discard
 	}
 
-	if c.initFunc == nil {
-		c.initFunc = func(conn AMQPConnection) (AMQPChannel, error) {
-			return conn.(*amqp.Connection).Channel()
-		}
-	}
-
 	if c.worker == nil {
 		c.worker = &DefaultWorker{Logger: c.logger}
+	}
+
+	if c.handler == nil {
+		return nil, fmt.Errorf("handler mus be not nil")
+	}
+
+	if c.queue+c.routingKey == "" {
+		return nil, fmt.Errorf("WithQueue or WithExchange options must be set")
+	}
+
+	if c.queue != "" && c.routingKey != "" {
+		return nil, fmt.Errorf("only one of WithQueue or WithExchange options must be set")
+	}
+
+	if c.initFunc == nil {
+		c.initFunc = func(conn AMQPConnection) (AMQPChannel, error) {
+			ch, err := conn.(*amqp.Connection).Channel()
+			if err != nil {
+				return nil, err
+			}
+
+			if c.routingKey == "" {
+				q, err := ch.QueueDeclare("", false, false, true, false, nil)
+				if err != nil {
+					return nil, err
+				}
+
+				c.queue = q.Name
+
+				err = ch.QueueBind(q.Name, c.routingKey, c.exchange, false, nil)
+				if err != nil {
+					return nil, err
+				}
+			}
+
+			return nil, err
+		}
 	}
 
 	go c.connectionState()
@@ -159,6 +191,25 @@ func WithNotify(readyCh chan struct{}, unreadyCh chan error) Option {
 	return func(c *Consumer) {
 		c.readyChs = append(c.readyChs, readyCh)
 		c.unreadyChs = append(c.unreadyChs, unreadyCh)
+	}
+}
+
+func WithExchange(routingKey, exchange string) Option {
+	return func(c *Consumer) {
+		c.exchange = exchange
+		c.routingKey = routingKey
+	}
+}
+
+func WithQueue(queue string) Option {
+	return func(c *Consumer) {
+		c.queue = queue
+	}
+}
+
+func WithHandler(h Handler) Option {
+	return func(c *Consumer) {
+		c.handler = h
 	}
 }
 
