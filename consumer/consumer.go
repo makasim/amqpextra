@@ -13,6 +13,10 @@ import (
 
 var errChannelClosed = fmt.Errorf("channel closed")
 
+type Ready struct {
+	Queue string
+}
+
 type AMQPConnection interface {
 }
 
@@ -42,7 +46,7 @@ type Consumer struct {
 
 	mu         sync.Mutex
 	unreadyChs []chan error
-	readyChs   []chan struct{}
+	readyChs   []chan Ready
 
 	internalUnreadyCh chan error
 	internalReadyCh   chan struct{}
@@ -187,7 +191,7 @@ func WithWorker(w Worker) Option {
 	}
 }
 
-func WithNotify(readyCh chan struct{}, unreadyCh chan error) Option {
+func WithNotify(readyCh chan Ready, unreadyCh chan error) Option {
 	return func(c *Consumer) {
 		c.readyChs = append(c.readyChs, readyCh)
 		c.unreadyChs = append(c.unreadyChs, unreadyCh)
@@ -224,7 +228,7 @@ func WithConsumeArgs(consumer string, autoAck, exclusive, noLocal, noWait bool, 
 	}
 }
 
-func (c *Consumer) Notify(readyCh chan struct{}, unreadyCh chan error) (ready <-chan struct{}, unready <-chan error) {
+func (c *Consumer) Notify(readyCh chan Ready, unreadyCh chan error) (ready <-chan Ready, unready <-chan error) {
 	if cap(readyCh) == 0 {
 		panic("ready chan is unbuffered")
 	}
@@ -247,7 +251,7 @@ func (c *Consumer) Notify(readyCh chan struct{}, unreadyCh chan error) (ready <-
 	select {
 	case <-c.internalReadyCh:
 		select {
-		case readyCh <- struct{}{}:
+		case readyCh <- Ready{Queue: c.queue}:
 		default:
 		}
 
@@ -438,7 +442,7 @@ func (c *Consumer) notifyReady() {
 	defer c.mu.Unlock()
 	for _, ch := range c.readyChs {
 		select {
-		case ch <- struct{}{}:
+		case ch <- Ready{Queue: c.queue}:
 		default:
 		}
 	}
