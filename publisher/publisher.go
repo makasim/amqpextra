@@ -113,8 +113,8 @@ func New(
 		p.logger = logger.Discard
 	}
 
-	if p.confirmation && p.confirmationBuffer <= 1 {
-		return nil, fmt.Errorf("confirmation buffer size must be greater than 1")
+	if p.confirmation && p.confirmationBuffer < 1 {
+		return nil, fmt.Errorf("confirmation buffer size must be greater than 0")
 	}
 
 	if p.initFunc == nil {
@@ -378,7 +378,7 @@ func (p *Publisher) handleConfirmations(
 			if c.Ack {
 				resultCh <- nil
 			} else {
-				resultCh <- fmt.Errorf("not delivered")
+				resultCh <- fmt.Errorf("confirmation: nack")
 			}
 		}
 	}
