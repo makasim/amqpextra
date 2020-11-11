@@ -319,7 +319,7 @@ func (p *Publisher) channelState(conn AMQPConnection, connCloseCh <-chan struct{
 		confirmationCloseCh := make(chan struct{})
 		confirmationDoneCh := make(chan struct{})
 		if p.confirmation {
-			err := ch.Confirm(false)
+			err = ch.Confirm(false)
 			if err != nil {
 				return p.waitRetry(err)
 			}

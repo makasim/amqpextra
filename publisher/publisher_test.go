@@ -2180,7 +2180,6 @@ func TestPublisherConfirms(main *testing.T) {
 		ch.EXPECT().Close().Times(1)
 		defer ch.Close()
 
-		connCh := make(chan *publisher.Connection)
 		readyCh := make(chan struct{}, 1)
 		unreadyCh := make(chan error, 1)
 
