@@ -1,3 +1,4 @@
+//nolint:dupl // ignore linter err
 package amqpextra
 
 import (
