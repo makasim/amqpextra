@@ -123,11 +123,11 @@ func New(
 		return nil, fmt.Errorf("handler must be not nil")
 	}
 
-	if c.queue+c.routingKey == "" {
+	if c.queue == "" && c.exchange == "" {
 		return nil, fmt.Errorf("WithQueue or WithExchange options must be set")
 	}
 
-	if c.queue != "" && c.routingKey != "" {
+	if c.queue != "" && c.exchange != "" {
 		return nil, fmt.Errorf("only one of WithQueue or WithExchange options must be set")
 	}
 
@@ -138,7 +138,7 @@ func New(
 				return nil, err
 			}
 
-			if c.routingKey != "" {
+			if c.exchange != "" {
 				q, err := ch.QueueDeclare("", false, false, true, false, nil)
 				if err != nil {
 					return nil, err
@@ -198,7 +198,7 @@ func WithNotify(readyCh chan Ready, unreadyCh chan error) Option {
 	}
 }
 
-func WithExchange(routingKey, exchange string) Option {
+func WithExchange(exchange, routingKey string) Option {
 	return func(c *Consumer) {
 		c.exchange = exchange
 		c.routingKey = routingKey
