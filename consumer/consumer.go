@@ -232,7 +232,7 @@ func (c *Consumer) Notify(readyCh chan Ready, unreadyCh chan error) (ready <-cha
 	select {
 	case ready := <-c.internalReadyCh:
 		select {
-		case readyCh <- Ready{Queue: ready.Queue}:
+		case readyCh <- ready:
 		default:
 		}
 
@@ -332,20 +332,6 @@ func (c *Consumer) channelState(conn AMQPConnection, connCloseCh <-chan struct{}
 	}
 }
 
-func (c *Consumer) declareTemporaryQueue(ch AMQPChannel) (queue string, err error) {
-	q, err := ch.QueueDeclare("", false, false, true, false, nil)
-	if err != nil {
-		return "", err
-	}
-
-	err = ch.QueueBind(q.Name, c.routingKey, c.exchange, false, nil)
-	if err != nil {
-		return "", err
-	}
-
-	return q.Name, nil
-}
-
 func (c *Consumer) consumeState(ch AMQPChannel, queue string, connCloseCh <-chan struct{}) error {
 	msgCh, err := ch.Consume(
 		queue,
@@ -403,6 +389,20 @@ func (c *Consumer) consumeState(ch AMQPChannel, queue string, connCloseCh <-chan
 
 		return result
 	}
+}
+
+func (c *Consumer) declareTemporaryQueue(ch AMQPChannel) (queue string, err error) {
+	q, err := ch.QueueDeclare("", false, false, true, false, nil)
+	if err != nil {
+		return "", err
+	}
+
+	err = ch.QueueBind(q.Name, c.routingKey, c.exchange, false, nil)
+	if err != nil {
+		return "", err
+	}
+
+	return q.Name, nil
 }
 
 func (c *Consumer) waitRetry(err error) error {
