@@ -103,6 +103,78 @@ waitOpened:
 	time.Sleep(time.Millisecond * 100)
 }
 
+func TestConsumerWithExchange(t *testing.T) {
+	amqpConn, err := amqp.Dial("amqp://guest:guest@rabbitmq:5672/amqpextra")
+	require.NoError(t, err)
+	defer amqpConn.Close()
+
+	ch, err := amqpConn.Channel()
+	require.NoError(t, err)
+	defer ch.Close()
+
+	rnum, err := rand.Int(rand.Reader, big.NewInt(10000000))
+	require.NoError(t, err)
+	exchangeName := fmt.Sprintf("exchange%d%d", time.Now().UnixNano(), rnum)
+	dialerReadyCh := make(chan struct{}, 1)
+	dialerUnreadyCh := make(chan error, 1)
+
+	dialer, err := amqpextra.NewDialer(
+		amqpextra.WithNotify(dialerReadyCh, dialerUnreadyCh),
+		amqpextra.WithURL("amqp://guest:guest@rabbitmq:5672/amqpextra"),
+	)
+	require.NoError(t, err)
+
+	assertConsumerReady(t, dialerReadyCh)
+
+	h := consumer.HandlerFunc(func(ctx context.Context, msg amqp.Delivery) interface{} {
+
+		assert.Equal(t, "hello", string(msg.Body))
+
+		return nil
+	})
+
+	err = ch.ExchangeDeclare(
+		exchangeName,
+		amqp.ExchangeFanout,
+		false,
+		true,
+		false,
+		false,
+		nil,
+	)
+	require.NoError(t, err)
+
+	readyCh := make(chan consumer.Ready, 1)
+	unreadyCh := make(chan error, 10)
+	c, err := dialer.Consumer(
+
+		consumer.WithNotify(readyCh, unreadyCh),
+		consumer.WithExchange(exchangeName, ""),
+		consumer.WithHandler(h),
+	)
+	require.NoError(t, err)
+	defer c.Close()
+
+	assertConsumerReadyQueue(t, readyCh)
+
+	rabbitmq.Publish(amqpConn, "hello", exchangeName)
+
+	c.Close()
+	<-c.NotifyClosed()
+	dialer.Close()
+}
+
+func assertConsumerReadyQueue(t *testing.T, readyCh chan consumer.Ready) {
+	timer := time.NewTimer(time.Millisecond * 2000)
+	defer timer.Stop()
+
+	select {
+	case <-readyCh:
+	case <-timer.C:
+		t.Fatal("consumer must be ready")
+	}
+}
+
 func assertConsumerReady(t *testing.T, readyCh chan struct{}) {
 	timer := time.NewTimer(time.Millisecond * 2000)
 	defer timer.Stop()
