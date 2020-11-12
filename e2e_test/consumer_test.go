@@ -124,6 +124,7 @@ func TestConsumerWithExchange(t *testing.T) {
 		amqpextra.WithURL("amqp://guest:guest@rabbitmq:5672/amqpextra"),
 	)
 	require.NoError(t, err)
+	defer dialer.Close()
 
 	assertConsumerReady(t, dialerReadyCh)
 
@@ -164,13 +165,11 @@ func TestConsumerWithExchange(t *testing.T) {
 	require.NoError(t, err)
 	timer := time.NewTimer(time.Second)
 
-	
 	select {
 	case <-timer.C:
 		t.Fatal("message must be received")
-	case <-gotMsg:     
-        }
-	
+	case <-gotMsg:
+	}
 
 	c.Close()
 	<-c.NotifyClosed()
