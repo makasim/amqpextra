@@ -299,13 +299,13 @@ func (c *Dialer) Connection(ctx context.Context) (*amqp.Connection, error) {
 }
 
 // Consumer returns a consumer that support reconnection feature.
-func (c *Dialer) Consumer(queue string, handler consumer.Handler, opts ...consumer.Option) (*consumer.Consumer, error) {
+func (c *Dialer) Consumer(opts ...consumer.Option) (*consumer.Consumer, error) {
 	opts = append([]consumer.Option{
 		consumer.WithLogger(c.logger),
 		consumer.WithContext(c.ctx),
 	}, opts...)
 
-	return NewConsumer(queue, handler, c.ConnectionCh(), opts...)
+	return NewConsumer(c.ConnectionCh(), opts...)
 }
 
 // Publisher returns a consumer that support reconnection feature.
