@@ -164,15 +164,13 @@ func TestConsumerWithExchange(t *testing.T) {
 	require.NoError(t, err)
 	timer := time.NewTimer(time.Second)
 
-wait:
-	for {
-		select {
-		case <-timer.C:
-			t.Fatal("message must be received")
-		case <-gotMsg:
-			break wait
-		}
-	}
+	
+	select {
+	case <-timer.C:
+		t.Fatal("message must be received")
+	case <-gotMsg:     
+        }
+	
 
 	c.Close()
 	<-c.NotifyClosed()
