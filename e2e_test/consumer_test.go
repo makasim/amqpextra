@@ -103,6 +103,82 @@ waitOpened:
 	time.Sleep(time.Millisecond * 100)
 }
 
+func TestConsumerWithExchange(t *testing.T) {
+	amqpConn, err := amqp.Dial("amqp://admin:admin2017@localhost:5672/")
+	require.NoError(t, err)
+	defer amqpConn.Close()
+
+	ch, err := amqpConn.Channel()
+	require.NoError(t, err)
+	defer ch.Close()
+
+	rnum, err := rand.Int(rand.Reader, big.NewInt(10000000))
+	exchangeName := fmt.Sprintf("exchange%d%d", time.Now().UnixNano(), rnum)
+	connName := fmt.Sprintf("amqpextra-test-%d-%d", time.Now().UnixNano(), rnum)
+
+	dialer, err := amqpextra.NewDialer(
+		amqpextra.WithURL("amqp://admin:admin2017@localhost:5672/"),
+		amqpextra.WithConnectionProperties(amqp.Table{
+			"connection_name": connName,
+		}),
+	)
+	index := 0
+	resultCh := make(chan error, 1)
+	h := consumer.HandlerFunc(func(ctx context.Context, msg amqp.Delivery) interface{} {
+
+		if string(msg.Body) == fmt.Sprintf("hello: %s", "last") {
+			close(resultCh)
+			return nil
+		}
+		assert.Equal(t, string(msg.Body), fmt.Sprintf("hello: %d", index))
+		index++
+
+		return nil
+	})
+	err = ch.ExchangeDeclare(
+		exchangeName,
+		amqp.ExchangeFanout,
+		false,
+		true,
+		false,
+		false,
+		nil,
+	)
+	require.NoError(t, err)
+
+	readyCh := make(chan consumer.Ready, 1)
+	unreadyCh := make(chan error, 10)
+	c, err := dialer.Consumer(
+		consumer.WithNotify(readyCh, unreadyCh),
+		consumer.WithExchange(exchangeName, "theKey"),
+		consumer.WithHandler(h),
+	)
+	require.NoError(t, err)
+
+	ready := <-readyCh
+
+	for i := 0; i < 10; i++ {
+		rabbitmq.Publish(amqpConn, fmt.Sprintf("hello: %d", i), ready.Queue)
+	}
+	rabbitmq.Publish(amqpConn, fmt.Sprintf("hello: %s", "last"), ready.Queue)
+
+	time.Sleep(time.Millisecond * 100)
+
+	dialer.Close()
+	<-c.NotifyClosed()
+}
+
+func assertConsumerReadyQueue(t *testing.T, readyCh chan consumer.Ready) {
+	timer := time.NewTimer(time.Millisecond * 2000)
+	defer timer.Stop()
+
+	select {
+	case <-readyCh:
+	case <-timer.C:
+		t.Fatal("consumer must be ready")
+	}
+}
+
 func assertConsumerReady(t *testing.T, readyCh chan struct{}) {
 	timer := time.NewTimer(time.Millisecond * 2000)
 	defer timer.Stop()
