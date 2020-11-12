@@ -115,6 +115,7 @@ func TestConsumerWithExchange(t *testing.T) {
 	rnum, err := rand.Int(rand.Reader, big.NewInt(10000000))
 	require.NoError(t, err)
 	exchangeName := fmt.Sprintf("exchange%d%d", time.Now().UnixNano(), rnum)
+
 	dialerReadyCh := make(chan struct{}, 1)
 	dialerUnreadyCh := make(chan error, 1)
 
@@ -126,10 +127,9 @@ func TestConsumerWithExchange(t *testing.T) {
 
 	assertConsumerReady(t, dialerReadyCh)
 
+	gotMsg := make(chan struct{})
 	h := consumer.HandlerFunc(func(ctx context.Context, msg amqp.Delivery) interface{} {
-
-		assert.Equal(t, "hello", string(msg.Body))
-
+		close(gotMsg)
 		return nil
 	})
 
@@ -143,11 +143,9 @@ func TestConsumerWithExchange(t *testing.T) {
 		nil,
 	)
 	require.NoError(t, err)
-
 	readyCh := make(chan consumer.Ready, 1)
-	unreadyCh := make(chan error, 10)
+	unreadyCh := make(chan error, 1)
 	c, err := dialer.Consumer(
-
 		consumer.WithNotify(readyCh, unreadyCh),
 		consumer.WithExchange(exchangeName, ""),
 		consumer.WithHandler(h),
@@ -157,7 +155,24 @@ func TestConsumerWithExchange(t *testing.T) {
 
 	assertConsumerReadyQueue(t, readyCh)
 
-	rabbitmq.Publish(amqpConn, "hello", exchangeName)
+	err = ch.Publish(exchangeName,
+		"",
+		false,
+		false,
+		amqp.Publishing{Body: []byte("aMessage")},
+	)
+	require.NoError(t, err)
+	timer := time.NewTimer(time.Second)
+
+wait:
+	for {
+		select {
+		case <-timer.C:
+			t.Fatal("message must be received")
+		case <-gotMsg:
+			break wait
+		}
+	}
 
 	c.Close()
 	<-c.NotifyClosed()
