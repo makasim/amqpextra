@@ -21,7 +21,10 @@ func ExampleDialer_Consumer() {
 		return nil
 	})
 
-	c, _ := dialer.Consumer("a_queue", h)
+	c, _ := dialer.Consumer(
+		consumer.WithQueue("a_queue"),
+		consumer.WithHandler(h),
+	)
 
 	// close consumer
 	c.Close()
@@ -36,18 +39,19 @@ func ExampleDialer_Consumer() {
 func ExampleNewConsumer() {
 	// you can get connCh from dialer.ConnectionCh() method
 	var connCh chan *amqpextra.Connection
+	h := consumer.HandlerFunc(
+		func(ctx context.Context, msg amqp.Delivery) interface{} {
+			// process message
+			msg.Ack(false)
+			return nil
+		})
 
 	// create consumer
 	c, err := amqpextra.NewConsumer(
-		"some_queue",
-		consumer.HandlerFunc(func(ctx context.Context, msg amqp.Delivery) interface{} {
-			// process message
-
-			msg.Ack(false)
-
-			return nil
-		}),
 		connCh,
+		consumer.WithHandler(h),
+		consumer.WithQueue("a_queue"),
+
 	)
 	if err != nil {
 		log.Fatal(err)

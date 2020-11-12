@@ -1,3 +1,4 @@
+//nolint:dupl // ignore linter err
 package amqpextra
 
 import (
@@ -5,14 +6,12 @@ import (
 )
 
 func NewConsumer(
-	queue string,
-	handler consumer.Handler,
 	connCh <-chan *Connection,
 	opts ...consumer.Option,
 ) (*consumer.Consumer, error) {
 	consumerConnCh := make(chan *consumer.Connection)
 
-	c, err := consumer.New(queue, handler, consumerConnCh, opts...)
+	c, err := consumer.New(consumerConnCh, opts...)
 	if err != nil {
 		return nil, err
 	}
