@@ -120,7 +120,7 @@ func New(
 	}
 
 	if c.handler == nil {
-		return nil, fmt.Errorf("handler mus be not nil")
+		return nil, fmt.Errorf("handler must be not nil")
 	}
 
 	if c.queue+c.routingKey == "" {
@@ -138,7 +138,7 @@ func New(
 				return nil, err
 			}
 
-			if c.routingKey == "" {
+			if c.routingKey != "" {
 				q, err := ch.QueueDeclare("", false, false, true, false, nil)
 				if err != nil {
 					return nil, err
