@@ -82,6 +82,9 @@ func New(
 		internalUnreadyCh: make(chan error),
 		internalReadyCh:   make(chan Ready),
 
+		prefetchSize:  1,
+		prefetchCount: 1,
+
 		closeCh: make(chan struct{}),
 	}
 

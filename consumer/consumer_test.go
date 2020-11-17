@@ -1433,7 +1433,7 @@ func TestConcurrency(main *testing.T) {
 	})
 }
 
-func TestExchange(main *testing.T) {
+func TestOptions(main *testing.T) {
 	main.Run("ReadyWithQueue", func(t *testing.T) {
 		defer goleak.VerifyNone(t)
 
@@ -1757,29 +1757,7 @@ func TestExchange(main *testing.T) {
 		require.EqualError(t, err, "handler must be not nil")
 	})
 
-	main.Run("ErroredIfSetQueueAndExchange", func(t *testing.T) {
-		defer goleak.VerifyNone(t)
-
-		ctrl := gomock.NewController(t)
-		defer ctrl.Finish()
-
-		h := handlerStub(logger.NewTest())
-
-		conn := mock_consumer.NewMockAMQPConnection(ctrl)
-
-		connCh := make(chan *consumer.Connection, 1)
-		connCh <- consumer.NewConnection(conn, nil)
-
-		_, err := consumer.New(
-			connCh,
-			consumer.WithHandler(h),
-			consumer.WithExchange("aExchange", "aRoutingKey"),
-			consumer.WithQueue("aQueue", false),
-		)
-		require.EqualError(t, err, "only one of WithQueue or WithExchange options must be set")
-	})
-
-	main.Run("ErroredIfNotSetQueueAndExchange", func(t *testing.T) {
+	main.Run("ErroredIfNotSetQueueOrTmpQueueOrExchange", func(t *testing.T) {
 		defer goleak.VerifyNone(t)
 
 		ctrl := gomock.NewController(t)
@@ -1797,6 +1775,61 @@ func TestExchange(main *testing.T) {
 			consumer.WithHandler(h),
 		)
 		require.EqualError(t, err, "WithQueue or WithExchange or WithTmpQueue options must be set")
+	})
+
+	main.Run("DeclareTemporaryQueueIfWithExchange", func(t *testing.T) {
+		defer goleak.VerifyNone(t)
+
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		h := handlerStub(logger.NewTest())
+
+		conn := mock_consumer.NewMockAMQPConnection(ctrl)
+		ch := mock_consumer.NewMockAMQPChannel(ctrl)
+
+		ch.EXPECT().
+			Consume(any(), any(), any(), any(), any(), any(), any()).
+			AnyTimes()
+		ch.EXPECT().
+			Qos(any(), any(), any()).
+			Times(1)
+		ch.EXPECT().
+			QueueDeclare(any(), any(), any(), any(), any(), any()).
+			Return(amqp.Queue{Name: "theTmpQueue"}, nil).
+			Times(1)
+		ch.EXPECT().
+			QueueBind("theTmpQueue", "theKey", "theExchange", any(), any()).
+			Times(1)
+		ch.EXPECT().
+			NotifyCancel(any()).
+			AnyTimes()
+		ch.EXPECT().
+			NotifyClose(any()).
+			AnyTimes()
+		ch.EXPECT().
+			Close().
+			AnyTimes()
+
+		connCh := make(chan *consumer.Connection, 1)
+		connCh <- consumer.NewConnection(conn, nil)
+
+		readyCh := make(chan consumer.Ready, 2)
+		unreadyCh := make(chan error, 2)
+
+		c, err := consumer.New(
+			connCh,
+			consumer.WithInitFunc(initFuncStub(ch)),
+			consumer.WithHandler(h),
+			consumer.WithNotify(readyCh, unreadyCh),
+			consumer.WithExchange("theExchange", "theKey"),
+		)
+		require.NoError(t, err)
+
+		assertUnready(t, unreadyCh, amqp.ErrClosed.Error())
+
+		c.Close()
+		assertClosed(t, c)
 	})
 }
 
