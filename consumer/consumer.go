@@ -194,8 +194,6 @@ func WithNotify(readyCh chan Ready, unreadyCh chan error) Option {
 
 func WithExchange(exchange, routingKey string) Option {
 	return func(c *Consumer) {
-		c.queue = ""
-		c.queueDeclare = false
 		c.exchange = exchange
 		c.routingKey = routingKey
 	}
@@ -205,8 +203,6 @@ func WithQueue(queue string, declare bool) Option {
 	return func(c *Consumer) {
 		c.queue = queue
 		c.queueDeclare = declare
-		c.exchange = ""
-		c.routingKey = ""
 	}
 }
 
@@ -339,9 +335,9 @@ func (c *Consumer) channelState(conn AMQPConnection, connCloseCh <-chan struct{}
 		}
 
 		queue := c.queue
-		if c.queueDeclare || queue == "" {
+		if c.queueDeclare || c.queue == "" {
 			q, declareErr := ch.QueueDeclare(queue, false, false, true, false, nil)
-			if err != nil {
+			if declareErr != nil {
 				return c.waitRetry(declareErr)
 			}
 			queue = q.Name

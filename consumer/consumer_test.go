@@ -1580,6 +1580,9 @@ func TestOptions(main *testing.T) {
 		ch.EXPECT().
 			QueueDeclare(any(), any(), any(), any(), any(), any()).
 			Return(amqp.Queue{}, fmt.Errorf("theError"))
+		ch.EXPECT().
+			QueueBind(any(), any(), any(), any(), any()).
+			AnyTimes()
 		ch.EXPECT().Qos(any(), any(), any()).
 			Times(1)
 		ch.EXPECT().
@@ -1759,7 +1762,7 @@ func TestOptions(main *testing.T) {
 		require.EqualError(t, err, "handler must be not nil")
 	})
 
-	main.Run("ErroredIfNotSetQueueOrTmpQueueOrExchange", func(t *testing.T) {
+	main.Run("ErroredIfNotSetQueueOrExchange", func(t *testing.T) {
 		defer goleak.VerifyNone(t)
 
 		ctrl := gomock.NewController(t)
@@ -1798,6 +1801,7 @@ func TestOptions(main *testing.T) {
 			consumer.WithExchange("aExchange", "aRoutingKey"),
 			consumer.WithQueue("aQueue", false),
 		)
+
 		require.EqualError(t, err, "only one of WithQueue or WithExchange options must be set")
 	})
 
