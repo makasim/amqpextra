@@ -75,7 +75,7 @@ waitOpened:
 		return nil
 	})
 
-	c, err := dialer.Consumer(consumer.WithQueue(q), consumer.WithHandler(h))
+	c, err := dialer.Consumer(consumer.WithQueue(q, false), consumer.WithHandler(h))
 	require.NoError(t, err)
 
 	assertConsumerReady(t, readyCh)

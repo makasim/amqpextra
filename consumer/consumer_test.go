@@ -39,7 +39,7 @@ func TestNotify(main *testing.T) {
 		require.PanicsWithValue(t, "ready chan is unbuffered", func() {
 			c, _ := consumer.New(
 				connCh,
-				consumer.WithQueue("theQueue"),
+				consumer.WithQueue("theQueue", false),
 				consumer.WithHandler(h),
 			)
 			defer c.Close()
@@ -64,7 +64,7 @@ func TestNotify(main *testing.T) {
 		require.PanicsWithValue(t, "unready chan is unbuffered", func() {
 			c, _ := consumer.New(
 				connCh,
-				consumer.WithQueue("theQueue"),
+				consumer.WithQueue("theQueue", false),
 				consumer.WithHandler(h),
 			)
 			defer c.Close()
@@ -93,7 +93,7 @@ func TestNotify(main *testing.T) {
 				time.Sleep(time.Millisecond * 20)
 				return nil, fmt.Errorf("the error")
 			}),
-			consumer.WithQueue("theQueue"),
+			consumer.WithQueue("theQueue", false),
 			consumer.WithHandler(h),
 			consumer.WithRetryPeriod(time.Millisecond),
 			consumer.WithLogger(l),
@@ -131,9 +131,11 @@ func TestNotify(main *testing.T) {
 
 		ch.EXPECT().
 			Consume(any(), any(), any(), any(), any(), any(), any()).
-			AnyTimes()
+			Times(1)
 		ch.EXPECT().NotifyCancel(any()).
 			AnyTimes()
+		ch.EXPECT().Qos(any(), any(), any()).
+			Times(1)
 		ch.EXPECT().
 			NotifyClose(any()).
 			AnyTimes()
@@ -147,7 +149,7 @@ func TestNotify(main *testing.T) {
 
 		c, err := consumer.New(
 			connCh,
-			consumer.WithQueue("theQueue"),
+			consumer.WithQueue("theQueue", false),
 			consumer.WithHandler(h),
 			consumer.WithInitFunc(initFuncStub(ch)),
 			consumer.WithLogger(l),
@@ -190,7 +192,7 @@ func TestUnready(main *testing.T) {
 
 		c, err := consumer.New(
 			connCh,
-			consumer.WithQueue("theQueue"),
+			consumer.WithQueue("theQueue", false),
 			consumer.WithHandler(h),
 			consumer.WithLogger(l),
 			consumer.WithNotify(readyCh, unreadyCh),
@@ -224,7 +226,7 @@ func TestUnready(main *testing.T) {
 
 		c, err := consumer.New(
 			connCh,
-			consumer.WithQueue("theQueue"),
+			consumer.WithQueue("theQueue", false),
 			consumer.WithHandler(h),
 			consumer.WithLogger(l),
 			consumer.WithContext(ctx),
@@ -256,7 +258,7 @@ func TestUnready(main *testing.T) {
 
 		c, err := consumer.New(
 			connCh,
-			consumer.WithQueue("theQueue"),
+			consumer.WithQueue("theQueue", false),
 			consumer.WithHandler(h),
 			consumer.WithLogger(l),
 			consumer.WithNotify(readyCh, unreadyCh),
@@ -289,7 +291,7 @@ func TestUnready(main *testing.T) {
 
 		c, err := consumer.New(
 			connCh,
-			consumer.WithQueue("theQueue"),
+			consumer.WithQueue("theQueue", false),
 			consumer.WithHandler(h),
 			consumer.WithLogger(l),
 			consumer.WithRetryPeriod(time.Millisecond*400),
@@ -331,7 +333,7 @@ func TestUnready(main *testing.T) {
 
 		c, err := consumer.New(
 			connCh,
-			consumer.WithQueue("theQueue"),
+			consumer.WithQueue("theQueue", false),
 			consumer.WithHandler(h),
 			consumer.WithLogger(l),
 			consumer.WithNotify(readyCh, unreadyCh),
@@ -373,7 +375,7 @@ func TestUnready(main *testing.T) {
 
 		c, err := consumer.New(
 			connCh,
-			consumer.WithQueue("theQueue"),
+			consumer.WithQueue("theQueue", false),
 			consumer.WithHandler(h),
 			consumer.WithLogger(l),
 			consumer.WithNotify(readyCh, unreadyCh),
@@ -417,7 +419,7 @@ func TestUnready(main *testing.T) {
 
 		c, err := consumer.New(
 			connCh,
-			consumer.WithQueue("theQueue"),
+			consumer.WithQueue("theQueue", false),
 			consumer.WithHandler(h),
 			consumer.WithLogger(l),
 			consumer.WithRetryPeriod(time.Millisecond*400),
@@ -459,7 +461,7 @@ func TestUnready(main *testing.T) {
 
 		c, err := consumer.New(
 			connCh,
-			consumer.WithQueue("theQueue"),
+			consumer.WithQueue("theQueue", false),
 			consumer.WithHandler(h),
 			consumer.WithLogger(l),
 			consumer.WithNotify(readyCh, unreadyCh),
@@ -500,7 +502,7 @@ func TestUnready(main *testing.T) {
 
 		c, err := consumer.New(
 			connCh,
-			consumer.WithQueue("theQueue"),
+			consumer.WithQueue("theQueue", false),
 			consumer.WithHandler(h),
 			consumer.WithLogger(l),
 			consumer.WithNotify(readyCh, unreadyCh),
@@ -534,6 +536,8 @@ func TestUnready(main *testing.T) {
 		ch := mock_consumer.NewMockAMQPChannel(ctrl)
 		ch.EXPECT().Consume(any(), any(), any(), any(), any(), any(), any()).
 			Return(nil, fmt.Errorf("the error")).Times(1)
+		ch.EXPECT().Qos(any(), any(), any()).
+			Times(1)
 
 		conn := mock_consumer.NewMockAMQPConnection(ctrl)
 
@@ -546,7 +550,7 @@ func TestUnready(main *testing.T) {
 
 		c, err := consumer.New(
 			connCh,
-			consumer.WithQueue("theQueue"),
+			consumer.WithQueue("theQueue", false),
 			consumer.WithHandler(h),
 			consumer.WithNotify(readyCh, unreadyCh),
 			consumer.WithLogger(l),
@@ -577,6 +581,8 @@ func TestUnready(main *testing.T) {
 		ch := mock_consumer.NewMockAMQPChannel(ctrl)
 		ch.EXPECT().Consume(any(), any(), any(), any(), any(), any(), any()).
 			Return(nil, fmt.Errorf("the error")).Times(1)
+		ch.EXPECT().Qos(any(), any(), any()).
+			Times(1)
 
 		conn := mock_consumer.NewMockAMQPConnection(ctrl)
 
@@ -589,7 +595,7 @@ func TestUnready(main *testing.T) {
 
 		c, err := consumer.New(
 			connCh,
-			consumer.WithQueue("theQueue"),
+			consumer.WithQueue("theQueue", false),
 			consumer.WithHandler(h),
 			consumer.WithLogger(l),
 			consumer.WithNotify(readyCh, unreadyCh),
@@ -636,6 +642,8 @@ func TestConsume(main *testing.T) {
 		ch.EXPECT().NotifyCancel(any()).
 			Return(cancelCh).Times(1)
 		ch.EXPECT().Close().Times(1)
+		ch.EXPECT().Qos(any(), any(), any()).
+			Times(1)
 
 		conn := mock_consumer.NewMockAMQPConnection(ctrl)
 
@@ -644,7 +652,7 @@ func TestConsume(main *testing.T) {
 
 		c, err := consumer.New(
 			connCh,
-			consumer.WithQueue("theQueue"),
+			consumer.WithQueue("theQueue", false),
 			consumer.WithHandler(h),
 			consumer.WithNotify(readyCh, unreadyCh),
 			consumer.WithLogger(l),
@@ -688,6 +696,8 @@ func TestConsume(main *testing.T) {
 		ch.EXPECT().NotifyCancel(any()).
 			Return(cancelCh).Times(1)
 		ch.EXPECT().Close().Times(1)
+		ch.EXPECT().Qos(any(), any(), any()).
+			Times(1)
 
 		conn := mock_consumer.NewMockAMQPConnection(ctrl)
 
@@ -696,7 +706,7 @@ func TestConsume(main *testing.T) {
 
 		c, err := consumer.New(
 			connCh,
-			consumer.WithQueue("theQueue"),
+			consumer.WithQueue("theQueue", false),
 			consumer.WithHandler(h),
 			consumer.WithLogger(l),
 			consumer.WithNotify(readyCh, unreadyCh),
@@ -742,6 +752,8 @@ func TestConsume(main *testing.T) {
 		ch.EXPECT().NotifyCancel(any()).
 			Return(cancelCh).Times(1)
 		ch.EXPECT().Close().Times(1)
+		ch.EXPECT().Qos(any(), any(), any()).
+			Times(1)
 
 		conn := mock_consumer.NewMockAMQPConnection(ctrl)
 
@@ -750,7 +762,7 @@ func TestConsume(main *testing.T) {
 
 		c, err := consumer.New(
 			connCh,
-			consumer.WithQueue("theQueue"),
+			consumer.WithQueue("theQueue", false),
 			consumer.WithHandler(h),
 			consumer.WithLogger(l),
 			consumer.WithNotify(readyCh, unreadyCh),
@@ -795,6 +807,8 @@ func TestConsume(main *testing.T) {
 		ch.EXPECT().NotifyCancel(any()).
 			Return(cancelCh).Times(1)
 		ch.EXPECT().Close().Times(1)
+		ch.EXPECT().Qos(any(), any(), any()).
+			Times(1)
 
 		amqpConn := mock_consumer.NewMockAMQPConnection(ctrl)
 
@@ -805,7 +819,7 @@ func TestConsume(main *testing.T) {
 
 		c, err := consumer.New(
 			connCh,
-			consumer.WithQueue("theQueue"),
+			consumer.WithQueue("theQueue", false),
 			consumer.WithHandler(h),
 			consumer.WithNotify(readyCh, unreadyCh),
 			consumer.WithLogger(l),
@@ -843,6 +857,8 @@ func TestConsume(main *testing.T) {
 		ch := mock_consumer.NewMockAMQPChannel(ctrl)
 		ch.EXPECT().Consume(any(), any(), any(), any(), any(), any(), any()).
 			Return(msgCh, nil).Times(1)
+		ch.EXPECT().Qos(any(), any(), any()).
+			Times(1)
 		ch.EXPECT().NotifyClose(any()).
 			Return(chCloseCh).Times(1)
 		ch.EXPECT().NotifyCancel(any()).
@@ -856,6 +872,8 @@ func TestConsume(main *testing.T) {
 		newCh := mock_consumer.NewMockAMQPChannel(ctrl)
 		newCh.EXPECT().Consume(any(), any(), any(), any(), any(), any(), any()).
 			Return(newNsgCh, nil).Times(1)
+		newCh.EXPECT().Qos(any(), any(), any()).
+			Times(1)
 		newCh.EXPECT().NotifyClose(any()).
 			Return(newChCloseCh).Times(1)
 		newCh.EXPECT().NotifyCancel(any()).
@@ -871,7 +889,7 @@ func TestConsume(main *testing.T) {
 
 		c, err := consumer.New(
 			connCh,
-			consumer.WithQueue("theQueue"),
+			consumer.WithQueue("theQueue", false),
 			consumer.WithHandler(h),
 			consumer.WithLogger(l),
 			consumer.WithNotify(readyCh, unreadyCh),
@@ -923,6 +941,8 @@ func TestConsume(main *testing.T) {
 		ch.EXPECT().NotifyCancel(any()).
 			Return(cancelCh).Times(1)
 		ch.EXPECT().Close().Return(fmt.Errorf("the error")).Times(1)
+		ch.EXPECT().Qos(any(), any(), any()).
+			Times(1)
 
 		conn := mock_consumer.NewMockAMQPConnection(ctrl)
 
@@ -931,7 +951,7 @@ func TestConsume(main *testing.T) {
 
 		c, err := consumer.New(
 			connCh,
-			consumer.WithQueue("theQueue"),
+			consumer.WithQueue("theQueue", false),
 			consumer.WithHandler(h),
 			consumer.WithLogger(l),
 			consumer.WithNotify(readyCh, unreadyCh),
@@ -975,6 +995,8 @@ func TestConsume(main *testing.T) {
 		ch.EXPECT().NotifyCancel(any()).
 			Return(cancelCh).Times(1)
 		ch.EXPECT().Close().Return(amqp.ErrClosed).Times(1)
+		ch.EXPECT().Qos(any(), any(), any()).
+			Times(1)
 
 		conn := mock_consumer.NewMockAMQPConnection(ctrl)
 
@@ -985,7 +1007,7 @@ func TestConsume(main *testing.T) {
 
 		c, err := consumer.New(
 			connCh,
-			consumer.WithQueue("theQueue"),
+			consumer.WithQueue("theQueue", false),
 			consumer.WithHandler(h),
 			consumer.WithLogger(l),
 			consumer.WithNotify(readyCh, unreadyCh),
@@ -1023,6 +1045,7 @@ func TestConsume(main *testing.T) {
 		ch := mock_consumer.NewMockAMQPChannel(ctrl)
 		ch.EXPECT().Consume(any(), any(), any(), any(), any(), any(), any()).
 			Return(msgCh, nil).Times(1)
+		ch.EXPECT().Qos(any(), any(), any()).Times(1)
 		ch.EXPECT().NotifyClose(any()).
 			Return(chCloseCh).Times(1)
 		ch.EXPECT().NotifyCancel(any()).
@@ -1045,6 +1068,7 @@ func TestConsume(main *testing.T) {
 		newCh := mock_consumer.NewMockAMQPChannel(ctrl)
 		newCh.EXPECT().Consume(any(), any(), any(), any(), any(), any(), any()).
 			Return(newNsgCh, nil).Times(1)
+		newCh.EXPECT().Qos(any(), any(), any()).Times(1)
 		newCh.EXPECT().NotifyClose(any()).
 			Return(newChCloseCh).Times(1)
 		newCh.EXPECT().NotifyCancel(any()).
@@ -1053,7 +1077,7 @@ func TestConsume(main *testing.T) {
 
 		c, err := consumer.New(
 			connCh,
-			consumer.WithQueue("theQueue"),
+			consumer.WithQueue("theQueue", false),
 			consumer.WithHandler(h),
 			consumer.WithLogger(l),
 			consumer.WithNotify(readyCh, unreadyCh),
@@ -1107,6 +1131,8 @@ func TestConsume(main *testing.T) {
 		ch := mock_consumer.NewMockAMQPChannel(ctrl)
 		ch.EXPECT().Consume(any(), any(), any(), any(), any(), any(), any()).
 			Return(msgCh, nil).Times(1)
+		ch.EXPECT().Qos(any(), any(), any()).
+			Times(1)
 		ch.EXPECT().NotifyClose(any()).
 			Return(chCloseCh).Times(1)
 		ch.EXPECT().NotifyCancel(any()).
@@ -1122,7 +1148,7 @@ func TestConsume(main *testing.T) {
 
 		c, err := consumer.New(
 			connCh,
-			consumer.WithQueue("theQueue"),
+			consumer.WithQueue("theQueue", false),
 			consumer.WithHandler(h),
 			consumer.WithLogger(l),
 			consumer.WithNotify(readyCh, unreadyCh),
@@ -1171,6 +1197,8 @@ func TestConcurrency(main *testing.T) {
 		ch := mock_consumer.NewMockAMQPChannel(ctrl)
 		ch.EXPECT().Consume(any(), any(), any(), any(), any(), any(), any()).
 			Return(msgCh, nil).Times(1)
+		ch.EXPECT().Qos(any(), any(), any()).
+			Times(1)
 		ch.EXPECT().NotifyClose(any()).
 			Return(chCloseCh).Times(1)
 		ch.EXPECT().NotifyCancel(any()).
@@ -1184,6 +1212,8 @@ func TestConcurrency(main *testing.T) {
 		newCh := mock_consumer.NewMockAMQPChannel(ctrl)
 		newCh.EXPECT().Consume(any(), any(), any(), any(), any(), any(), any()).
 			Return(msgCh, nil).Times(1)
+		newCh.EXPECT().Qos(any(), any(), any()).
+			Times(1)
 		newCh.EXPECT().NotifyClose(any()).
 			Return(newChCloseCh).Times(1)
 		newCh.EXPECT().NotifyCancel(any()).
@@ -1211,7 +1241,7 @@ func TestConcurrency(main *testing.T) {
 
 		c, err := consumer.New(
 			connCh,
-			consumer.WithQueue("theQueue"),
+			consumer.WithQueue("theQueue", false),
 			consumer.WithHandler(h),
 			consumer.WithLogger(l),
 			consumer.WithNotify(readyCh, unreadyCh),
@@ -1258,6 +1288,8 @@ func TestConcurrency(main *testing.T) {
 		ch := mock_consumer.NewMockAMQPChannel(ctrl)
 		ch.EXPECT().Consume(any(), any(), any(), any(), any(), any(), any()).
 			Return(msgCh, nil).Times(1)
+		ch.EXPECT().Qos(any(), any(), any()).
+			Times(1)
 		ch.EXPECT().NotifyClose(any()).
 			Return(chCloseCh).Times(1)
 		ch.EXPECT().NotifyCancel(any()).
@@ -1273,7 +1305,7 @@ func TestConcurrency(main *testing.T) {
 
 		c, err := consumer.New(
 			connCh,
-			consumer.WithQueue("theQueue"),
+			consumer.WithQueue("theQueue", false),
 			consumer.WithHandler(h),
 			consumer.WithLogger(l),
 			consumer.WithNotify(readyCh, unreadyCh),
@@ -1331,6 +1363,8 @@ func TestConcurrency(main *testing.T) {
 		ch := mock_consumer.NewMockAMQPChannel(ctrl)
 		ch.EXPECT().Consume(any(), any(), any(), any(), any(), any(), any()).
 			Return(msgCh, nil).Times(1)
+		ch.EXPECT().Qos(any(), any(), any()).
+			Times(1)
 		ch.EXPECT().NotifyClose(any()).
 			Return(chCloseCh).Times(1)
 		ch.EXPECT().NotifyCancel(any()).
@@ -1368,7 +1402,7 @@ func TestConcurrency(main *testing.T) {
 
 		c, err := consumer.New(
 			connCh,
-			consumer.WithQueue("theQueue"),
+			consumer.WithQueue("theQueue", false),
 			consumer.WithHandler(h),
 			consumer.WithLogger(l),
 			consumer.WithNotify(readyCh, unreadyCh),
@@ -1418,6 +1452,8 @@ func TestExchange(main *testing.T) {
 			Consume("theQueue", any(), any(), any(), any(), any(), any()).
 			Return(msgCh, nil).
 			AnyTimes()
+		ch.EXPECT().Qos(any(), any(), any()).
+			Times(1)
 		ch.EXPECT().
 			NotifyClose(any()).
 			AnyTimes()
@@ -1435,7 +1471,7 @@ func TestExchange(main *testing.T) {
 
 		c, err := consumer.New(
 			connCh,
-			consumer.WithQueue("theQueue"),
+			consumer.WithQueue("theQueue", false),
 			consumer.WithHandler(h),
 			consumer.WithLogger(l),
 			consumer.WithNotify(readyCh, unreadyCh),
@@ -1477,6 +1513,8 @@ func TestExchange(main *testing.T) {
 			Consume(any(), any(), any(), any(), any(), any(), any()).
 			Return(msgCh, nil).
 			AnyTimes()
+		ch.EXPECT().Qos(any(), any(), any()).
+			Times(1)
 		ch.EXPECT().
 			QueueDeclare(any(), any(), any(), any(), any(), any()).
 			Return(amqp.Queue{Name: "theTmpQueue"}, nil)
@@ -1540,6 +1578,8 @@ func TestExchange(main *testing.T) {
 		ch.EXPECT().
 			QueueDeclare(any(), any(), any(), any(), any(), any()).
 			Return(amqp.Queue{}, fmt.Errorf("theError"))
+		ch.EXPECT().Qos(any(), any(), any()).
+			Times(1)
 		ch.EXPECT().
 			NotifyClose(any()).
 			AnyTimes()
@@ -1598,6 +1638,8 @@ func TestExchange(main *testing.T) {
 		ch.EXPECT().
 			QueueBind(any(), any(), any(), any(), any()).
 			Return(fmt.Errorf("theError"))
+		ch.EXPECT().Qos(any(), any(), any()).
+			Times(1)
 		ch.EXPECT().
 			NotifyClose(any()).
 			AnyTimes()
@@ -1656,6 +1698,8 @@ func TestExchange(main *testing.T) {
 		ch.EXPECT().
 			QueueBind(any(), any(), any(), any(), any()).
 			Return(fmt.Errorf("theError"))
+		ch.EXPECT().Qos(any(), any(), any()).
+			Times(1)
 		ch.EXPECT().
 			NotifyClose(any()).
 			AnyTimes()
@@ -1730,7 +1774,7 @@ func TestExchange(main *testing.T) {
 			connCh,
 			consumer.WithHandler(h),
 			consumer.WithExchange("aExchange", "aRoutingKey"),
-			consumer.WithQueue("aQueue"),
+			consumer.WithQueue("aQueue", false),
 		)
 		require.EqualError(t, err, "only one of WithQueue or WithExchange options must be set")
 	})
