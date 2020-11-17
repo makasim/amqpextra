@@ -1376,6 +1376,8 @@ func TestConcurrency(main *testing.T) {
 		newCh := mock_consumer.NewMockAMQPChannel(ctrl)
 		newCh.EXPECT().Consume(any(), any(), any(), any(), any(), any(), any()).
 			Return(msgCh, nil).Times(1)
+		newCh.EXPECT().Qos(any(), any(), any()).
+			Times(1)
 		newCh.EXPECT().NotifyClose(any()).
 			Return(newChCloseCh).Times(1)
 		newCh.EXPECT().NotifyCancel(any()).
