@@ -22,6 +22,7 @@ type AMQPConnection interface {
 
 type AMQPChannel interface {
 	Consume(queue, consumer string, autoAck, exclusive, noLocal, noWait bool, args amqp.Table) (<-chan amqp.Delivery, error)
+	Qos(prefetchCount, prefetchSize int, global bool) error
 	NotifyClose(receiver chan *amqp.Error) chan *amqp.Error
 	NotifyCancel(c chan string) chan string
 	QueueDeclare(name string, durable, autoDelete, exclusive, noWait bool, args amqp.Table) (amqp.Queue, error)
@@ -51,10 +52,16 @@ type Consumer struct {
 	internalUnreadyCh chan error
 	internalReadyCh   chan Ready
 
+	prefetchCount, prefetchSize int
+	prefetchGlobal              bool
+
 	exchange   string
 	routingKey string
 
-	queue string
+	tmpQueue bool
+
+	queue        string
+	queueDeclare bool
 
 	consumer  string
 	autoAck   bool
@@ -123,12 +130,8 @@ func New(
 		return nil, fmt.Errorf("handler must be not nil")
 	}
 
-	if c.queue == "" && c.exchange == "" {
-		return nil, fmt.Errorf("WithQueue or WithExchange options must be set")
-	}
-
-	if c.queue != "" && c.exchange != "" {
-		return nil, fmt.Errorf("only one of WithQueue or WithExchange options must be set")
+	if c.queue == "" && c.exchange == "" && !c.tmpQueue {
+		return nil, fmt.Errorf("WithQueue or WithExchange or WithTmpQueue options must be set")
 	}
 
 	if c.initFunc == nil {
@@ -172,6 +175,14 @@ func WithWorker(w Worker) Option {
 	}
 }
 
+func WithQos(prefetchCount, prefetchSize int, global bool) Option {
+	return func(c *Consumer) {
+		c.prefetchCount = prefetchCount
+		c.prefetchSize = prefetchSize
+		c.prefetchGlobal = global
+	}
+}
+
 func WithNotify(readyCh chan Ready, unreadyCh chan error) Option {
 	return func(c *Consumer) {
 		c.readyChs = append(c.readyChs, readyCh)
@@ -181,14 +192,28 @@ func WithNotify(readyCh chan Ready, unreadyCh chan error) Option {
 
 func WithExchange(exchange, routingKey string) Option {
 	return func(c *Consumer) {
+		c.queue = ""
+		c.queueDeclare = false
 		c.exchange = exchange
 		c.routingKey = routingKey
 	}
 }
 
-func WithQueue(queue string) Option {
+func WithQueue(queue string, declare bool) Option {
 	return func(c *Consumer) {
 		c.queue = queue
+		c.queueDeclare = declare
+		c.exchange = ""
+		c.routingKey = ""
+		c.tmpQueue = false
+	}
+}
+
+func WithTmpQueue() Option {
+	return func(c *Consumer) {
+		c.queue = ""
+		c.queueDeclare = false
+		c.tmpQueue = true
 	}
 }
 
@@ -315,9 +340,18 @@ func (c *Consumer) channelState(conn AMQPConnection, connCloseCh <-chan struct{}
 			return c.waitRetry(err)
 		}
 
-		queue := c.queue
+		err = ch.Qos(c.prefetchCount, c.prefetchSize, c.prefetchGlobal)
+		if err != nil {
+			return c.waitRetry(err)
+		}
+
+		queue, err := c.defineQueue(ch)
+		if err != nil {
+			return c.waitRetry(err)
+		}
+
 		if c.exchange != "" {
-			queue, err = c.declareTemporaryQueue(ch)
+			err := ch.QueueBind(queue, c.routingKey, c.exchange, false, nil)
 			if err != nil {
 				return c.waitRetry(err)
 			}
@@ -333,6 +367,11 @@ func (c *Consumer) channelState(conn AMQPConnection, connCloseCh <-chan struct{}
 }
 
 func (c *Consumer) consumeState(ch AMQPChannel, queue string, connCloseCh <-chan struct{}) error {
+	err := ch.Qos(c.prefetchCount, c.prefetchCount, c.prefetchGlobal)
+	if err != nil {
+		return err
+	}
+
 	msgCh, err := ch.Consume(
 		queue,
 		c.consumer,
@@ -391,18 +430,25 @@ func (c *Consumer) consumeState(ch AMQPChannel, queue string, connCloseCh <-chan
 	}
 }
 
-func (c *Consumer) declareTemporaryQueue(ch AMQPChannel) (queue string, err error) {
-	q, err := ch.QueueDeclare("", false, false, true, false, nil)
-	if err != nil {
-		return "", err
+func (c *Consumer) defineQueue(ch AMQPChannel) (queue string, err error) {
+	queue = c.queue
+	if c.queueDeclare {
+		q, err := ch.QueueDeclare(queue, false, false, true, false, nil)
+		if err != nil {
+			return
+		}
+		queue = q.Name
 	}
 
-	err = ch.QueueBind(q.Name, c.routingKey, c.exchange, false, nil)
-	if err != nil {
-		return "", err
+	if c.tmpQueue {
+		q, err := ch.QueueDeclare("", false, false, true, false, nil)
+		if err != nil {
+			return
+		}
+		queue = q.Name
 	}
 
-	return q.Name, nil
+	return
 }
 
 func (c *Consumer) waitRetry(err error) error {
