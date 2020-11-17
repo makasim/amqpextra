@@ -355,7 +355,7 @@ func (c *Consumer) channelState(conn AMQPConnection, connCloseCh <-chan struct{}
 		}
 
 		if c.exchange != "" {
-			err := ch.QueueBind(queue, c.routingKey, c.exchange, false, nil)
+			err = ch.QueueBind(queue, c.routingKey, c.exchange, false, nil)
 			if err != nil {
 				return c.waitRetry(err)
 			}

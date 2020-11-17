@@ -1796,7 +1796,7 @@ func TestExchange(main *testing.T) {
 			connCh,
 			consumer.WithHandler(h),
 		)
-		require.EqualError(t, err, "WithQueue or WithExchange options must be set")
+		require.EqualError(t, err, "WithQueue or WithExchange or WithTmpQueue options must be set")
 	})
 }
 
