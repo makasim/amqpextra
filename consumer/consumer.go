@@ -52,8 +52,9 @@ type Consumer struct {
 	internalUnreadyCh chan error
 	internalReadyCh   chan Ready
 
-	prefetchCount, prefetchSize int
-	prefetchGlobal              bool
+	prefetchCount int
+	prefetchSize  int
+	qosGlobal     bool
 
 	exchange   string
 	routingKey string
@@ -179,7 +180,7 @@ func WithQos(prefetchCount, prefetchSize int, global bool) Option {
 	return func(c *Consumer) {
 		c.prefetchCount = prefetchCount
 		c.prefetchSize = prefetchSize
-		c.prefetchGlobal = global
+		c.qosGlobal = global
 	}
 }
 
@@ -193,6 +194,7 @@ func WithNotify(readyCh chan Ready, unreadyCh chan error) Option {
 func WithExchange(exchange, routingKey string) Option {
 	return func(c *Consumer) {
 		c.queue = ""
+		c.tmpQueue = true
 		c.queueDeclare = false
 		c.exchange = exchange
 		c.routingKey = routingKey
@@ -211,6 +213,8 @@ func WithQueue(queue string, declare bool) Option {
 
 func WithTmpQueue() Option {
 	return func(c *Consumer) {
+		c.exchange = ""
+		c.routingKey = ""
 		c.queue = ""
 		c.queueDeclare = false
 		c.tmpQueue = true
@@ -340,12 +344,12 @@ func (c *Consumer) channelState(conn AMQPConnection, connCloseCh <-chan struct{}
 			return c.waitRetry(err)
 		}
 
-		err = ch.Qos(c.prefetchCount, c.prefetchSize, c.prefetchGlobal)
+		err = ch.Qos(c.prefetchCount, c.prefetchSize, c.qosGlobal)
 		if err != nil {
 			return c.waitRetry(err)
 		}
 
-		queue, err := c.defineQueue(ch)
+		queue, err := c.declareQueue(ch)
 		if err != nil {
 			return c.waitRetry(err)
 		}
@@ -367,10 +371,6 @@ func (c *Consumer) channelState(conn AMQPConnection, connCloseCh <-chan struct{}
 }
 
 func (c *Consumer) consumeState(ch AMQPChannel, queue string, connCloseCh <-chan struct{}) error {
-	err := ch.Qos(c.prefetchCount, c.prefetchCount, c.prefetchGlobal)
-	if err != nil {
-		return err
-	}
 
 	msgCh, err := ch.Consume(
 		queue,
@@ -430,12 +430,12 @@ func (c *Consumer) consumeState(ch AMQPChannel, queue string, connCloseCh <-chan
 	}
 }
 
-func (c *Consumer) defineQueue(ch AMQPChannel) (queue string, err error) {
+func (c *Consumer) declareQueue(ch AMQPChannel) (queue string, err error) {
 	queue = c.queue
 	if c.queueDeclare {
 		q, err := ch.QueueDeclare(queue, false, false, true, false, nil)
 		if err != nil {
-			return
+			return "", err
 		}
 		queue = q.Name
 	}
@@ -443,12 +443,12 @@ func (c *Consumer) defineQueue(ch AMQPChannel) (queue string, err error) {
 	if c.tmpQueue {
 		q, err := ch.QueueDeclare("", false, false, true, false, nil)
 		if err != nil {
-			return
+			return "", err
 		}
 		queue = q.Name
 	}
 
-	return
+	return queue, nil
 }
 
 func (c *Consumer) waitRetry(err error) error {
