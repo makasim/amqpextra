@@ -53,7 +53,6 @@ type Consumer struct {
 	internalReadyCh   chan Ready
 
 	prefetchCount int
-	prefetchSize  int
 	qosGlobal     bool
 
 	exchange   string
@@ -81,9 +80,7 @@ func New(
 
 		internalUnreadyCh: make(chan error),
 		internalReadyCh:   make(chan Ready),
-
-		prefetchSize:  1,
-		prefetchCount: 1,
+		prefetchCount:     1,
 
 		closeCh: make(chan struct{}),
 	}
@@ -182,7 +179,6 @@ func WithWorker(w Worker) Option {
 func WithQos(prefetchCount, prefetchSize int, global bool) Option {
 	return func(c *Consumer) {
 		c.prefetchCount = prefetchCount
-		c.prefetchSize = prefetchSize
 		c.qosGlobal = global
 	}
 }
@@ -347,7 +343,7 @@ func (c *Consumer) channelState(conn AMQPConnection, connCloseCh <-chan struct{}
 			return c.waitRetry(err)
 		}
 
-		err = ch.Qos(c.prefetchCount, c.prefetchSize, c.qosGlobal)
+		err = ch.Qos(c.prefetchCount, 0, c.qosGlobal)
 		if err != nil {
 			return c.waitRetry(err)
 		}
