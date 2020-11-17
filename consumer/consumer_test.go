@@ -1779,6 +1779,28 @@ func TestOptions(main *testing.T) {
 		require.EqualError(t, err, "WithQueue or WithExchange or WithTmpQueue options must be set")
 	})
 
+	main.Run("ErroredIfSetQueueAndExchange", func(t *testing.T) {
+		defer goleak.VerifyNone(t)
+
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		h := handlerStub(logger.NewTest())
+
+		conn := mock_consumer.NewMockAMQPConnection(ctrl)
+
+		connCh := make(chan *consumer.Connection, 1)
+		connCh <- consumer.NewConnection(conn, nil)
+
+		_, err := consumer.New(
+			connCh,
+			consumer.WithHandler(h),
+			consumer.WithExchange("aExchange", "aRoutingKey"),
+			consumer.WithQueue("aQueue", false),
+		)
+		require.EqualError(t, err, "only one of WithQueue or WithExchange options must be set")
+	})
+
 	main.Run("DeclareTemporaryQueueIfWithExchange", func(t *testing.T) {
 		defer goleak.VerifyNone(t)
 
