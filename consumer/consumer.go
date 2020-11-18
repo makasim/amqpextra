@@ -134,7 +134,7 @@ func New(
 		return nil, fmt.Errorf("handler must be not nil")
 	}
 
-	if c.queue == "" && c.exchange == "" && !c.queueDeclare{
+	if c.queue == "" && c.exchange == "" && !c.queueDeclare {
 		return nil, fmt.Errorf("consumer source options must be set")
 	}
 
@@ -198,6 +198,7 @@ func WithExchange(exchange, routingKey string) Option {
 		c.resetSource()
 		c.exchange = exchange
 		c.routingKey = routingKey
+		c.declareAutoDelete = true
 		c.queueDeclare = true
 		c.declareExclusive = true
 	}
@@ -214,6 +215,7 @@ func WithTmpQueue() Option {
 	return func(c *Consumer) {
 		c.resetSource()
 		c.queueDeclare = true
+		c.declareAutoDelete = true
 		c.declareExclusive = true
 	}
 }

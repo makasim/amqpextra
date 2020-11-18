@@ -1855,7 +1855,7 @@ func TestOptions(main *testing.T) {
 			Qos(any(), any(), any()).
 			Times(1)
 		ch.EXPECT().
-			QueueDeclare("", false, false, true, false, nil).
+			QueueDeclare("", false, true, true, false, nil).
 			Return(amqp.Queue{Name: "theTmpQueue"}, nil).
 			Times(1)
 		ch.EXPECT().
@@ -1911,7 +1911,7 @@ func TestOptions(main *testing.T) {
 			Qos(any(), any(), any()).
 			Times(1)
 		ch.EXPECT().
-			QueueDeclare("", false, false, true, false, nil).
+			QueueDeclare("", false, true, true, false, nil).
 			Return(amqp.Queue{Name: "theTmpQueue"}, nil).
 			Times(1)
 		ch.EXPECT().
