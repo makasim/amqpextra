@@ -135,7 +135,7 @@ func New(
 	}
 
 	if c.queue == "" && c.exchange == "" && !c.queueDeclare {
-		return nil, fmt.Errorf("consumer source options must be set")
+		return nil, fmt.Errorf("WithQueue or WithExchange or WithDeclareQueue or WithTmpQueue options must be set")
 	}
 
 	if c.initFunc == nil {

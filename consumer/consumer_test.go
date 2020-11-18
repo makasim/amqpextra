@@ -1779,7 +1779,7 @@ func TestOptions(main *testing.T) {
 			connCh,
 			consumer.WithHandler(h),
 		)
-		require.EqualError(t, err, "consumer source options must be set")
+		require.EqualError(t, err, "WithQueue or WithExchange or WithDeclareQueue or WithTmpQueue options must be set")
 	})
 
 	main.Run("DeclareTemporaryQueueIfWithExchange", func(t *testing.T) {
