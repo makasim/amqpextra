@@ -22,6 +22,7 @@ type AMQPConnection interface {
 
 type AMQPChannel interface {
 	Consume(queue, consumer string, autoAck, exclusive, noLocal, noWait bool, args amqp.Table) (<-chan amqp.Delivery, error)
+	Qos(prefetchCount, prefetchSize int, global bool) error
 	NotifyClose(receiver chan *amqp.Error) chan *amqp.Error
 	NotifyCancel(c chan string) chan string
 	QueueDeclare(name string, durable, autoDelete, exclusive, noWait bool, args amqp.Table) (amqp.Queue, error)
@@ -51,10 +52,19 @@ type Consumer struct {
 	internalUnreadyCh chan error
 	internalReadyCh   chan Ready
 
+	prefetchCount int
+	qosGlobal     bool
+
 	exchange   string
 	routingKey string
 
-	queue string
+	queue             string
+	queueDeclare      bool
+	declareDurable    bool
+	declareAutoDelete bool
+	declareExclusive  bool
+	declareNoWait     bool
+	declareArgs       amqp.Table
 
 	consumer  string
 	autoAck   bool
@@ -73,6 +83,7 @@ func New(
 
 		internalUnreadyCh: make(chan error),
 		internalReadyCh:   make(chan Ready),
+		prefetchCount:     1,
 
 		closeCh: make(chan struct{}),
 	}
@@ -123,12 +134,8 @@ func New(
 		return nil, fmt.Errorf("handler must be not nil")
 	}
 
-	if c.queue == "" && c.exchange == "" {
-		return nil, fmt.Errorf("WithQueue or WithExchange options must be set")
-	}
-
-	if c.queue != "" && c.exchange != "" {
-		return nil, fmt.Errorf("only one of WithQueue or WithExchange options must be set")
+	if c.queue == "" && c.exchange == "" && !c.queueDeclare {
+		return nil, fmt.Errorf("WithQueue or WithExchange or WithDeclareQueue or WithTmpQueue options must be set")
 	}
 
 	if c.initFunc == nil {
@@ -172,6 +179,13 @@ func WithWorker(w Worker) Option {
 	}
 }
 
+func WithQos(prefetchCount int, global bool) Option {
+	return func(c *Consumer) {
+		c.prefetchCount = prefetchCount
+		c.qosGlobal = global
+	}
+}
+
 func WithNotify(readyCh chan Ready, unreadyCh chan error) Option {
 	return func(c *Consumer) {
 		c.readyChs = append(c.readyChs, readyCh)
@@ -181,14 +195,41 @@ func WithNotify(readyCh chan Ready, unreadyCh chan error) Option {
 
 func WithExchange(exchange, routingKey string) Option {
 	return func(c *Consumer) {
+		c.resetSource()
 		c.exchange = exchange
 		c.routingKey = routingKey
+		c.declareAutoDelete = true
+		c.queueDeclare = true
+		c.declareExclusive = true
 	}
 }
 
 func WithQueue(queue string) Option {
 	return func(c *Consumer) {
+		c.resetSource()
 		c.queue = queue
+	}
+}
+
+func WithTmpQueue() Option {
+	return func(c *Consumer) {
+		c.resetSource()
+		c.queueDeclare = true
+		c.declareAutoDelete = true
+		c.declareExclusive = true
+	}
+}
+
+func WithDeclareQueue(name string, durable, autoDelete, exclusive, noWait bool, args amqp.Table) Option {
+	return func(c *Consumer) {
+		c.resetSource()
+		c.queue = name
+		c.queueDeclare = true
+		c.declareDurable = durable
+		c.declareAutoDelete = autoDelete
+		c.declareExclusive = exclusive
+		c.declareNoWait = noWait
+		c.declareArgs = args
 	}
 }
 
@@ -207,6 +248,18 @@ func WithConsumeArgs(consumer string, autoAck, exclusive, noLocal, noWait bool, 
 		c.noWait = noWait
 		c.args = args
 	}
+}
+
+func (c *Consumer) resetSource() {
+	c.queue = ""
+	c.queueDeclare = false
+	c.declareDurable = false
+	c.declareAutoDelete = false
+	c.declareExclusive = false
+	c.declareNoWait = false
+	c.declareArgs = nil
+	c.routingKey = ""
+	c.exchange = ""
 }
 
 func (c *Consumer) Notify(readyCh chan Ready, unreadyCh chan error) (ready <-chan Ready, unready <-chan error) {
@@ -315,9 +368,22 @@ func (c *Consumer) channelState(conn AMQPConnection, connCloseCh <-chan struct{}
 			return c.waitRetry(err)
 		}
 
+		err = ch.Qos(c.prefetchCount, 0, c.qosGlobal)
+		if err != nil {
+			return c.waitRetry(err)
+		}
+
 		queue := c.queue
+		if c.queueDeclare {
+			q, declareErr := ch.QueueDeclare(c.queue, c.declareDurable, c.declareAutoDelete, c.declareExclusive, c.declareNoWait, c.declareArgs)
+			if declareErr != nil {
+				return c.waitRetry(declareErr)
+			}
+			queue = q.Name
+		}
+
 		if c.exchange != "" {
-			queue, err = c.declareTemporaryQueue(ch)
+			err = ch.QueueBind(queue, c.routingKey, c.exchange, false, nil)
 			if err != nil {
 				return c.waitRetry(err)
 			}
@@ -333,6 +399,7 @@ func (c *Consumer) channelState(conn AMQPConnection, connCloseCh <-chan struct{}
 }
 
 func (c *Consumer) consumeState(ch AMQPChannel, queue string, connCloseCh <-chan struct{}) error {
+
 	msgCh, err := ch.Consume(
 		queue,
 		c.consumer,
@@ -389,20 +456,6 @@ func (c *Consumer) consumeState(ch AMQPChannel, queue string, connCloseCh <-chan
 
 		return result
 	}
-}
-
-func (c *Consumer) declareTemporaryQueue(ch AMQPChannel) (queue string, err error) {
-	q, err := ch.QueueDeclare("", false, false, true, false, nil)
-	if err != nil {
-		return "", err
-	}
-
-	err = ch.QueueBind(q.Name, c.routingKey, c.exchange, false, nil)
-	if err != nil {
-		return "", err
-	}
-
-	return q.Name, nil
 }
 
 func (c *Consumer) waitRetry(err error) error {

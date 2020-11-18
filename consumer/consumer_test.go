@@ -131,9 +131,11 @@ func TestNotify(main *testing.T) {
 
 		ch.EXPECT().
 			Consume(any(), any(), any(), any(), any(), any(), any()).
-			AnyTimes()
+			Times(1)
 		ch.EXPECT().NotifyCancel(any()).
 			AnyTimes()
+		ch.EXPECT().Qos(any(), any(), any()).
+			Times(1)
 		ch.EXPECT().
 			NotifyClose(any()).
 			AnyTimes()
@@ -534,6 +536,8 @@ func TestUnready(main *testing.T) {
 		ch := mock_consumer.NewMockAMQPChannel(ctrl)
 		ch.EXPECT().Consume(any(), any(), any(), any(), any(), any(), any()).
 			Return(nil, fmt.Errorf("the error")).Times(1)
+		ch.EXPECT().Qos(any(), any(), any()).
+			Times(1)
 
 		conn := mock_consumer.NewMockAMQPConnection(ctrl)
 
@@ -577,6 +581,8 @@ func TestUnready(main *testing.T) {
 		ch := mock_consumer.NewMockAMQPChannel(ctrl)
 		ch.EXPECT().Consume(any(), any(), any(), any(), any(), any(), any()).
 			Return(nil, fmt.Errorf("the error")).Times(1)
+		ch.EXPECT().Qos(any(), any(), any()).
+			Times(1)
 
 		conn := mock_consumer.NewMockAMQPConnection(ctrl)
 
@@ -636,6 +642,8 @@ func TestConsume(main *testing.T) {
 		ch.EXPECT().NotifyCancel(any()).
 			Return(cancelCh).Times(1)
 		ch.EXPECT().Close().Times(1)
+		ch.EXPECT().Qos(any(), any(), any()).
+			Times(1)
 
 		conn := mock_consumer.NewMockAMQPConnection(ctrl)
 
@@ -688,6 +696,8 @@ func TestConsume(main *testing.T) {
 		ch.EXPECT().NotifyCancel(any()).
 			Return(cancelCh).Times(1)
 		ch.EXPECT().Close().Times(1)
+		ch.EXPECT().Qos(any(), any(), any()).
+			Times(1)
 
 		conn := mock_consumer.NewMockAMQPConnection(ctrl)
 
@@ -742,6 +752,8 @@ func TestConsume(main *testing.T) {
 		ch.EXPECT().NotifyCancel(any()).
 			Return(cancelCh).Times(1)
 		ch.EXPECT().Close().Times(1)
+		ch.EXPECT().Qos(any(), any(), any()).
+			Times(1)
 
 		conn := mock_consumer.NewMockAMQPConnection(ctrl)
 
@@ -795,6 +807,8 @@ func TestConsume(main *testing.T) {
 		ch.EXPECT().NotifyCancel(any()).
 			Return(cancelCh).Times(1)
 		ch.EXPECT().Close().Times(1)
+		ch.EXPECT().Qos(any(), any(), any()).
+			Times(1)
 
 		amqpConn := mock_consumer.NewMockAMQPConnection(ctrl)
 
@@ -843,6 +857,8 @@ func TestConsume(main *testing.T) {
 		ch := mock_consumer.NewMockAMQPChannel(ctrl)
 		ch.EXPECT().Consume(any(), any(), any(), any(), any(), any(), any()).
 			Return(msgCh, nil).Times(1)
+		ch.EXPECT().Qos(any(), any(), any()).
+			Times(1)
 		ch.EXPECT().NotifyClose(any()).
 			Return(chCloseCh).Times(1)
 		ch.EXPECT().NotifyCancel(any()).
@@ -856,6 +872,8 @@ func TestConsume(main *testing.T) {
 		newCh := mock_consumer.NewMockAMQPChannel(ctrl)
 		newCh.EXPECT().Consume(any(), any(), any(), any(), any(), any(), any()).
 			Return(newNsgCh, nil).Times(1)
+		newCh.EXPECT().Qos(any(), any(), any()).
+			Times(1)
 		newCh.EXPECT().NotifyClose(any()).
 			Return(newChCloseCh).Times(1)
 		newCh.EXPECT().NotifyCancel(any()).
@@ -923,6 +941,8 @@ func TestConsume(main *testing.T) {
 		ch.EXPECT().NotifyCancel(any()).
 			Return(cancelCh).Times(1)
 		ch.EXPECT().Close().Return(fmt.Errorf("the error")).Times(1)
+		ch.EXPECT().Qos(any(), any(), any()).
+			Times(1)
 
 		conn := mock_consumer.NewMockAMQPConnection(ctrl)
 
@@ -975,6 +995,8 @@ func TestConsume(main *testing.T) {
 		ch.EXPECT().NotifyCancel(any()).
 			Return(cancelCh).Times(1)
 		ch.EXPECT().Close().Return(amqp.ErrClosed).Times(1)
+		ch.EXPECT().Qos(any(), any(), any()).
+			Times(1)
 
 		conn := mock_consumer.NewMockAMQPConnection(ctrl)
 
@@ -1023,6 +1045,7 @@ func TestConsume(main *testing.T) {
 		ch := mock_consumer.NewMockAMQPChannel(ctrl)
 		ch.EXPECT().Consume(any(), any(), any(), any(), any(), any(), any()).
 			Return(msgCh, nil).Times(1)
+		ch.EXPECT().Qos(any(), any(), any()).Times(1)
 		ch.EXPECT().NotifyClose(any()).
 			Return(chCloseCh).Times(1)
 		ch.EXPECT().NotifyCancel(any()).
@@ -1045,6 +1068,7 @@ func TestConsume(main *testing.T) {
 		newCh := mock_consumer.NewMockAMQPChannel(ctrl)
 		newCh.EXPECT().Consume(any(), any(), any(), any(), any(), any(), any()).
 			Return(newNsgCh, nil).Times(1)
+		newCh.EXPECT().Qos(any(), any(), any()).Times(1)
 		newCh.EXPECT().NotifyClose(any()).
 			Return(newChCloseCh).Times(1)
 		newCh.EXPECT().NotifyCancel(any()).
@@ -1107,6 +1131,8 @@ func TestConsume(main *testing.T) {
 		ch := mock_consumer.NewMockAMQPChannel(ctrl)
 		ch.EXPECT().Consume(any(), any(), any(), any(), any(), any(), any()).
 			Return(msgCh, nil).Times(1)
+		ch.EXPECT().Qos(any(), any(), any()).
+			Times(1)
 		ch.EXPECT().NotifyClose(any()).
 			Return(chCloseCh).Times(1)
 		ch.EXPECT().NotifyCancel(any()).
@@ -1171,6 +1197,8 @@ func TestConcurrency(main *testing.T) {
 		ch := mock_consumer.NewMockAMQPChannel(ctrl)
 		ch.EXPECT().Consume(any(), any(), any(), any(), any(), any(), any()).
 			Return(msgCh, nil).Times(1)
+		ch.EXPECT().Qos(any(), any(), any()).
+			Times(1)
 		ch.EXPECT().NotifyClose(any()).
 			Return(chCloseCh).Times(1)
 		ch.EXPECT().NotifyCancel(any()).
@@ -1184,6 +1212,8 @@ func TestConcurrency(main *testing.T) {
 		newCh := mock_consumer.NewMockAMQPChannel(ctrl)
 		newCh.EXPECT().Consume(any(), any(), any(), any(), any(), any(), any()).
 			Return(msgCh, nil).Times(1)
+		newCh.EXPECT().Qos(any(), any(), any()).
+			Times(1)
 		newCh.EXPECT().NotifyClose(any()).
 			Return(newChCloseCh).Times(1)
 		newCh.EXPECT().NotifyCancel(any()).
@@ -1258,6 +1288,8 @@ func TestConcurrency(main *testing.T) {
 		ch := mock_consumer.NewMockAMQPChannel(ctrl)
 		ch.EXPECT().Consume(any(), any(), any(), any(), any(), any(), any()).
 			Return(msgCh, nil).Times(1)
+		ch.EXPECT().Qos(any(), any(), any()).
+			Times(1)
 		ch.EXPECT().NotifyClose(any()).
 			Return(chCloseCh).Times(1)
 		ch.EXPECT().NotifyCancel(any()).
@@ -1331,6 +1363,8 @@ func TestConcurrency(main *testing.T) {
 		ch := mock_consumer.NewMockAMQPChannel(ctrl)
 		ch.EXPECT().Consume(any(), any(), any(), any(), any(), any(), any()).
 			Return(msgCh, nil).Times(1)
+		ch.EXPECT().Qos(any(), any(), any()).
+			Times(1)
 		ch.EXPECT().NotifyClose(any()).
 			Return(chCloseCh).Times(1)
 		ch.EXPECT().NotifyCancel(any()).
@@ -1342,6 +1376,8 @@ func TestConcurrency(main *testing.T) {
 		newCh := mock_consumer.NewMockAMQPChannel(ctrl)
 		newCh.EXPECT().Consume(any(), any(), any(), any(), any(), any(), any()).
 			Return(msgCh, nil).Times(1)
+		newCh.EXPECT().Qos(any(), any(), any()).
+			Times(1)
 		newCh.EXPECT().NotifyClose(any()).
 			Return(newChCloseCh).Times(1)
 		newCh.EXPECT().NotifyCancel(any()).
@@ -1399,7 +1435,7 @@ func TestConcurrency(main *testing.T) {
 	})
 }
 
-func TestExchange(main *testing.T) {
+func TestOptions(main *testing.T) {
 	main.Run("ReadyWithQueue", func(t *testing.T) {
 		defer goleak.VerifyNone(t)
 
@@ -1418,6 +1454,8 @@ func TestExchange(main *testing.T) {
 			Consume("theQueue", any(), any(), any(), any(), any(), any()).
 			Return(msgCh, nil).
 			AnyTimes()
+		ch.EXPECT().Qos(any(), any(), any()).
+			Times(1)
 		ch.EXPECT().
 			NotifyClose(any()).
 			AnyTimes()
@@ -1477,6 +1515,8 @@ func TestExchange(main *testing.T) {
 			Consume(any(), any(), any(), any(), any(), any(), any()).
 			Return(msgCh, nil).
 			AnyTimes()
+		ch.EXPECT().Qos(any(), any(), any()).
+			Times(1)
 		ch.EXPECT().
 			QueueDeclare(any(), any(), any(), any(), any(), any()).
 			Return(amqp.Queue{Name: "theTmpQueue"}, nil)
@@ -1541,6 +1581,11 @@ func TestExchange(main *testing.T) {
 			QueueDeclare(any(), any(), any(), any(), any(), any()).
 			Return(amqp.Queue{}, fmt.Errorf("theError"))
 		ch.EXPECT().
+			QueueBind(any(), any(), any(), any(), any()).
+			AnyTimes()
+		ch.EXPECT().Qos(any(), any(), any()).
+			Times(1)
+		ch.EXPECT().
 			NotifyClose(any()).
 			AnyTimes()
 		ch.EXPECT().
@@ -1598,6 +1643,8 @@ func TestExchange(main *testing.T) {
 		ch.EXPECT().
 			QueueBind(any(), any(), any(), any(), any()).
 			Return(fmt.Errorf("theError"))
+		ch.EXPECT().Qos(any(), any(), any()).
+			Times(1)
 		ch.EXPECT().
 			NotifyClose(any()).
 			AnyTimes()
@@ -1656,6 +1703,8 @@ func TestExchange(main *testing.T) {
 		ch.EXPECT().
 			QueueBind(any(), any(), any(), any(), any()).
 			Return(fmt.Errorf("theError"))
+		ch.EXPECT().Qos(any(), any(), any()).
+			Times(1)
 		ch.EXPECT().
 			NotifyClose(any()).
 			AnyTimes()
@@ -1713,7 +1762,7 @@ func TestExchange(main *testing.T) {
 		require.EqualError(t, err, "handler must be not nil")
 	})
 
-	main.Run("ErroredIfSetQueueAndExchange", func(t *testing.T) {
+	main.Run("ErroredIfSourceNotSet", func(t *testing.T) {
 		defer goleak.VerifyNone(t)
 
 		ctrl := gomock.NewController(t)
@@ -1729,13 +1778,11 @@ func TestExchange(main *testing.T) {
 		_, err := consumer.New(
 			connCh,
 			consumer.WithHandler(h),
-			consumer.WithExchange("aExchange", "aRoutingKey"),
-			consumer.WithQueue("aQueue"),
 		)
-		require.EqualError(t, err, "only one of WithQueue or WithExchange options must be set")
+		require.EqualError(t, err, "WithQueue or WithExchange or WithDeclareQueue or WithTmpQueue options must be set")
 	})
 
-	main.Run("ErroredIfNotSetQueueAndExchange", func(t *testing.T) {
+	main.Run("DeclareTemporaryQueueIfWithExchange", func(t *testing.T) {
 		defer goleak.VerifyNone(t)
 
 		ctrl := gomock.NewController(t)
@@ -1744,15 +1791,273 @@ func TestExchange(main *testing.T) {
 		h := handlerStub(logger.NewTest())
 
 		conn := mock_consumer.NewMockAMQPConnection(ctrl)
+		ch := mock_consumer.NewMockAMQPChannel(ctrl)
+
+		ch.EXPECT().
+			Consume(any(), any(), any(), any(), any(), any(), any()).
+			AnyTimes()
+		ch.EXPECT().
+			Qos(any(), any(), any()).
+			Times(1)
+		ch.EXPECT().
+			QueueDeclare(any(), any(), any(), any(), any(), any()).
+			Return(amqp.Queue{Name: "theTmpQueue"}, nil).
+			Times(1)
+		ch.EXPECT().
+			QueueBind("theTmpQueue", "theKey", "theExchange", any(), any()).
+			Times(1)
+		ch.EXPECT().
+			NotifyCancel(any()).
+			AnyTimes()
+		ch.EXPECT().
+			NotifyClose(any()).
+			AnyTimes()
+		ch.EXPECT().
+			Close().
+			AnyTimes()
 
 		connCh := make(chan *consumer.Connection, 1)
 		connCh <- consumer.NewConnection(conn, nil)
 
-		_, err := consumer.New(
+		readyCh := make(chan consumer.Ready, 2)
+		unreadyCh := make(chan error, 2)
+
+		c, err := consumer.New(
 			connCh,
+			consumer.WithInitFunc(initFuncStub(ch)),
 			consumer.WithHandler(h),
+			consumer.WithNotify(readyCh, unreadyCh),
+			consumer.WithExchange("theExchange", "theKey"),
 		)
-		require.EqualError(t, err, "WithQueue or WithExchange options must be set")
+		require.NoError(t, err)
+
+		assertUnready(t, unreadyCh, amqp.ErrClosed.Error())
+
+		c.Close()
+		assertClosed(t, c)
+	})
+
+	main.Run("WithTemporaryQueueResetOtherSources", func(t *testing.T) {
+		defer goleak.VerifyNone(t)
+
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		h := handlerStub(logger.NewTest())
+
+		conn := mock_consumer.NewMockAMQPConnection(ctrl)
+		ch := mock_consumer.NewMockAMQPChannel(ctrl)
+
+		ch.EXPECT().
+			Consume("theTmpQueue", any(), any(), any(), any(), any(), any()).
+			AnyTimes()
+		ch.EXPECT().
+			Qos(any(), any(), any()).
+			Times(1)
+		ch.EXPECT().
+			QueueDeclare("", false, true, true, false, nil).
+			Return(amqp.Queue{Name: "theTmpQueue"}, nil).
+			Times(1)
+		ch.EXPECT().
+			NotifyCancel(any()).
+			AnyTimes()
+		ch.EXPECT().
+			NotifyClose(any()).
+			AnyTimes()
+		ch.EXPECT().
+			Close().
+			AnyTimes()
+
+		connCh := make(chan *consumer.Connection, 1)
+		connCh <- consumer.NewConnection(conn, nil)
+
+		readyCh := make(chan consumer.Ready, 2)
+		unreadyCh := make(chan error, 2)
+
+		c, err := consumer.New(
+			connCh,
+			consumer.WithInitFunc(initFuncStub(ch)),
+			consumer.WithHandler(h),
+			consumer.WithNotify(readyCh, unreadyCh),
+			consumer.WithExchange("aExchange", "aKey"),
+			consumer.WithQueue("aQueue"),
+			consumer.WithDeclareQueue("aQueue", true, true, true, true, amqp.Table{}),
+
+			consumer.WithTmpQueue(),
+		)
+		require.NoError(t, err)
+
+		assertReady(t, readyCh, "theTmpQueue")
+
+		c.Close()
+		assertClosed(t, c)
+	})
+
+	main.Run("WithExchangeResetOtherSources", func(t *testing.T) {
+		defer goleak.VerifyNone(t)
+
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		h := handlerStub(logger.NewTest())
+
+		conn := mock_consumer.NewMockAMQPConnection(ctrl)
+		ch := mock_consumer.NewMockAMQPChannel(ctrl)
+
+		ch.EXPECT().
+			Consume("theTmpQueue", any(), any(), any(), any(), any(), any()).
+			AnyTimes()
+		ch.EXPECT().
+			Qos(any(), any(), any()).
+			Times(1)
+		ch.EXPECT().
+			QueueDeclare("", false, true, true, false, nil).
+			Return(amqp.Queue{Name: "theTmpQueue"}, nil).
+			Times(1)
+		ch.EXPECT().
+			QueueBind("theTmpQueue", "theRoutingKey", "theExchange", false, nil).
+			Return(nil).
+			Times(1)
+		ch.EXPECT().
+			NotifyCancel(any()).
+			AnyTimes()
+		ch.EXPECT().
+			NotifyClose(any()).
+			AnyTimes()
+		ch.EXPECT().
+			Close().
+			AnyTimes()
+
+		connCh := make(chan *consumer.Connection, 1)
+		connCh <- consumer.NewConnection(conn, nil)
+
+		readyCh := make(chan consumer.Ready, 2)
+		unreadyCh := make(chan error, 2)
+
+		c, err := consumer.New(
+			connCh,
+			consumer.WithInitFunc(initFuncStub(ch)),
+			consumer.WithHandler(h),
+			consumer.WithNotify(readyCh, unreadyCh),
+			consumer.WithQueue("aQueue"),
+			consumer.WithDeclareQueue("aQueue", true, true, true, true, amqp.Table{}),
+			consumer.WithTmpQueue(),
+
+			consumer.WithExchange("theExchange", "theRoutingKey"),
+		)
+		require.NoError(t, err)
+
+		assertReady(t, readyCh, "theTmpQueue")
+
+		c.Close()
+		assertClosed(t, c)
+	})
+
+	main.Run("WithQueueResetOtherSources", func(t *testing.T) {
+		defer goleak.VerifyNone(t)
+
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		h := handlerStub(logger.NewTest())
+
+		conn := mock_consumer.NewMockAMQPConnection(ctrl)
+		ch := mock_consumer.NewMockAMQPChannel(ctrl)
+
+		ch.EXPECT().
+			Consume("theQueue", any(), any(), any(), any(), any(), any()).
+			AnyTimes()
+		ch.EXPECT().
+			Qos(any(), any(), any()).
+			Times(1)
+		ch.EXPECT().
+			NotifyCancel(any()).
+			AnyTimes()
+		ch.EXPECT().
+			NotifyClose(any()).
+			AnyTimes()
+		ch.EXPECT().
+			Close().
+			AnyTimes()
+
+		connCh := make(chan *consumer.Connection, 1)
+		connCh <- consumer.NewConnection(conn, nil)
+
+		readyCh := make(chan consumer.Ready, 2)
+		unreadyCh := make(chan error, 2)
+
+		c, err := consumer.New(
+			connCh,
+			consumer.WithInitFunc(initFuncStub(ch)),
+			consumer.WithHandler(h),
+			consumer.WithNotify(readyCh, unreadyCh),
+			consumer.WithDeclareQueue("aQueue", true, true, true, true, amqp.Table{}),
+			consumer.WithTmpQueue(),
+			consumer.WithExchange("theExchange", "theRoutingKey"),
+
+			consumer.WithQueue("theQueue"),
+		)
+		require.NoError(t, err)
+
+		assertReady(t, readyCh, "theQueue")
+
+		c.Close()
+		assertClosed(t, c)
+	})
+
+	main.Run("WithDeclareQueueResetOtherSources", func(t *testing.T) {
+		defer goleak.VerifyNone(t)
+
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		h := handlerStub(logger.NewTest())
+
+		conn := mock_consumer.NewMockAMQPConnection(ctrl)
+		ch := mock_consumer.NewMockAMQPChannel(ctrl)
+
+		ch.EXPECT().
+			Consume("theDeclareQueue", any(), any(), any(), any(), any(), any()).
+			AnyTimes()
+		ch.EXPECT().
+			QueueDeclare("theDeclareQueue", true, true, true, true, amqp.Table{"theHeaderKey": "theHeaderValue"}).
+			Return(amqp.Queue{Name: "theDeclareQueue"}, nil).
+			Times(1)
+		ch.EXPECT().
+			Qos(any(), any(), any()).
+			Times(1)
+		ch.EXPECT().
+			NotifyCancel(any()).
+			AnyTimes()
+		ch.EXPECT().
+			NotifyClose(any()).
+			AnyTimes()
+		ch.EXPECT().
+			Close().
+			AnyTimes()
+
+		connCh := make(chan *consumer.Connection, 1)
+		connCh <- consumer.NewConnection(conn, nil)
+
+		readyCh := make(chan consumer.Ready, 2)
+		unreadyCh := make(chan error, 2)
+
+		c, err := consumer.New(
+			connCh,
+			consumer.WithInitFunc(initFuncStub(ch)),
+			consumer.WithHandler(h),
+			consumer.WithNotify(readyCh, unreadyCh),
+			consumer.WithTmpQueue(),
+			consumer.WithExchange("theExchange", "theRoutingKey"),
+			consumer.WithQueue("theQueue"),
+			consumer.WithDeclareQueue("theDeclareQueue", true, true, true, true, amqp.Table{"theHeaderKey": "theHeaderValue"}),
+		)
+		require.NoError(t, err)
+
+		assertReady(t, readyCh, "theDeclareQueue")
+
+		c.Close()
+		assertClosed(t, c)
 	})
 }
 

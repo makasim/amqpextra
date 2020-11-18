@@ -51,7 +51,6 @@ func ExampleNewConsumer() {
 		connCh,
 		consumer.WithHandler(h),
 		consumer.WithQueue("a_queue"),
-
 	)
 	if err != nil {
 		log.Fatal(err)
