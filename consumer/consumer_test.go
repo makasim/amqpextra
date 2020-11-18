@@ -2017,11 +2017,11 @@ func TestOptions(main *testing.T) {
 		ch := mock_consumer.NewMockAMQPChannel(ctrl)
 
 		ch.EXPECT().
-			Consume("theQueue", any(), any(), any(), any(), any(), any()).
+			Consume("theDeclareQueue", any(), any(), any(), any(), any(), any()).
 			AnyTimes()
 		ch.EXPECT().
-			QueueDeclare("theQueue", true, true, true, true, amqp.Table{"theHeaderKey": "theHeaderValue"}).
-			Return(amqp.Queue{Name: "theQueue"}, nil).
+			QueueDeclare("theDeclareQueue", true, true, true, true, amqp.Table{"theHeaderKey": "theHeaderValue"}).
+			Return(amqp.Queue{Name: "theDeclareQueue"}, nil).
 			Times(1)
 		ch.EXPECT().
 			Qos(any(), any(), any()).
@@ -2046,14 +2046,15 @@ func TestOptions(main *testing.T) {
 			connCh,
 			consumer.WithInitFunc(initFuncStub(ch)),
 			consumer.WithHandler(h),
-			consumer.WithNotify(readyCh, unreadyCh), consumer.WithTmpQueue(),
+			consumer.WithNotify(readyCh, unreadyCh),
+			consumer.WithTmpQueue(),
 			consumer.WithExchange("theExchange", "theRoutingKey"),
 			consumer.WithQueue("theQueue"),
-			consumer.WithDeclareQueue("theQueue", true, true, true, true, amqp.Table{"theHeaderKey": "theHeaderValue"}),
+			consumer.WithDeclareQueue("theDeclareQueue", true, true, true, true, amqp.Table{"theHeaderKey": "theHeaderValue"}),
 		)
 		require.NoError(t, err)
 
-		assertReady(t, readyCh, "theQueue")
+		assertReady(t, readyCh, "theDeclareQueue")
 
 		c.Close()
 		assertClosed(t, c)
