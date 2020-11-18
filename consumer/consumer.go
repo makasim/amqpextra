@@ -58,8 +58,13 @@ type Consumer struct {
 	exchange   string
 	routingKey string
 
-	queue        string
-	queueDeclare bool
+	queue             string
+	queueDeclare      bool
+	declareDurable    bool
+	declareAutoDelete bool
+	declareExclusive  bool
+	declareNoWait     bool
+	declareArgs       amqp.Table
 
 	consumer  string
 	autoAck   bool
@@ -129,12 +134,8 @@ func New(
 		return nil, fmt.Errorf("handler must be not nil")
 	}
 
-	if c.queue == "" && c.exchange == "" {
-		return nil, fmt.Errorf("WithQueue or WithExchange options must be set")
-	}
-
-	if c.queue != "" && c.exchange != "" && !c.queueDeclare {
-		return nil, fmt.Errorf("only one of WithQueue or WithExchange options must be set")
+	if c.queue == "" && c.exchange == "" && !c.queueDeclare{
+		return nil, fmt.Errorf("consumer source options must be set")
 	}
 
 	if c.initFunc == nil {
@@ -194,15 +195,39 @@ func WithNotify(readyCh chan Ready, unreadyCh chan error) Option {
 
 func WithExchange(exchange, routingKey string) Option {
 	return func(c *Consumer) {
+		c.resetSource()
 		c.exchange = exchange
 		c.routingKey = routingKey
+		c.queueDeclare = true
+		c.declareExclusive = true
 	}
 }
 
-func WithQueue(queue string, declare bool) Option {
+func WithQueue(queue string) Option {
 	return func(c *Consumer) {
+		c.resetSource()
 		c.queue = queue
-		c.queueDeclare = declare
+	}
+}
+
+func WithTmpQueue() Option {
+	return func(c *Consumer) {
+		c.resetSource()
+		c.queueDeclare = true
+		c.declareExclusive = true
+	}
+}
+
+func WithDeclareQueue(name string, durable, autoDelete, exclusive, noWait bool, args amqp.Table) Option {
+	return func(c *Consumer) {
+		c.resetSource()
+		c.queue = name
+		c.queueDeclare = true
+		c.declareDurable = durable
+		c.declareAutoDelete = autoDelete
+		c.declareExclusive = exclusive
+		c.declareNoWait = noWait
+		c.declareArgs = args
 	}
 }
 
@@ -221,6 +246,18 @@ func WithConsumeArgs(consumer string, autoAck, exclusive, noLocal, noWait bool, 
 		c.noWait = noWait
 		c.args = args
 	}
+}
+
+func (c *Consumer) resetSource() {
+	c.queue = ""
+	c.queueDeclare = false
+	c.declareDurable = false
+	c.declareAutoDelete = false
+	c.declareExclusive = false
+	c.declareNoWait = false
+	c.declareArgs = nil
+	c.routingKey = ""
+	c.exchange = ""
 }
 
 func (c *Consumer) Notify(readyCh chan Ready, unreadyCh chan error) (ready <-chan Ready, unready <-chan error) {
@@ -335,8 +372,8 @@ func (c *Consumer) channelState(conn AMQPConnection, connCloseCh <-chan struct{}
 		}
 
 		queue := c.queue
-		if c.queueDeclare || c.queue == "" {
-			q, declareErr := ch.QueueDeclare(queue, false, false, true, false, nil)
+		if c.queueDeclare {
+			q, declareErr := ch.QueueDeclare(c.queue, c.declareDurable, c.declareAutoDelete, c.declareExclusive, c.declareNoWait, c.declareArgs)
 			if declareErr != nil {
 				return c.waitRetry(declareErr)
 			}

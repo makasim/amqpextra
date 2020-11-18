@@ -22,7 +22,7 @@ func ExampleDialer_Consumer() {
 	})
 
 	c, _ := dialer.Consumer(
-		consumer.WithQueue("a_queue", false),
+		consumer.WithQueue("a_queue"),
 		consumer.WithHandler(h),
 	)
 
@@ -50,7 +50,7 @@ func ExampleNewConsumer() {
 	c, err := amqpextra.NewConsumer(
 		connCh,
 		consumer.WithHandler(h),
-		consumer.WithQueue("a_queue", false),
+		consumer.WithQueue("a_queue"),
 	)
 	if err != nil {
 		log.Fatal(err)
