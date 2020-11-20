@@ -200,7 +200,6 @@ func WithExchange(exchange, routingKey string) Option {
 		c.routingKey = routingKey
 		c.declareAutoDelete = true
 		c.queueDeclare = true
-		c.declareExclusive = true
 	}
 }
 
@@ -216,7 +215,6 @@ func WithTmpQueue() Option {
 		c.resetSource()
 		c.queueDeclare = true
 		c.declareAutoDelete = true
-		c.declareExclusive = true
 	}
 }
 
