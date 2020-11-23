@@ -100,17 +100,7 @@ func New(
 		}
 
 		if cap(stateCh) == 0 {
-			return nil, fmt.Errorf("unready chan is unbuffered")
-		}
-	}
-
-	for _, readyCh := range c.stateChs {
-		if readyCh == nil {
-			return nil, fmt.Errorf("ready chan must be not nil")
-		}
-
-		if cap(readyCh) == 0 {
-			return nil, fmt.Errorf("ready chan is unbuffered")
+			return nil, fmt.Errorf("state chan is unbuffered")
 		}
 	}
 
@@ -269,6 +259,7 @@ func (c *Consumer) Notify(stateCh chan State) <-chan State {
 	select {
 	case <-c.NotifyClosed():
 		close(stateCh)
+		return stateCh
 	default:
 	}
 
@@ -276,9 +267,9 @@ func (c *Consumer) Notify(stateCh chan State) <-chan State {
 	c.stateChs = append(c.stateChs, stateCh)
 	c.mu.Unlock()
 
-	state := <-c.internalStateCh
 	select {
-	case stateCh <- state:
+	case state := <-c.internalStateCh:
+		stateCh <- state
 	default:
 	}
 
@@ -310,7 +301,6 @@ func (c *Consumer) connectionState() {
 	state := State{
 		err:     amqp.ErrClosed,
 		Unready: true,
-		Ready:   nil,
 	}
 	c.setState(state)
 	for {
