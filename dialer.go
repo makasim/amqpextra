@@ -30,7 +30,6 @@ type AMQPConnection interface {
 type Connection struct {
 	amqpConn AMQPConnection
 	lostCh   chan struct{}
-	closeCh  chan struct{}
 }
 
 // AMQPConnection returns streadway's *amqp.Connection
@@ -41,10 +40,6 @@ func (c *Connection) AMQPConnection() *amqp.Connection {
 // NotifyLost notifies when current connection is lost and new once should be requested
 func (c *Connection) NotifyLost() chan struct{} {
 	return c.lostCh
-}
-
-func (c *Connection) NotifyClose() chan struct{} {
-	return c.closeCh
 }
 
 type config struct {
@@ -410,7 +405,7 @@ func (c *Dialer) connectedState(amqpConn AMQPConnection) error {
 
 	internalCloseCh := amqpConn.NotifyClose(make(chan *amqp.Error, 1))
 
-	conn := &Connection{amqpConn: amqpConn, lostCh: lostCh, closeCh: c.closedCh}
+	conn := &Connection{amqpConn: amqpConn, lostCh: lostCh}
 
 	c.logger.Printf("[DEBUG] connection ready")
 	c.notifyReady()

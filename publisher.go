@@ -44,7 +44,7 @@ func proxyPublisherConn(
 
 				select {
 				case publisherConnCh <- publisherConn:
-				case <-conn.NotifyClose():
+				case <-conn.NotifyLost():
 					continue
 				case <-publisherCloseCh:
 					return
