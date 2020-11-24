@@ -351,7 +351,7 @@ func (c *Consumer) channelState(conn AMQPConnection, connCloseCh <-chan struct{}
 
 		err = c.consumeState(ch, queue, connCloseCh)
 		if err == errChannelClosed {
-			c.internalStateCh <- c.notifyUnready(err)
+			c.notifyUnready(err)
 			continue
 		}
 
