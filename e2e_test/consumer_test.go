@@ -204,7 +204,7 @@ func assertConsumerReadyState(t *testing.T, stateCh <-chan consumer.State) {
 	select {
 	case state, ok := <-stateCh:
 		if !ok {
-			require.Equal(t, "permanently closed", state)
+			require.Equal(t, "permanently closed", state.Ready.Queue)
 			return
 		}
 
