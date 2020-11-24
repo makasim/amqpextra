@@ -288,8 +288,7 @@ func (c *Consumer) connectionState() {
 
 	c.logger.Printf("[DEBUG] consumer starting")
 
-	var err = amqp.ErrClosed
-	state := c.notifyUnready(err)
+	state := c.notifyUnready(amqp.ErrClosed)
 	for {
 		select {
 		case c.internalStateCh <- state:
