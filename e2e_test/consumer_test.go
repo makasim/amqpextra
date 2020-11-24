@@ -144,17 +144,17 @@ func TestConsumerWithExchange(t *testing.T) {
 		nil,
 	)
 	require.NoError(t, err)
-	readyCh := make(chan consumer.Ready, 1)
-	unreadyCh := make(chan error, 1)
+
+	stateCh := make(chan consumer.State, 1)
 	c, err := dialer.Consumer(
-		consumer.WithNotify(readyCh, unreadyCh),
+		consumer.WithNotify(stateCh),
 		consumer.WithExchange(exchangeName, ""),
 		consumer.WithHandler(h),
 	)
 	require.NoError(t, err)
 	defer c.Close()
-
-	assertConsumerReadyQueue(t, readyCh)
+	assertConsumerUnreadyState(t, stateCh, amqp.ErrClosed.Error())
+	assertConsumerReadyState(t, stateCh)
 
 	err = ch.Publish(exchangeName,
 		"",
@@ -176,12 +176,42 @@ func TestConsumerWithExchange(t *testing.T) {
 	dialer.Close()
 }
 
-func assertConsumerReadyQueue(t *testing.T, readyCh chan consumer.Ready) {
-	timer := time.NewTimer(time.Millisecond * 2000)
+func assertConsumerUnreadyState(t *testing.T, stateCh <-chan consumer.State, errString string) {
+	timer := time.NewTimer(time.Millisecond * 100)
 	defer timer.Stop()
 
 	select {
-	case <-readyCh:
+	case state, ok := <-stateCh:
+		if !ok {
+			require.Equal(t, "permanently closed", errString)
+			return
+		}
+
+		require.Nil(t, state.Ready)
+
+		require.NotNil(t, state.Unready)
+
+		require.EqualError(t, state.Unready.Err, errString)
+	case <-timer.C:
+		t.Fatal("consumer must be unready")
+	}
+}
+
+func assertConsumerReadyState(t *testing.T, stateCh <-chan consumer.State) {
+	timer := time.NewTimer(time.Millisecond * 100)
+	defer timer.Stop()
+
+	select {
+	case state, ok := <-stateCh:
+		if !ok {
+			require.Equal(t, "permanently closed", state)
+			return
+		}
+
+		require.Nil(t, state.Unready)
+
+		require.NotNil(t, state.Ready)
+
 	case <-timer.C:
 		t.Fatal("consumer must be ready")
 	}
