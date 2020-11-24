@@ -36,7 +36,7 @@ func ExampleDialer_ConnectionCh() {
 			select {
 			case conn, ok := <-connCh:
 				if !ok {
-					// connection permanently closed
+					// connection is permanently closed
 					return
 				}
 
@@ -59,9 +59,6 @@ func ExampleDialer_ConnectionCh() {
 					case <-conn.NotifyLost():
 						// connection is lost. let`s get new one
 						continue L1
-					case <-conn.NotifyClose():
-						// connection is closed
-						return
 					}
 				}
 			}
@@ -419,7 +416,6 @@ func TestConnectState(main *testing.T) {
 		assertReady(t, readyCh)
 
 		conn := <-dialer.ConnectionCh()
-		assertConnNotClosed(t, conn)
 		assertConnNotLost(t, conn)
 
 		dialer.Close()
@@ -745,7 +741,6 @@ func TestConnectedState(main *testing.T) {
 		assertReady(t, readyCh)
 
 		conn := <-dialer.ConnectionCh()
-		assertConnNotClosed(t, conn)
 		assertConnNotLost(t, conn)
 
 		dialer.Close()
@@ -788,22 +783,18 @@ func TestConnectedState(main *testing.T) {
 		assertReady(t, readyCh)
 
 		conn0 := <-dialer.ConnectionCh()
-		assertConnNotClosed(t, conn0)
 		assertConnNotLost(t, conn0)
 
 		closeCh0 <- amqp.ErrClosed
 
 		assertConnLost(t, conn0)
-		assertConnNotClosed(t, conn0)
 
 		assertReady(t, readyCh)
 
 		conn1 := <-dialer.ConnectionCh()
-		assertConnNotClosed(t, conn1)
 		assertConnNotLost(t, conn1)
 
 		dialer.Close()
-		assertConnClosed(t, conn1)
 		assertClosed(t, dialer)
 		assert.Equal(t, `[DEBUG] connection unready
 [DEBUG] dialing
@@ -846,23 +837,19 @@ func TestConnectedState(main *testing.T) {
 		assertReady(t, readyCh)
 
 		conn0 := <-dialer.ConnectionCh()
-		assertConnNotClosed(t, conn0)
 		assertConnNotLost(t, conn0)
 
 		close(closeCh0)
 
 		assertConnLost(t, conn0)
-		assertConnNotClosed(t, conn0)
 
 		assertReady(t, readyCh)
 
 		conn1 := <-dialer.ConnectionCh()
-		assertConnNotClosed(t, conn1)
 		assertConnNotLost(t, conn1)
 
 		dialer.Close()
 
-		assertConnClosed(t, conn1)
 		assertClosed(t, dialer)
 		assert.Equal(t, `[DEBUG] connection unready
 [DEBUG] dialing
@@ -1034,17 +1021,6 @@ func assertConnNotLost(t *testing.T, conn *amqpextra.Connection) {
 	}
 }
 
-func assertConnNotClosed(t *testing.T, conn *amqpextra.Connection) {
-	timer := time.NewTimer(time.Millisecond * 100)
-	defer timer.Stop()
-
-	select {
-	case <-conn.NotifyClose():
-		t.Fatal("connection should not be closed")
-	case <-timer.C:
-	}
-}
-
 func assertConnLost(t *testing.T, conn *amqpextra.Connection) {
 	timer := time.NewTimer(time.Millisecond * 100)
 	defer timer.Stop()
@@ -1053,17 +1029,6 @@ func assertConnLost(t *testing.T, conn *amqpextra.Connection) {
 	case <-conn.NotifyLost():
 	case <-timer.C:
 		t.Fatal("wait connection lost timeout")
-	}
-}
-
-func assertConnClosed(t *testing.T, conn *amqpextra.Connection) {
-	timer := time.NewTimer(time.Millisecond * 100)
-	defer timer.Stop()
-
-	select {
-	case <-conn.NotifyClose():
-	case <-timer.C:
-		t.Fatal("wait connection closed timeout")
 	}
 }
 

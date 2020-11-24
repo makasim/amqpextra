@@ -37,11 +37,11 @@ func proxyConsumerConn(
 					return
 				}
 
-				consumerConn := consumer.NewConnection(conn.AMQPConnection(), conn.NotifyClose())
+				consumerConn := consumer.NewConnection(conn.AMQPConnection(), conn.NotifyLost())
 
 				select {
 				case consumerConnCh <- consumerConn:
-				case <-conn.NotifyClose():
+				case <-conn.NotifyLost():
 					continue
 				case <-consumerCloseCh:
 					return
