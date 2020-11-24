@@ -262,12 +262,8 @@ func (c *Consumer) Notify(stateCh chan State) <-chan State {
 	select {
 	case state := <-c.internalStateCh:
 		stateCh <- state
-	}
-
-	select {
 	case <-c.NotifyClosed():
 		return stateCh
-	default:
 	}
 
 	c.mu.Lock()
@@ -313,7 +309,7 @@ func (c *Consumer) connectionState() {
 
 			if err := c.channelState(conn.AMQPConnection(), conn.NotifyClose()); err != nil {
 				c.logger.Printf("[DEBUG] consumer unready")
-				c.notifyUnready(err)
+				state = c.notifyUnready(err)
 				continue
 			}
 
