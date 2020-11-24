@@ -13,8 +13,17 @@ import (
 
 var errChannelClosed = fmt.Errorf("channel closed")
 
+type State struct {
+	Unready *Unready
+	Ready   *Ready
+}
+
 type Ready struct {
 	Queue string
+}
+
+type Unready struct {
+	Err error
 }
 
 type AMQPConnection interface {
@@ -45,12 +54,10 @@ type Consumer struct {
 	logger      logger.Logger
 	closeCh     chan struct{}
 
-	mu         sync.Mutex
-	unreadyChs []chan error
-	readyChs   []chan Ready
+	mu       sync.Mutex
+	stateChs []chan State
 
-	internalUnreadyCh chan error
-	internalReadyCh   chan Ready
+	internalStateCh chan State
 
 	prefetchCount int
 	qosGlobal     bool
@@ -79,11 +86,9 @@ func New(
 	opts ...Option,
 ) (*Consumer, error) {
 	c := &Consumer{
-		connCh: connCh,
-
-		internalUnreadyCh: make(chan error),
-		internalReadyCh:   make(chan Ready),
-		prefetchCount:     1,
+		connCh:          connCh,
+		internalStateCh: make(chan State),
+		prefetchCount:   1,
 
 		closeCh: make(chan struct{}),
 	}
@@ -92,23 +97,13 @@ func New(
 		opt(c)
 	}
 
-	for _, unreadyCh := range c.unreadyChs {
-		if unreadyCh == nil {
-			return nil, fmt.Errorf("unready chan must be not nil")
+	for _, stateCh := range c.stateChs {
+		if stateCh == nil {
+			return nil, fmt.Errorf("state chan must be not nil")
 		}
 
-		if cap(unreadyCh) == 0 {
-			return nil, fmt.Errorf("unready chan is unbuffered")
-		}
-	}
-
-	for _, readyCh := range c.readyChs {
-		if readyCh == nil {
-			return nil, fmt.Errorf("ready chan must be not nil")
-		}
-
-		if cap(readyCh) == 0 {
-			return nil, fmt.Errorf("ready chan is unbuffered")
+		if cap(stateCh) == 0 {
+			return nil, fmt.Errorf("state chan is unbuffered")
 		}
 	}
 
@@ -186,10 +181,9 @@ func WithQos(prefetchCount int, global bool) Option {
 	}
 }
 
-func WithNotify(readyCh chan Ready, unreadyCh chan error) Option {
+func WithNotify(stateCh chan State) Option {
 	return func(c *Consumer) {
-		c.readyChs = append(c.readyChs, readyCh)
-		c.unreadyChs = append(c.unreadyChs, unreadyCh)
+		c.stateChs = append(c.stateChs, stateCh)
 	}
 }
 
@@ -260,47 +254,23 @@ func (c *Consumer) resetSource() {
 	c.exchange = ""
 }
 
-func (c *Consumer) Notify(readyCh chan Ready, unreadyCh chan error) (ready <-chan Ready, unready <-chan error) {
-	if cap(readyCh) == 0 {
-		panic("ready chan is unbuffered")
-	}
-	if cap(unreadyCh) == 0 {
-		panic("unready chan is unbuffered")
+func (c *Consumer) Notify(stateCh chan State) <-chan State {
+	if cap(stateCh) == 0 {
+		panic("state chan is unbuffered")
 	}
 
 	select {
+	case state := <-c.internalStateCh:
+		stateCh <- state
 	case <-c.NotifyClosed():
-		close(unreadyCh)
-		return readyCh, unreadyCh
-	default:
+		return stateCh
 	}
 
 	c.mu.Lock()
-	c.readyChs = append(c.readyChs, readyCh)
-	c.unreadyChs = append(c.unreadyChs, unreadyCh)
+	c.stateChs = append(c.stateChs, stateCh)
 	c.mu.Unlock()
 
-	select {
-	case ready := <-c.internalReadyCh:
-		select {
-		case readyCh <- ready:
-		default:
-		}
-
-		return readyCh, unreadyCh
-	case err, ok := <-c.internalUnreadyCh:
-		if !ok {
-			close(unreadyCh)
-			return readyCh, unreadyCh
-		}
-
-		select {
-		case unreadyCh <- err:
-		default:
-		}
-
-		return readyCh, unreadyCh
-	}
+	return stateCh
 }
 
 func (c *Consumer) NotifyClosed() <-chan struct{} {
@@ -313,22 +283,15 @@ func (c *Consumer) Close() {
 
 func (c *Consumer) connectionState() {
 	defer c.cancelFunc()
-	defer func() {
-		c.mu.Lock()
-		defer c.mu.Unlock()
-		for _, unreadyCh := range c.unreadyChs {
-			close(unreadyCh)
-		}
-	}()
 	defer close(c.closeCh)
 	defer c.logger.Printf("[DEBUG] consumer stopped")
 
 	c.logger.Printf("[DEBUG] consumer starting")
-	var connErr error = amqp.ErrClosed
-	c.notifyUnready(connErr)
+
+	state := c.notifyUnready(amqp.ErrClosed)
 	for {
 		select {
-		case c.internalUnreadyCh <- connErr:
+		case c.internalStateCh <- state:
 			continue
 		case conn, ok := <-c.connCh:
 			if !ok {
@@ -345,8 +308,7 @@ func (c *Consumer) connectionState() {
 
 			if err := c.channelState(conn.AMQPConnection(), conn.NotifyClose()); err != nil {
 				c.logger.Printf("[DEBUG] consumer unready")
-				connErr = err
-				c.notifyUnready(connErr)
+				state = c.notifyUnready(err)
 				continue
 			}
 
@@ -389,6 +351,7 @@ func (c *Consumer) channelState(conn AMQPConnection, connCloseCh <-chan struct{}
 
 		err = c.consumeState(ch, queue, connCloseCh)
 		if err == errChannelClosed {
+			c.notifyUnready(err)
 			continue
 		}
 
@@ -397,7 +360,6 @@ func (c *Consumer) channelState(conn AMQPConnection, connCloseCh <-chan struct{}
 }
 
 func (c *Consumer) consumeState(ch AMQPChannel, queue string, connCloseCh <-chan struct{}) error {
-
 	msgCh, err := ch.Consume(
 		queue,
 		c.consumer,
@@ -421,7 +383,7 @@ func (c *Consumer) consumeState(ch AMQPChannel, queue string, connCloseCh <-chan
 
 	c.logger.Printf("[DEBUG] consumer ready")
 
-	c.notifyReady(queue)
+	state := c.notifyReady(queue)
 
 	go func() {
 		defer close(workerDoneCh)
@@ -432,7 +394,7 @@ func (c *Consumer) consumeState(ch AMQPChannel, queue string, connCloseCh <-chan
 
 	for {
 		select {
-		case c.internalReadyCh <- Ready{Queue: queue}:
+		case c.internalStateCh <- state:
 			continue
 		case <-cancelCh:
 			c.logger.Printf("[DEBUG] consumption canceled")
@@ -466,11 +428,11 @@ func (c *Consumer) waitRetry(err error) error {
 		}
 	}()
 
-	c.notifyUnready(err)
+	state := c.notifyUnready(err)
 
 	for {
 		select {
-		case c.internalUnreadyCh <- err:
+		case c.internalStateCh <- state:
 			continue
 		case <-timer.C:
 			return err
@@ -480,26 +442,36 @@ func (c *Consumer) waitRetry(err error) error {
 	}
 }
 
-func (c *Consumer) notifyUnready(err error) {
+func (c *Consumer) notifyReady(queue string) State {
+	state := State{
+		Ready: &Ready{Queue: queue},
+	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	for _, ch := range c.unreadyChs {
+	for _, stateCh := range c.stateChs {
 		select {
-		case ch <- err:
-		default:
+		case stateCh <- state:
+		case <-stateCh:
+			stateCh <- state
 		}
 	}
+	return state
 }
 
-func (c *Consumer) notifyReady(queue string) {
+func (c *Consumer) notifyUnready(err error) State {
+	state := State{
+		Unready: &Unready{Err: err},
+	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	for _, ch := range c.readyChs {
+	for _, stateCh := range c.stateChs {
 		select {
-		case ch <- Ready{Queue: queue}:
-		default:
+		case stateCh <- state:
+		case <-stateCh:
+			stateCh <- state
 		}
 	}
+	return state
 }
 
 func (c *Consumer) close(ch AMQPChannel) {
