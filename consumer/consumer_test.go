@@ -2026,9 +2026,9 @@ func assertUnreadyState(t *testing.T, stateCh <-chan consumer.State, errString s
 			return
 		}
 
-		require.Nil(t, state.Ready)
+		require.Nil(t, state.Ready, fmt.Sprintf("%+v", state))
 
-		require.NotNil(t, state.Unready)
+		require.NotNil(t, state.Unready, fmt.Sprintf("%+v", state))
 
 		require.EqualError(t, state.Unready.Err, errString)
 	case <-timer.C:
@@ -2047,9 +2047,9 @@ func assertReadyState(t *testing.T, stateCh <-chan consumer.State, queue string)
 			return
 		}
 
-		require.Nil(t, state.Unready)
+		require.Nil(t, state.Unready, fmt.Sprintf("%+v", state))
 
-		require.NotNil(t, state.Ready)
+		require.NotNil(t, state.Ready, fmt.Sprintf("%+v", state))
 
 		require.Equal(t, state.Ready.Queue, queue)
 
