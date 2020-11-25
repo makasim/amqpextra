@@ -75,9 +75,9 @@ func TestNotify(main *testing.T) {
 		defer c.Close()
 
 		newStateCh := c.Notify(stateCh)
-		assertUnreadyState(t, stateCh, amqp.ErrClosed.Error())
+		assertUnready(t, stateCh, amqp.ErrClosed.Error())
 		connCh <- consumer.NewConnection(conn, nil)
-		assertUnreadyState(t, newStateCh, "the error")
+		assertUnready(t, newStateCh, "the error")
 		c.Close()
 		assertClosed(t, c)
 
@@ -128,8 +128,8 @@ func TestNotify(main *testing.T) {
 
 		newStateCh := c.Notify(stateCh)
 		connCh <- consumer.NewConnection(conn, nil)
-		assertUnreadyState(t, newStateCh, amqp.ErrClosed.Error())
-		assertReadyState(t, newStateCh, "theQueue")
+		assertUnready(t, newStateCh, amqp.ErrClosed.Error())
+		assertReady(t, newStateCh, "theQueue")
 
 		c.Close()
 		assertClosed(t, c)
@@ -160,14 +160,14 @@ func TestUnready(main *testing.T) {
 
 		c, err := consumer.New(
 			connCh,
-			consumer.WithQueue("theQueue"),
+			consumer.WithQueue("aQueue"),
 			consumer.WithHandler(h),
 			consumer.WithLogger(l),
 			consumer.WithNotify(stateCh),
 		)
 		require.NoError(t, err)
 
-		assertUnreadyState(t, stateCh, amqp.ErrClosed.Error())
+		assertUnready(t, stateCh, amqp.ErrClosed.Error())
 		c.Close()
 		assertClosed(t, c)
 
@@ -193,7 +193,7 @@ func TestUnready(main *testing.T) {
 
 		c, err := consumer.New(
 			connCh,
-			consumer.WithQueue("theQueue"),
+			consumer.WithQueue("aQueue"),
 			consumer.WithHandler(h),
 			consumer.WithLogger(l),
 			consumer.WithContext(ctx),
@@ -201,7 +201,7 @@ func TestUnready(main *testing.T) {
 		)
 		require.NoError(t, err)
 
-		assertUnreadyState(t, stateCh, amqp.ErrClosed.Error())
+		assertUnready(t, stateCh, amqp.ErrClosed.Error())
 		cancelFunc()
 		assertClosed(t, c)
 
@@ -224,14 +224,14 @@ func TestUnready(main *testing.T) {
 
 		c, err := consumer.New(
 			connCh,
-			consumer.WithQueue("theQueue"),
+			consumer.WithQueue("aQueue"),
 			consumer.WithHandler(h),
 			consumer.WithLogger(l),
 			consumer.WithNotify(stateCh),
 		)
 		require.NoError(t, err)
 
-		assertUnreadyState(t, stateCh, amqp.ErrClosed.Error())
+		assertUnready(t, stateCh, amqp.ErrClosed.Error())
 		close(connCh)
 		assertClosed(t, c)
 
@@ -256,7 +256,7 @@ func TestUnready(main *testing.T) {
 
 		c, err := consumer.New(
 			connCh,
-			consumer.WithQueue("theQueue"),
+			consumer.WithQueue("aQueue"),
 			consumer.WithHandler(h),
 			consumer.WithLogger(l),
 			consumer.WithRetryPeriod(time.Millisecond*400),
@@ -267,7 +267,7 @@ func TestUnready(main *testing.T) {
 		)
 		require.NoError(t, err)
 
-		assertUnreadyState(t, stateCh, amqp.ErrClosed.Error())
+		assertUnready(t, stateCh, amqp.ErrClosed.Error())
 
 		connCh <- consumer.NewConnection(conn, nil)
 		time.Sleep(time.Millisecond * 200)
@@ -297,7 +297,7 @@ func TestUnready(main *testing.T) {
 
 		c, err := consumer.New(
 			connCh,
-			consumer.WithQueue("theQueue"),
+			consumer.WithQueue("aQueue"),
 			consumer.WithHandler(h),
 			consumer.WithLogger(l),
 			consumer.WithNotify(stateCh),
@@ -308,7 +308,7 @@ func TestUnready(main *testing.T) {
 		)
 		require.NoError(t, err)
 
-		assertUnreadyState(t, stateCh, amqp.ErrClosed.Error())
+		assertUnready(t, stateCh, amqp.ErrClosed.Error())
 		connCh <- consumer.NewConnection(conn, nil)
 		time.Sleep(time.Millisecond * 200)
 		close(connCh)
@@ -349,11 +349,11 @@ func TestUnready(main *testing.T) {
 		)
 		require.NoError(t, err)
 
-		assertUnreadyState(t, stateCh, amqp.ErrClosed.Error())
+		assertUnready(t, stateCh, amqp.ErrClosed.Error())
 		connCh <- consumer.NewConnection(conn, nil)
 
 		time.Sleep(time.Millisecond * 200)
-		assertUnreadyState(t, stateCh, "the error")
+		assertUnready(t, stateCh, "the error")
 
 		c.Close()
 		assertClosed(t, c)
@@ -392,7 +392,7 @@ func TestUnready(main *testing.T) {
 		)
 		require.NoError(t, err)
 
-		assertUnreadyState(t, stateCh, amqp.ErrClosed.Error())
+		assertUnready(t, stateCh, amqp.ErrClosed.Error())
 		connCh <- consumer.NewConnection(conn, nil)
 		time.Sleep(time.Millisecond * 200)
 		close(connCh)
@@ -433,7 +433,7 @@ func TestUnready(main *testing.T) {
 		)
 		require.NoError(t, err)
 
-		assertUnreadyState(t, stateCh, amqp.ErrClosed.Error())
+		assertUnready(t, stateCh, amqp.ErrClosed.Error())
 		connCh <- consumer.NewConnection(conn, nil)
 		time.Sleep(time.Millisecond * 200)
 		c.Close()
@@ -473,7 +473,7 @@ func TestUnready(main *testing.T) {
 		)
 		require.NoError(t, err)
 
-		assertUnreadyState(t, stateCh, amqp.ErrClosed.Error())
+		assertUnready(t, stateCh, amqp.ErrClosed.Error())
 		connCh <- consumer.NewConnection(conn, nil)
 		time.Sleep(time.Millisecond * 200)
 		close(connCh)
@@ -518,7 +518,7 @@ func TestUnready(main *testing.T) {
 		)
 		require.NoError(t, err)
 
-		assertUnreadyState(t, stateCh, amqp.ErrClosed.Error())
+		assertUnready(t, stateCh, amqp.ErrClosed.Error())
 		connCh <- consumer.NewConnection(conn, nil)
 		time.Sleep(time.Millisecond * 200)
 		c.Close()
@@ -562,7 +562,7 @@ func TestUnready(main *testing.T) {
 		)
 		require.NoError(t, err)
 
-		assertUnreadyState(t, stateCh, amqp.ErrClosed.Error())
+		assertUnready(t, stateCh, amqp.ErrClosed.Error())
 		connCh <- consumer.NewConnection(conn, nil)
 		time.Sleep(time.Millisecond * 200)
 		close(connCh)
@@ -617,8 +617,8 @@ func TestConsume(main *testing.T) {
 		)
 		require.NoError(t, err)
 
-		assertUnreadyState(t, stateCh, amqp.ErrClosed.Error())
-		assertReadyState(t, stateCh, "theQueue")
+		assertUnready(t, stateCh, amqp.ErrClosed.Error())
+		assertReady(t, stateCh, "theQueue")
 
 		c.Close()
 		assertClosed(t, c)
@@ -660,7 +660,6 @@ func TestConsume(main *testing.T) {
 		conn := mock_consumer.NewMockAMQPConnection(ctrl)
 
 		connCh := make(chan *consumer.Connection, 1)
-		connCh <- consumer.NewConnection(conn, nil)
 
 		c, err := consumer.New(
 			connCh,
@@ -671,8 +670,10 @@ func TestConsume(main *testing.T) {
 			consumer.WithInitFunc(initFuncStub(ch)),
 		)
 		require.NoError(t, err)
-		assertUnreadyState(t, stateCh, amqp.ErrClosed.Error())
-		assertReadyState(t, stateCh, "theQueue")
+		assertUnready(t, stateCh, amqp.ErrClosed.Error())
+		connCh <- consumer.NewConnection(conn, nil)
+		assertReady(t, stateCh, "theQueue")
+
 		c.Close()
 		assertClosed(t, c)
 
@@ -715,7 +716,6 @@ func TestConsume(main *testing.T) {
 		conn := mock_consumer.NewMockAMQPConnection(ctrl)
 
 		connCh := make(chan *consumer.Connection, 1)
-		connCh <- consumer.NewConnection(conn, nil)
 
 		c, err := consumer.New(
 			connCh,
@@ -728,8 +728,10 @@ func TestConsume(main *testing.T) {
 		)
 		require.NoError(t, err)
 
-		assertUnreadyState(t, stateCh, amqp.ErrClosed.Error())
-		assertReadyState(t, stateCh, "theQueue")
+		assertUnready(t, stateCh, amqp.ErrClosed.Error())
+		connCh <- consumer.NewConnection(conn, nil)
+		assertReady(t, stateCh, "theQueue")
+
 		c.Close()
 		assertClosed(t, c)
 
@@ -783,9 +785,10 @@ func TestConsume(main *testing.T) {
 		)
 		require.NoError(t, err)
 
-		assertUnreadyState(t, stateCh, amqp.ErrClosed.Error())
+		assertUnready(t, stateCh, amqp.ErrClosed.Error())
 		connCh <- conn
-		assertReadyState(t, stateCh, "theQueue")
+		assertReady(t, stateCh, "theQueue")
+
 		close(connCh)
 		close(closeCh)
 		assertClosed(t, c)
@@ -841,7 +844,6 @@ func TestConsume(main *testing.T) {
 		conn := mock_consumer.NewMockAMQPConnection(ctrl)
 
 		connCh := make(chan *consumer.Connection, 1)
-		connCh <- consumer.NewConnection(conn, nil)
 		stateCh := make(chan consumer.State, 2)
 
 		c, err := consumer.New(
@@ -856,13 +858,14 @@ func TestConsume(main *testing.T) {
 		require.NoError(t, err)
 		defer c.Close()
 
-		assertUnreadyState(t, stateCh, amqp.ErrClosed.Error())
-		assertReadyState(t, stateCh, "theQueue")
+		assertUnready(t, stateCh, amqp.ErrClosed.Error())
+		connCh <- consumer.NewConnection(conn, nil)
+		assertReady(t, stateCh, "theQueue")
 
 		time.Sleep(time.Millisecond * 50)
 		chCloseCh <- amqp.ErrClosed
-		assertUnreadyState(t, stateCh, "channel closed")
-		assertReadyState(t, stateCh, "theQueue")
+		assertUnready(t, stateCh, "channel closed")
+		assertReady(t, stateCh, "theQueue")
 
 		c.Close()
 		assertClosed(t, c)
@@ -908,7 +911,6 @@ func TestConsume(main *testing.T) {
 		conn := mock_consumer.NewMockAMQPConnection(ctrl)
 
 		connCh := make(chan *consumer.Connection, 1)
-		connCh <- consumer.NewConnection(conn, nil)
 
 		c, err := consumer.New(
 			connCh,
@@ -920,8 +922,9 @@ func TestConsume(main *testing.T) {
 			consumer.WithInitFunc(initFuncStub(ch)),
 		)
 		require.NoError(t, err)
-		assertUnreadyState(t, stateCh, amqp.ErrClosed.Error())
-		assertReadyState(t, stateCh, "theQueue")
+		assertUnready(t, stateCh, amqp.ErrClosed.Error())
+		connCh <- consumer.NewConnection(conn, nil)
+		assertReady(t, stateCh, "theQueue")
 		c.Close()
 		assertClosed(t, c)
 
@@ -962,7 +965,6 @@ func TestConsume(main *testing.T) {
 		conn := mock_consumer.NewMockAMQPConnection(ctrl)
 
 		connCh := make(chan *consumer.Connection, 1)
-		connCh <- consumer.NewConnection(conn, nil)
 		stateCh := make(chan consumer.State, 2)
 
 		c, err := consumer.New(
@@ -976,8 +978,9 @@ func TestConsume(main *testing.T) {
 		)
 		require.NoError(t, err)
 
-		assertUnreadyState(t, stateCh, amqp.ErrClosed.Error())
-		assertReadyState(t, stateCh, "theQueue")
+		assertUnready(t, stateCh, amqp.ErrClosed.Error())
+		connCh <- consumer.NewConnection(conn, nil)
+		assertReady(t, stateCh, "theQueue")
 		c.Close()
 		assertClosed(t, c)
 
@@ -1016,7 +1019,6 @@ func TestConsume(main *testing.T) {
 		conn := mock_consumer.NewMockAMQPConnection(ctrl)
 
 		connCh := make(chan *consumer.Connection, 1)
-		connCh <- consumer.NewConnection(conn, nil)
 
 		newChCloseCh := make(chan *amqp.Error)
 		newCancelCh := make(chan string)
@@ -1046,16 +1048,17 @@ func TestConsume(main *testing.T) {
 		)
 		require.NoError(t, err)
 
-		assertUnreadyState(t, stateCh, amqp.ErrClosed.Error())
-		assertReadyState(t, stateCh, "theQueue")
+		assertUnready(t, stateCh, amqp.ErrClosed.Error())
+		connCh <- consumer.NewConnection(conn, nil)
+		assertReady(t, stateCh, "theQueue")
 
 		time.Sleep(time.Millisecond * 50)
 		cancelCh <- "aTag"
-		assertUnreadyState(t, stateCh, "consumption canceled")
+		assertUnready(t, stateCh, "consumption canceled")
 
 		connCh <- consumer.NewConnection(newConn, nil)
 
-		assertReadyState(t, stateCh, "theQueue")
+		assertReady(t, stateCh, "theQueue")
 
 		c.Close()
 		assertClosed(t, c)
@@ -1102,7 +1105,6 @@ func TestConsume(main *testing.T) {
 
 		connCh := make(chan *consumer.Connection, 1)
 		stateCh := make(chan consumer.State, 2)
-		connCh <- consumer.NewConnection(conn, nil)
 
 		c, err := consumer.New(
 			connCh,
@@ -1115,8 +1117,10 @@ func TestConsume(main *testing.T) {
 		)
 		require.NoError(t, err)
 
-		assertUnreadyState(t, stateCh, amqp.ErrClosed.Error())
-		assertReadyState(t, stateCh, "theQueue")
+		assertUnready(t, stateCh, amqp.ErrClosed.Error())
+		connCh <- consumer.NewConnection(conn, nil)
+		assertReady(t, stateCh, "theQueue")
+
 		msgCh <- amqp.Delivery{}
 		msgCh <- amqp.Delivery{}
 		msgCh <- amqp.Delivery{}
@@ -1183,8 +1187,6 @@ func TestConcurrency(main *testing.T) {
 		closeCh := make(chan struct{})
 		conn := consumer.NewConnection(amqpConn, closeCh)
 		connCh := make(chan *consumer.Connection, 2)
-		connCh <- conn
-		connCh <- consumer.NewConnection(newConn, nil)
 
 		wg := &sync.WaitGroup{}
 		for i := 0; i < 10; i++ {
@@ -1207,9 +1209,12 @@ func TestConcurrency(main *testing.T) {
 			consumer.WithInitFunc(initFuncStub(ch, newCh)),
 		)
 		require.NoError(t, err)
+		connCh <- conn
+		assertUnready(t, stateCh, amqp.ErrClosed.Error())
 
-		assertUnreadyState(t, stateCh, amqp.ErrClosed.Error())
-		assertReadyState(t, stateCh, "theQueue")
+		connCh <- consumer.NewConnection(newConn, nil)
+
+		assertReady(t, stateCh, "theQueue")
 		time.Sleep(time.Millisecond * 300)
 		close(closeCh)
 		wg.Wait()
@@ -1258,7 +1263,7 @@ func TestConcurrency(main *testing.T) {
 		conn := mock_consumer.NewMockAMQPConnection(ctrl)
 
 		connCh := make(chan *consumer.Connection, 2)
-		connCh <- consumer.NewConnection(conn, nil)
+
 		stateCh := make(chan consumer.State, 2)
 
 		c, err := consumer.New(
@@ -1272,8 +1277,9 @@ func TestConcurrency(main *testing.T) {
 		)
 		require.NoError(t, err)
 
-		assertUnreadyState(t, stateCh, amqp.ErrClosed.Error())
-		assertReadyState(t, stateCh, "theQueue")
+		assertUnready(t, stateCh, amqp.ErrClosed.Error())
+		connCh <- consumer.NewConnection(conn, nil)
+		assertReady(t, stateCh, "theQueue")
 
 		wg := &sync.WaitGroup{}
 		for i := 0; i < 10; i++ {
@@ -1347,7 +1353,6 @@ func TestConcurrency(main *testing.T) {
 		conn := mock_consumer.NewMockAMQPConnection(ctrl)
 
 		connCh := make(chan *consumer.Connection, 2)
-		connCh <- consumer.NewConnection(conn, nil)
 		stateCh := make(chan consumer.State, 2)
 
 		wg := &sync.WaitGroup{}
@@ -1372,8 +1377,10 @@ func TestConcurrency(main *testing.T) {
 		)
 		require.NoError(t, err)
 
-		assertUnreadyState(t, stateCh, amqp.ErrClosed.Error())
-		assertReadyState(t, stateCh, "theQueue")
+		assertUnready(t, stateCh, amqp.ErrClosed.Error())
+		connCh <- consumer.NewConnection(conn, nil)
+		assertReady(t, stateCh, "theQueue")
+
 		time.Sleep(time.Millisecond * 300)
 		chCloseCh <- amqp.ErrClosed
 		wg.Wait()
@@ -1428,7 +1435,6 @@ func TestOptions(main *testing.T) {
 		conn := mock_consumer.NewMockAMQPConnection(ctrl)
 
 		connCh := make(chan *consumer.Connection, 1)
-		connCh <- consumer.NewConnection(conn, nil)
 
 		c, err := consumer.New(
 			connCh,
@@ -1440,9 +1446,9 @@ func TestOptions(main *testing.T) {
 		)
 		require.NoError(t, err)
 
-		assertUnreadyState(t, stateCh, amqp.ErrClosed.Error())
-
-		assertReadyState(t, stateCh, "theQueue")
+		assertUnready(t, stateCh, amqp.ErrClosed.Error())
+		connCh <- consumer.NewConnection(conn, nil)
+		assertReady(t, stateCh, "theQueue")
 
 		c.Close()
 		assertClosed(t, c)
@@ -1494,7 +1500,6 @@ func TestOptions(main *testing.T) {
 		conn := mock_consumer.NewMockAMQPConnection(ctrl)
 
 		connCh := make(chan *consumer.Connection, 1)
-		connCh <- consumer.NewConnection(conn, nil)
 
 		c, err := consumer.New(
 			connCh,
@@ -1506,9 +1511,9 @@ func TestOptions(main *testing.T) {
 		)
 		require.NoError(t, err)
 
-		assertUnreadyState(t, stateCh, amqp.ErrClosed.Error())
-
-		assertReadyState(t, stateCh, "theTmpQueue")
+		assertUnready(t, stateCh, amqp.ErrClosed.Error())
+		connCh <- consumer.NewConnection(conn, nil)
+		assertReady(t, stateCh, "theTmpQueue")
 
 		c.Close()
 		assertClosed(t, c)
@@ -1568,9 +1573,9 @@ func TestOptions(main *testing.T) {
 		)
 		require.NoError(t, err)
 
-		assertUnreadyState(t, stateCh, amqp.ErrClosed.Error())
+		assertUnready(t, stateCh, amqp.ErrClosed.Error())
 		time.Sleep(time.Millisecond * 50)
-		assertUnreadyState(t, stateCh, "theError")
+		assertUnready(t, stateCh, "theError")
 
 		c.Close()
 		assertClosed(t, c)
@@ -1627,9 +1632,9 @@ func TestOptions(main *testing.T) {
 		)
 		require.NoError(t, err)
 
-		assertUnreadyState(t, stateCh, amqp.ErrClosed.Error())
+		assertUnready(t, stateCh, amqp.ErrClosed.Error())
 		time.Sleep(time.Millisecond * 50)
-		assertUnreadyState(t, stateCh, "theError")
+		assertUnready(t, stateCh, "theError")
 
 		c.Close()
 		assertClosed(t, c)
@@ -1686,9 +1691,9 @@ func TestOptions(main *testing.T) {
 		)
 		require.NoError(t, err)
 
-		assertUnreadyState(t, stateCh, amqp.ErrClosed.Error())
+		assertUnready(t, stateCh, amqp.ErrClosed.Error())
 		time.Sleep(time.Millisecond * 50)
-		assertUnreadyState(t, stateCh, "theError")
+		assertUnready(t, stateCh, "theError")
 
 		c.Close()
 		assertClosed(t, c)
@@ -1785,7 +1790,7 @@ func TestOptions(main *testing.T) {
 		)
 		require.NoError(t, err)
 
-		assertUnreadyState(t, stateCh, amqp.ErrClosed.Error())
+		assertUnready(t, stateCh, amqp.ErrClosed.Error())
 
 		c.Close()
 		assertClosed(t, c)
@@ -1823,7 +1828,6 @@ func TestOptions(main *testing.T) {
 			AnyTimes()
 
 		connCh := make(chan *consumer.Connection, 1)
-		connCh <- consumer.NewConnection(conn, nil)
 
 		stateCh := make(chan consumer.State, 2)
 
@@ -1840,8 +1844,9 @@ func TestOptions(main *testing.T) {
 		)
 		require.NoError(t, err)
 
-		assertUnreadyState(t, stateCh, amqp.ErrClosed.Error())
-		assertReadyState(t, stateCh, "theTmpQueue")
+		assertUnready(t, stateCh, amqp.ErrClosed.Error())
+		connCh <- consumer.NewConnection(conn, nil)
+		assertReady(t, stateCh, "theTmpQueue")
 
 		c.Close()
 		assertClosed(t, c)
@@ -1883,7 +1888,6 @@ func TestOptions(main *testing.T) {
 			AnyTimes()
 
 		connCh := make(chan *consumer.Connection, 1)
-		connCh <- consumer.NewConnection(conn, nil)
 
 		stateCh := make(chan consumer.State, 2)
 
@@ -1900,8 +1904,9 @@ func TestOptions(main *testing.T) {
 		)
 		require.NoError(t, err)
 
-		assertUnreadyState(t, stateCh, amqp.ErrClosed.Error())
-		assertReadyState(t, stateCh, "theTmpQueue")
+		assertUnready(t, stateCh, amqp.ErrClosed.Error())
+		connCh <- consumer.NewConnection(conn, nil)
+		assertReady(t, stateCh, "theTmpQueue")
 
 		c.Close()
 		assertClosed(t, c)
@@ -1935,7 +1940,6 @@ func TestOptions(main *testing.T) {
 			AnyTimes()
 
 		connCh := make(chan *consumer.Connection, 1)
-		connCh <- consumer.NewConnection(conn, nil)
 
 		stateCh := make(chan consumer.State, 2)
 
@@ -1952,8 +1956,9 @@ func TestOptions(main *testing.T) {
 		)
 		require.NoError(t, err)
 
-		assertUnreadyState(t, stateCh, amqp.ErrClosed.Error())
-		assertReadyState(t, stateCh, "theQueue")
+		assertUnready(t, stateCh, amqp.ErrClosed.Error())
+		connCh <- consumer.NewConnection(conn, nil)
+		assertReady(t, stateCh, "theQueue")
 
 		c.Close()
 		assertClosed(t, c)
@@ -1991,7 +1996,6 @@ func TestOptions(main *testing.T) {
 			AnyTimes()
 
 		connCh := make(chan *consumer.Connection, 1)
-		connCh <- consumer.NewConnection(conn, nil)
 
 		stateCh := make(chan consumer.State, 2)
 
@@ -2007,15 +2011,16 @@ func TestOptions(main *testing.T) {
 		)
 		require.NoError(t, err)
 
-		assertUnreadyState(t, stateCh, amqp.ErrClosed.Error())
-		assertReadyState(t, stateCh, "theDeclareQueue")
+		assertUnready(t, stateCh, amqp.ErrClosed.Error())
+		connCh <- consumer.NewConnection(conn, nil)
+		assertReady(t, stateCh, "theDeclareQueue")
 
 		c.Close()
 		assertClosed(t, c)
 	})
 }
 
-func assertUnreadyState(t *testing.T, stateCh <-chan consumer.State, errString string) {
+func assertUnready(t *testing.T, stateCh <-chan consumer.State, errString string) {
 	timer := time.NewTimer(time.Millisecond * 100)
 	defer timer.Stop()
 
@@ -2036,7 +2041,7 @@ func assertUnreadyState(t *testing.T, stateCh <-chan consumer.State, errString s
 	}
 }
 
-func assertReadyState(t *testing.T, stateCh <-chan consumer.State, queue string) {
+func assertReady(t *testing.T, stateCh <-chan consumer.State, queue string) {
 	timer := time.NewTimer(time.Millisecond * 100)
 	defer timer.Stop()
 
