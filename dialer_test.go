@@ -520,7 +520,7 @@ func TestNotify(main *testing.T) {
 
 	main.Run("NoChangeStateWhileDial", func(t *testing.T) {
 		defer goleak.VerifyNone(t)
-
+		stateCh := make(chan amqpextra.State, 1)
 		l := logger.NewTest()
 		d, err := amqpextra.NewDialer(
 			amqpextra.WithURL("amqp://rabbitmq.host"),
@@ -533,7 +533,7 @@ func TestNotify(main *testing.T) {
 
 		newStateCh := d.Notify(make(chan amqpextra.State, 1))
 		assertUnready(t, newStateCh, amqp.ErrClosed.Error())
-		assertNoStateChanged(t, newStateCh)
+		assertNoStateChanged(t, stateCh)
 		time.Sleep(time.Millisecond * 100)
 		assertUnready(t, newStateCh, "the error")
 

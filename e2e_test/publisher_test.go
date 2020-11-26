@@ -25,11 +25,10 @@ func TestPublishWhileConnectionClosed(t *testing.T) {
 	rnum, err := rand.Int(rand.Reader, big.NewInt(10000000))
 	require.NoError(t, err)
 	connName := fmt.Sprintf("amqpextra-test-%d-%d", time.Now().UnixNano(), rnum)
-	readyCh := make(chan struct{}, 1)
-	unreadyCh := make(chan error, 1)
+	stateCh := make(chan amqpextra.State, 1)
 	dialer, err := amqpextra.NewDialer(
 		amqpextra.WithURL("amqp://guest:guest@rabbitmq:5672/amqpextra"),
-		amqpextra.WithNotify(readyCh, unreadyCh),
+		amqpextra.WithNotify(stateCh),
 		amqpextra.WithConnectionProperties(amqp.Table{
 			"connection_name": connName,
 		}),
@@ -55,7 +54,7 @@ waitOpened:
 	}
 	p, err := dialer.Publisher()
 	require.NoError(t, err)
-	assertPublisherReady(t, readyCh)
+	assertDialerReady(t, stateCh)
 
 	count := 0
 	errorCount := 0
@@ -102,15 +101,4 @@ func TestPublishConfirms(t *testing.T) {
 
 	dialer.Close()
 	<-pub.NotifyClosed()
-}
-
-func assertPublisherReady(t *testing.T, readyCh chan struct{}) {
-	timer := time.NewTimer(time.Millisecond * 2000)
-	defer timer.Stop()
-
-	select {
-	case <-readyCh:
-	case <-timer.C:
-		t.Fatal("publisher must be ready")
-	}
 }
