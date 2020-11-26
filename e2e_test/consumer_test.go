@@ -36,10 +36,9 @@ func TestConsumeWhileConnectionClosed(t *testing.T) {
 	rnum, err := rand.Int(rand.Reader, big.NewInt(10000000))
 	require.NoError(t, err)
 	connName := fmt.Sprintf("amqpextra-test-%d-%d", time.Now().UnixNano(), rnum)
-	readyCh := make(chan struct{}, 1)
-	unreadyCh := make(chan error, 1)
+	stateCh := make(chan amqpextra.State, 1)
 	dialer, err := amqpextra.NewDialer(
-		amqpextra.WithNotify(readyCh, unreadyCh),
+		amqpextra.WithNotify(stateCh),
 		amqpextra.WithURL("amqp://guest:guest@rabbitmq:5672/amqpextra"),
 		amqpextra.WithConnectionProperties(amqp.Table{
 			"connection_name": connName,
@@ -75,10 +74,15 @@ waitOpened:
 		return nil
 	})
 
-	c, err := dialer.Consumer(consumer.WithQueue(q), consumer.WithHandler(h))
+	consumerStateCh := make(chan consumer.State, 1)
+	c, err := dialer.Consumer(
+		consumer.WithQueue(q),
+		consumer.WithHandler(h),
+		consumer.WithNotify(consumerStateCh))
 	require.NoError(t, err)
 
-	assertConsumerReady(t, readyCh)
+	assertConsumerUnready(t, consumerStateCh, amqp.ErrClosed.Error())
+	assertConsumerReady(t, consumerStateCh)
 
 	count := 0
 	errorCount := 0
@@ -116,17 +120,16 @@ func TestConsumerWithExchange(t *testing.T) {
 	require.NoError(t, err)
 	exchangeName := fmt.Sprintf("exchange%d%d", time.Now().UnixNano(), rnum)
 
-	dialerReadyCh := make(chan struct{}, 1)
-	dialerUnreadyCh := make(chan error, 1)
+	dialerStateCh := make(chan amqpextra.State, 1)
 
 	dialer, err := amqpextra.NewDialer(
-		amqpextra.WithNotify(dialerReadyCh, dialerUnreadyCh),
+		amqpextra.WithNotify(dialerStateCh),
 		amqpextra.WithURL("amqp://guest:guest@rabbitmq:5672/amqpextra"),
 	)
 	require.NoError(t, err)
 	defer dialer.Close()
 
-	assertConsumerReady(t, dialerReadyCh)
+	assertDialerReady(t, dialerStateCh)
 
 	gotMsg := make(chan struct{})
 	h := consumer.HandlerFunc(func(ctx context.Context, msg amqp.Delivery) interface{} {
@@ -153,8 +156,8 @@ func TestConsumerWithExchange(t *testing.T) {
 	)
 	require.NoError(t, err)
 	defer c.Close()
-	assertConsumerUnreadyState(t, stateCh, amqp.ErrClosed.Error())
-	assertConsumerReadyState(t, stateCh)
+	assertConsumerUnready(t, stateCh, amqp.ErrClosed.Error())
+	assertConsumerReady(t, stateCh)
 
 	err = ch.Publish(exchangeName,
 		"",
@@ -176,16 +179,12 @@ func TestConsumerWithExchange(t *testing.T) {
 	dialer.Close()
 }
 
-func assertConsumerUnreadyState(t *testing.T, stateCh <-chan consumer.State, errString string) {
+func assertConsumerUnready(t *testing.T, stateCh <-chan consumer.State, errString string) {
 	timer := time.NewTimer(time.Millisecond * 100)
 	defer timer.Stop()
 
 	select {
-	case state, ok := <-stateCh:
-		if !ok {
-			require.Equal(t, "permanently closed", errString)
-			return
-		}
+	case state := <-stateCh:
 
 		require.Nil(t, state.Ready)
 
@@ -197,7 +196,7 @@ func assertConsumerUnreadyState(t *testing.T, stateCh <-chan consumer.State, err
 	}
 }
 
-func assertConsumerReadyState(t *testing.T, stateCh <-chan consumer.State) {
+func assertConsumerReady(t *testing.T, stateCh <-chan consumer.State) {
 	timer := time.NewTimer(time.Millisecond * 100)
 	defer timer.Stop()
 
@@ -212,17 +211,6 @@ func assertConsumerReadyState(t *testing.T, stateCh <-chan consumer.State) {
 
 		require.NotNil(t, state.Ready)
 
-	case <-timer.C:
-		t.Fatal("consumer must be ready")
-	}
-}
-
-func assertConsumerReady(t *testing.T, readyCh chan struct{}) {
-	timer := time.NewTimer(time.Millisecond * 2000)
-	defer timer.Stop()
-
-	select {
-	case <-readyCh:
 	case <-timer.C:
 		t.Fatal("consumer must be ready")
 	}

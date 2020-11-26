@@ -15,6 +15,17 @@ import (
 	"github.com/streadway/amqp"
 )
 
+type State struct {
+	Ready   *Ready
+	Unready *Unready
+}
+
+type Ready struct{}
+
+type Unready struct {
+	Err error
+}
+
 // Option could be used to configure Dialer
 type Option func(c *Dialer)
 
@@ -63,12 +74,10 @@ type Dialer struct {
 
 	connCh chan *Connection
 
-	mu         sync.Mutex
-	readyChs   []chan struct{}
-	unreadyChs []chan error
+	mu       sync.Mutex
+	stateChs []chan State
 
-	internalReadyCh   chan struct{}
-	internalUnreadyCh chan error
+	internalStateChan chan State
 
 	closedCh chan struct{}
 }
@@ -103,8 +112,7 @@ func NewDialer(opts ...Option) (*Dialer, error) {
 			retryPeriod: time.Second * 5,
 			logger:      logger.Discard,
 		},
-		internalUnreadyCh: make(chan error, 1),
-		internalReadyCh:   make(chan struct{}, 1),
+		internalStateChan: make(chan State),
 		connCh:            make(chan *Connection),
 		closedCh:          make(chan struct{}),
 	}
@@ -113,23 +121,13 @@ func NewDialer(opts ...Option) (*Dialer, error) {
 		opt(c)
 	}
 
-	for _, unreadyCh := range c.unreadyChs {
-		if unreadyCh == nil {
-			return nil, errors.New("unready chan must be not nil")
-		}
-
-		if cap(unreadyCh) == 0 {
-			return nil, errors.New("unready chan is unbuffered")
-		}
-	}
-
-	for _, readyCh := range c.readyChs {
+	for _, readyCh := range c.stateChs {
 		if readyCh == nil {
-			return nil, errors.New("ready chan must be not nil")
+			return nil, errors.New("state chan must be not nil")
 		}
 
 		if cap(readyCh) == 0 {
-			return nil, errors.New("ready chan is unbuffered")
+			return nil, errors.New("state chan is unbuffered")
 		}
 	}
 
@@ -204,10 +202,9 @@ func WithConnectionProperties(props amqp.Table) Option {
 }
 
 // WithNotify helps subscribe on Dialer ready/unready events.
-func WithNotify(readyCh chan struct{}, unreadyCh chan error) Option {
+func WithNotify(stateCh chan State) Option {
 	return func(c *Dialer) {
-		c.readyChs = append(c.readyChs, readyCh)
-		c.unreadyChs = append(c.unreadyChs, unreadyCh)
+		c.stateChs = append(c.stateChs, stateCh)
 	}
 }
 
@@ -221,47 +218,23 @@ func (c *Dialer) ConnectionCh() <-chan *Connection {
 }
 
 // Notify could be used to subscribe on Dialer ready/unready events
-func (c *Dialer) Notify(readyCh chan struct{}, unreadyCh chan error) (ready <-chan struct{}, unready <-chan error) {
-	if cap(readyCh) == 0 {
-		panic("ready chan is unbuffered")
-	}
-	if cap(unreadyCh) == 0 {
-		panic("unready chan is unbuffered")
+func (c *Dialer) Notify(stateCh chan State) <-chan State {
+	if cap(stateCh) == 0 {
+		panic("state chan is unbuffered")
 	}
 
 	select {
+	case state := <-c.internalStateChan:
+		stateCh <- state
 	case <-c.NotifyClosed():
-		close(unreadyCh)
-		return readyCh, unreadyCh
-	default:
+		return stateCh
 	}
 
 	c.mu.Lock()
-	c.readyChs = append(c.readyChs, readyCh)
-	c.unreadyChs = append(c.unreadyChs, unreadyCh)
+	c.stateChs = append(c.stateChs, stateCh)
 	c.mu.Unlock()
 
-	select {
-	case <-c.internalReadyCh:
-		select {
-		case readyCh <- struct{}{}:
-		default:
-		}
-
-		return readyCh, unreadyCh
-	case err, ok := <-c.internalUnreadyCh:
-		if !ok {
-			close(unreadyCh)
-			return readyCh, unreadyCh
-		}
-
-		select {
-		case unreadyCh <- err:
-		default:
-		}
-
-		return readyCh, unreadyCh
-	}
+	return stateCh
 }
 
 // NotifyClosed could be used to subscribe on Dialer closed event.
@@ -321,14 +294,6 @@ func (c *Dialer) Publisher(opts ...publisher.Option) (*publisher.Publisher, erro
 func (c *Dialer) connectState() {
 	defer close(c.connCh)
 	defer close(c.closedCh)
-	defer func() {
-		c.mu.Lock()
-		defer c.mu.Unlock()
-		for _, unreadyCh := range c.unreadyChs {
-			close(unreadyCh)
-		}
-
-	}()
 	defer c.cancelFunc()
 	defer c.logger.Printf("[DEBUG] connection closed")
 
@@ -336,10 +301,7 @@ func (c *Dialer) connectState() {
 	l := len(c.amqpUrls)
 
 	c.logger.Printf("[DEBUG] connection unready")
-
-	var connErr error = amqp.ErrClosed
-	c.notifyUnready(connErr)
-
+	state := State{Unready: &Unready{Err: amqp.ErrClosed}}
 	for {
 		select {
 		case <-c.ctx.Done():
@@ -365,7 +327,7 @@ func (c *Dialer) connectState() {
 	loop2:
 		for {
 			select {
-			case c.internalUnreadyCh <- connErr:
+			case c.internalStateChan <- state:
 				continue
 			case conn := <-connCh:
 				select {
@@ -376,7 +338,8 @@ func (c *Dialer) connectState() {
 				}
 
 				if err := c.connectedState(conn); err != nil {
-					c.logger.Printf("[DEBUG] connection unready")
+					c.logger.Printf("[DEBUG] connection unready: %s", err)
+					state = c.notifyUnready(err)
 					break loop2
 				}
 
@@ -384,7 +347,7 @@ func (c *Dialer) connectState() {
 			case err := <-errorCh:
 				c.logger.Printf("[DEBUG] connection unready: %v", err)
 				if retryErr := c.waitRetry(err); retryErr != nil {
-					connErr = retryErr
+					state = State{Unready: &Unready{Err: retryErr}}
 					break loop2
 				}
 
@@ -402,16 +365,14 @@ func (c *Dialer) connectedState(amqpConn AMQPConnection) error {
 
 	lostCh := make(chan struct{})
 	defer close(lostCh)
-
 	internalCloseCh := amqpConn.NotifyClose(make(chan *amqp.Error, 1))
 
 	conn := &Connection{amqpConn: amqpConn, lostCh: lostCh}
-
 	c.logger.Printf("[DEBUG] connection ready")
-	c.notifyReady()
+	state := c.notifyReady()
 	for {
 		select {
-		case c.internalReadyCh <- struct{}{}:
+		case c.internalStateChan <- state:
 			continue
 		case c.connCh <- conn:
 			continue
@@ -419,7 +380,6 @@ func (c *Dialer) connectedState(amqpConn AMQPConnection) error {
 			if !ok {
 				err = amqp.ErrClosed
 			}
-
 			return err
 		case <-c.ctx.Done():
 			return nil
@@ -427,26 +387,32 @@ func (c *Dialer) connectedState(amqpConn AMQPConnection) error {
 	}
 }
 
-func (c *Dialer) notifyUnready(err error) {
+func (c *Dialer) notifyUnready(err error) State {
+	state := State{Unready: &Unready{Err: err}}
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	for _, ch := range c.unreadyChs {
+	for _, stateCh := range c.stateChs {
 		select {
-		case ch <- err:
-		default:
+		case stateCh <- state:
+		case <-stateCh:
+			stateCh <- state
 		}
 	}
+	return state
 }
 
-func (c *Dialer) notifyReady() {
+func (c *Dialer) notifyReady() State {
+	state := State{Ready: &Ready{}}
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	for _, ch := range c.readyChs {
+	for _, stateCh := range c.stateChs {
 		select {
-		case ch <- struct{}{}:
-		default:
+		case stateCh <- state:
+		case <-stateCh:
+			stateCh <- state
 		}
 	}
+	return state
 }
 
 func (c *Dialer) waitRetry(err error) error {
@@ -458,12 +424,12 @@ func (c *Dialer) waitRetry(err error) error {
 		default:
 		}
 	}()
-
-	c.notifyUnready(err)
+	state := c.notifyUnready(err)
+	c.logger.Printf("[DEBUG] connection unready: %s", err)
 
 	for {
 		select {
-		case c.internalUnreadyCh <- err:
+		case c.internalStateChan <- state:
 			continue
 		case <-timer.C:
 			return err

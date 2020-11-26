@@ -6,6 +6,8 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	"time"
 
 	"github.com/makasim/amqpextra"
@@ -18,26 +20,24 @@ import (
 func TestDialerReconnectWhenClosedByClient(t *testing.T) {
 	defer goleak.VerifyNone(t)
 
-	readyCh := make(chan struct{}, 1)
-	unreadyCh := make(chan error, 2)
-
+	stateCh := make(chan amqpextra.State, 1)
 	dialer, err := amqpextra.NewDialer(
 		amqpextra.WithURL("amqp://guest:guest@rabbitmq:5672/amqpextra"),
-		amqpextra.WithNotify(readyCh, unreadyCh),
+		amqpextra.WithNotify(stateCh),
 	)
 	require.NoError(t, err)
 	defer dialer.Close()
 
-	assertConnectionReady(t, readyCh)
+	assertDialerReady(t, stateCh)
 	conn := <-dialer.ConnectionCh()
 
 	go func() {
 		time.Sleep(time.Millisecond * 100)
 		require.NoError(t, conn.AMQPConnection().Close())
 	}()
-	assertConnectionUnready(t, unreadyCh)
+	assertDialerUnready(t, stateCh)
 
-	assertConnectionReady(t, readyCh)
+	assertDialerReady(t, stateCh)
 }
 
 func TestDialerReconnectWhenClosedByServer(t *testing.T) {
@@ -45,15 +45,15 @@ func TestDialerReconnectWhenClosedByServer(t *testing.T) {
 
 	rnum, err := rand.Int(rand.Reader, big.NewInt(10000000))
 	require.NoError(t, err)
-	readyCh := make(chan struct{}, 1)
-	unreadyCh := make(chan error, 1)
+	stateCh := make(chan amqpextra.State, 1)
+
 	connName := fmt.Sprintf("amqpextra-test-%d-%d", time.Now().UnixNano(), rnum)
 	dialer, err := amqpextra.NewDialer(
 		amqpextra.WithURL("amqp://guest:guest@rabbitmq:5672/amqpextra"),
 		amqpextra.WithConnectionProperties(amqp.Table{
 			"connection_name": connName,
 		}),
-		amqpextra.WithNotify(readyCh, unreadyCh),
+		amqpextra.WithNotify(stateCh),
 	)
 	require.NoError(t, err)
 	defer dialer.Close()
@@ -74,33 +74,37 @@ waitOpened:
 		}
 	}
 
-	assertConnectionReady(t, readyCh)
+	assertDialerReady(t, stateCh)
 
 	require.True(t, rabbitmq.CloseConn(connName))
 
-	assertConnectionUnready(t, unreadyCh)
+	assertDialerUnready(t, stateCh)
 
-	assertConnectionReady(t, readyCh)
+	assertDialerReady(t, stateCh)
 }
 
-func assertConnectionReady(t *testing.T, readyCh chan struct{}) {
+func assertDialerReady(t *testing.T, stateCh <-chan amqpextra.State) {
 	timer := time.NewTimer(time.Millisecond * 2000)
 	defer timer.Stop()
 
 	select {
-	case <-readyCh:
+	case state := <-stateCh:
+		assert.Nil(t, state.Unready)
+		assert.NotNil(t, state.Ready)
 	case <-timer.C:
 		t.Fatal("dialer must be ready")
 	}
 }
 
-func assertConnectionUnready(t *testing.T, unreadyCh chan error) {
+func assertDialerUnready(t *testing.T, stateCh <-chan amqpextra.State) {
 	timer := time.NewTimer(time.Millisecond * 2000)
 	defer timer.Stop()
 
 	select {
-	case <-unreadyCh:
+	case state := <-stateCh:
+		assert.Nil(t, state.Ready)
+		assert.NotNil(t, state.Unready)
 	case <-timer.C:
-		t.Fatal("dialer must be unready")
+		t.Fatal("dialer must be ready")
 	}
 }
