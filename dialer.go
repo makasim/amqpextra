@@ -297,13 +297,12 @@ func (c *Dialer) connectState() {
 	defer c.cancelFunc()
 	defer c.logger.Printf("[DEBUG] connection closed")
 
-	var (
-		state     State
-		waitState = make(chan struct{})
-		i         = 0
-		l         = len(c.amqpUrls)
-	)
+	i := 0
+	l := len(c.amqpUrls)
 
+	c.logger.Printf("[DEBUG] connection unready")
+
+	state := State{Unready: &Unready{Err: amqp.ErrClosed}}
 	for {
 		select {
 		case <-c.ctx.Done():
@@ -329,8 +328,7 @@ func (c *Dialer) connectState() {
 	loop2:
 		for {
 			select {
-			case <-waitState:
-				c.internalStateChan <- state
+			case c.internalStateChan <- state:
 				continue
 			case conn := <-connCh:
 				select {
@@ -341,16 +339,16 @@ func (c *Dialer) connectState() {
 				}
 
 				if err := c.connectedState(conn); err != nil {
-					waitState <- struct{}{}
+					c.logger.Printf("[DEBUG] connection unready: %s", err)
 					state = c.notifyUnready(err)
 					break loop2
 				}
 
 				return
 			case err := <-errorCh:
+				c.logger.Printf("[DEBUG] connection unready: %v", err)
 				if retryErr := c.waitRetry(err); retryErr != nil {
-					waitState <- struct{}{}
-					state = c.notifyUnready(retryErr)
+					state = State{Unready: &Unready{Err: retryErr}}
 					break loop2
 				}
 
@@ -372,7 +370,7 @@ func (c *Dialer) connectedState(amqpConn AMQPConnection) error {
 	internalCloseCh := amqpConn.NotifyClose(make(chan *amqp.Error, 1))
 
 	conn := &Connection{amqpConn: amqpConn, lostCh: lostCh}
-
+	c.logger.Printf("[DEBUG] connection ready")
 	state := c.notifyReady()
 	for {
 		select {
@@ -402,7 +400,6 @@ func (c *Dialer) notifyUnready(err error) State {
 			stateCh <- state
 		}
 	}
-	c.logger.Printf("[DEBUG] connection unready: %s", err)
 	return state
 }
 
@@ -417,7 +414,6 @@ func (c *Dialer) notifyReady() State {
 			stateCh <- state
 		}
 	}
-	c.logger.Printf("[DEBUG] connection ready")
 	return state
 }
 
@@ -432,6 +428,7 @@ func (c *Dialer) waitRetry(err error) error {
 	}()
 
 	state := c.notifyUnready(err)
+	c.logger.Printf("[DEBUG] connection unready: %s", err)
 
 	for {
 		select {
