@@ -220,7 +220,7 @@ func (c *Dialer) ConnectionCh() <-chan *Connection {
 // Notify could be used to subscribe on Dialer ready/unready events
 func (c *Dialer) Notify(stateCh chan State) <-chan State {
 	if cap(stateCh) == 0 {
-		panic("ready chan is unbuffered")
+		panic("state chan is unbuffered")
 	}
 
 	select {
@@ -301,7 +301,6 @@ func (c *Dialer) connectState() {
 	l := len(c.amqpUrls)
 
 	c.logger.Printf("[DEBUG] connection unready")
-
 	state := State{Unready: &Unready{Err: amqp.ErrClosed}}
 	for {
 		select {
@@ -366,7 +365,6 @@ func (c *Dialer) connectedState(amqpConn AMQPConnection) error {
 
 	lostCh := make(chan struct{})
 	defer close(lostCh)
-
 	internalCloseCh := amqpConn.NotifyClose(make(chan *amqp.Error, 1))
 
 	conn := &Connection{amqpConn: amqpConn, lostCh: lostCh}
@@ -426,7 +424,6 @@ func (c *Dialer) waitRetry(err error) error {
 		default:
 		}
 	}()
-
 	state := c.notifyUnready(err)
 	c.logger.Printf("[DEBUG] connection unready: %s", err)
 
