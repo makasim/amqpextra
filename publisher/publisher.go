@@ -250,6 +250,7 @@ func (p *Publisher) connectionState() {
 
 	p.logger.Printf("[DEBUG] publisher starting")
 	state := State{Unready: &Unready{Err: amqp.ErrClosed}}
+
 	for {
 		select {
 		case conn, ok := <-p.connCh:
@@ -306,13 +307,13 @@ func (p *Publisher) channelState(conn AMQPConnection, connCloseCh <-chan struct{
 		}
 
 		err = p.publishState(ch, connCloseCh, resultChCh)
-		if err != nil {
-			p.notifyUnready(err)
-		}
 		close(confirmationCloseCh)
-		if err == errChannelClosed {
-			<-confirmationDoneCh
-			continue
+		if err != nil {
+			if err == errChannelClosed {
+				<-confirmationDoneCh
+				continue
+			}
+			p.notifyUnready(err)
 		}
 
 		p.close(ch)
