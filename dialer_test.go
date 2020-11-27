@@ -147,7 +147,6 @@ func TestConnectState(main *testing.T) {
 		assert.Equal(t, `[DEBUG] connection unready
 [DEBUG] dialing
 [DEBUG] connection unready: dialing errored
-[DEBUG] connection unready: dialing errored
 [DEBUG] connection closed
 `, l.Logs())
 	})
@@ -292,7 +291,6 @@ func TestConnectState(main *testing.T) {
 		assert.Equal(t, `[DEBUG] connection unready
 [DEBUG] dialing
 [DEBUG] connection unready: the error
-[DEBUG] connection unready: the error
 [DEBUG] connection closed
 `, l.Logs())
 	})
@@ -330,7 +328,6 @@ func TestConnectState(main *testing.T) {
 		assert.Equal(t, `[DEBUG] connection unready
 [DEBUG] dialing
 [DEBUG] connection unready: the error
-[DEBUG] connection unready: the error
 [DEBUG] connection closed
 `, l.Logs())
 	})
@@ -362,7 +359,6 @@ func TestConnectState(main *testing.T) {
 
 		assert.Equal(t, `[DEBUG] connection unready
 [DEBUG] dialing
-[DEBUG] connection unready: the error
 [DEBUG] connection unready: the error
 [DEBUG] connection closed
 `, l.Logs())
@@ -406,7 +402,6 @@ func TestConnectState(main *testing.T) {
 
 		assert.Equal(t, `[DEBUG] connection unready
 [DEBUG] dialing
-[DEBUG] connection unready: the error
 [DEBUG] connection unready: the error
 [DEBUG] dialing
 [DEBUG] connection ready
@@ -543,7 +538,6 @@ func TestNotify(main *testing.T) {
 		expected := `[DEBUG] connection unready
 [DEBUG] dialing
 [DEBUG] connection unready: the error
-[DEBUG] connection unready: the error
 [DEBUG] connection closed
 `
 		require.Equal(t, expected, l.Logs())
@@ -595,6 +589,7 @@ func TestNotify(main *testing.T) {
 		defer ctrl.Finish()
 
 		l := logger.NewTest()
+		stateCh := make(chan amqpextra.State, 1)
 
 		conn := mock_amqpextra.NewMockAMQPConnection(ctrl)
 		conn.EXPECT().NotifyClose(any()).AnyTimes()
@@ -604,23 +599,22 @@ func TestNotify(main *testing.T) {
 			amqpextra.WithURL("amqp://rabbitmq.host"),
 			amqpextra.WithLogger(l),
 			amqpextra.WithAMQPDial(
-				amqpDialStub(errors.New("the error")),
+				amqpDialStub(time.Millisecond*10, errors.New("the error")),
 			),
-			amqpextra.WithRetryPeriod(time.Millisecond*50),
+			amqpextra.WithRetryPeriod(time.Millisecond*100),
 		)
 		require.NoError(t, err)
 
-		newStateCh := d.Notify(make(chan amqpextra.State, 1))
-
+		newStateCh := d.Notify(stateCh)
 		assertUnready(t, newStateCh, amqp.ErrClosed.Error())
-		time.Sleep(time.Millisecond * 20)
+
+		assertUnready(t, newStateCh, "the error")
 
 		d.Close()
 		assertClosed(t, d)
 
 		expected := `[DEBUG] connection unready
 [DEBUG] dialing
-[DEBUG] connection unready: the error
 [DEBUG] connection unready: the error
 [DEBUG] connection closed
 `
@@ -906,11 +900,11 @@ func assertReady(t *testing.T, stateCh <-chan amqpextra.State) {
 	}
 }
 
-func assertNoStateChanged(t *testing.T, readyCh <-chan amqpextra.State) {
+func assertNoStateChanged(t *testing.T, stateCh <-chan amqpextra.State) {
 	timer := time.NewTimer(time.Millisecond * 100)
 	defer timer.Stop()
 	select {
-	case <-readyCh:
+	case <-stateCh:
 		t.Fatal("state change is not expected")
 	case <-timer.C:
 	}

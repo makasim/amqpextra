@@ -425,8 +425,6 @@ func (c *Dialer) waitRetry(err error) error {
 		}
 	}()
 	state := c.notifyUnready(err)
-	c.logger.Printf("[DEBUG] connection unready: %s", err)
-
 	for {
 		select {
 		case c.internalStateChan <- state:
