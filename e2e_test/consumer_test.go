@@ -81,7 +81,6 @@ waitOpened:
 		consumer.WithNotify(consumerStateCh))
 	require.NoError(t, err)
 
-	assertConsumerUnready(t, consumerStateCh, amqp.ErrClosed.Error())
 	assertConsumerReady(t, consumerStateCh)
 
 	count := 0
@@ -156,7 +155,7 @@ func TestConsumerWithExchange(t *testing.T) {
 	)
 	require.NoError(t, err)
 	defer c.Close()
-	assertConsumerUnready(t, stateCh, amqp.ErrClosed.Error())
+
 	assertConsumerReady(t, stateCh)
 
 	err = ch.Publish(exchangeName,
@@ -177,23 +176,6 @@ func TestConsumerWithExchange(t *testing.T) {
 	c.Close()
 	<-c.NotifyClosed()
 	dialer.Close()
-}
-
-func assertConsumerUnready(t *testing.T, stateCh <-chan consumer.State, errString string) {
-	timer := time.NewTimer(time.Millisecond * 100)
-	defer timer.Stop()
-
-	select {
-	case state := <-stateCh:
-
-		require.Nil(t, state.Ready)
-
-		require.NotNil(t, state.Unready)
-
-		require.EqualError(t, state.Unready.Err, errString)
-	case <-timer.C:
-		t.Fatal("consumer must be unready")
-	}
 }
 
 func assertConsumerReady(t *testing.T, stateCh <-chan consumer.State) {
