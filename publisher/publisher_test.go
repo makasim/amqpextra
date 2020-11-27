@@ -24,7 +24,7 @@ func TestNotify(main *testing.T) {
 
 		stateCh := make(chan publisher.State)
 
-		require.PanicsWithValue(t, "ready chan is unbuffered", func() {
+		require.PanicsWithValue(t, "state chan is unbuffered", func() {
 			_, _, p := newPublisher()
 			defer p.Close()
 			p.Notify(stateCh)
@@ -229,16 +229,14 @@ func TestNotify(main *testing.T) {
 			AnyTimes()
 
 		_, _, p := newPublisher(
-			publisher.WithInitFunc(initFuncStub(ch)),
+			publisher.WithInitFunc(initFuncStub(ch, "the error")),
 		)
 
 		newStateCh := p.Notify(stateCh)
+		p.Close()
 
 		assertUnready(t, newStateCh, amqp.ErrClosed.Error())
-
-		p.Close()
 		assertClosed(t, p)
-		assertUnready(t, newStateCh, "permanently closed")
 	})
 }
 
@@ -267,7 +265,7 @@ func TestReconnection(main *testing.T) {
 			Times(1)
 
 		retry := 2
-		stateCh := make(chan publisher.State, 2)
+		stateCh := make(chan publisher.State, 1)
 
 		connCh, l, p := newPublisher(
 			publisher.WithNotify(stateCh),
@@ -284,9 +282,12 @@ func TestReconnection(main *testing.T) {
 
 		amqpConn := mock_publisher.NewMockAMQPConnection(ctrl)
 		connCh <- publisher.NewConnection(amqpConn, nil)
+		assertUnready(t, stateCh, fmt.Sprintf("init func errored: %d", 1))
+		assertUnready(t, stateCh, fmt.Sprintf("init func errored: %d", 1))
 		connCh <- publisher.NewConnection(amqpConn, nil)
+		assertUnready(t, stateCh, fmt.Sprintf("init func errored: %d", 0))
+		assertUnready(t, stateCh, fmt.Sprintf("init func errored: %d", 0))
 		connCh <- publisher.NewConnection(amqpConn, nil)
-
 		assertReady(t, stateCh)
 
 		p.Close()

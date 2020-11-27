@@ -214,18 +214,22 @@ func (p *Publisher) Go(msg Message) <-chan error {
 	default:
 	}
 
-	select {
-	case p.publishingCh <- msg:
-	case <-msg.Context.Done():
-		msg.ResultCh <- fmt.Errorf("message: %v", msg.Context.Err())
-	// noinspection GoNilness
-	case state := <-stateCh:
-		if state.Unready != nil {
-			msg.ResultCh <- fmt.Errorf("publisher not ready")
+loop:
+	for {
+		select {
+		case p.publishingCh <- msg:
+		case <-msg.Context.Done():
+			msg.ResultCh <- fmt.Errorf("message: %v", msg.Context.Err())
+		// noinspection GoNilness
+		case state := <-stateCh:
+			if state.Ready != nil {
+				msg.ResultCh <- fmt.Errorf("publisher not ready")
+				break loop
+			}
+			continue
+		case <-p.ctx.Done():
+			msg.ResultCh <- fmt.Errorf("publisher stopped")
 		}
-
-	case <-p.ctx.Done():
-		msg.ResultCh <- fmt.Errorf("publisher stopped")
 	}
 
 	return msg.ResultCh
@@ -467,9 +471,7 @@ func (p *Publisher) waitRetry(err error) error {
 		default:
 		}
 	}()
-
 	state := p.notifyUnready(err)
-
 	for {
 		select {
 		case p.internalStateCh <- state:
