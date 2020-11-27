@@ -308,11 +308,11 @@ func (p *Publisher) channelState(conn AMQPConnection, connCloseCh <-chan struct{
 
 		err = p.publishState(ch, connCloseCh, resultChCh)
 		close(confirmationCloseCh)
+		if err == errChannelClosed {
+			<-confirmationDoneCh
+			continue
+		}
 		if err != nil {
-			if err == errChannelClosed {
-				<-confirmationDoneCh
-				continue
-			}
 			p.notifyUnready(err)
 		}
 

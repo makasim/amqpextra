@@ -283,9 +283,7 @@ func TestReconnection(main *testing.T) {
 		amqpConn := mock_publisher.NewMockAMQPConnection(ctrl)
 		connCh <- publisher.NewConnection(amqpConn, nil)
 		assertUnready(t, stateCh, fmt.Sprintf("init func errored: %d", 1))
-		assertUnready(t, stateCh, fmt.Sprintf("init func errored: %d", 1))
 		connCh <- publisher.NewConnection(amqpConn, nil)
-		assertUnready(t, stateCh, fmt.Sprintf("init func errored: %d", 0))
 		assertUnready(t, stateCh, fmt.Sprintf("init func errored: %d", 0))
 		connCh <- publisher.NewConnection(amqpConn, nil)
 		assertReady(t, stateCh)
@@ -316,16 +314,14 @@ func TestReconnection(main *testing.T) {
 			publisher.WithInitFunc(func(conn publisher.AMQPConnection) (publisher.AMQPChannel, error) {
 				return nil, fmt.Errorf("the error")
 			}),
-			publisher.WithRestartSleep(time.Millisecond*400),
+			publisher.WithRestartSleep(time.Millisecond*100),
 		)
 		defer p.Close()
 
 		amqpConn := mock_publisher.NewMockAMQPConnection(ctrl)
 		connCh <- publisher.NewConnection(amqpConn, nil)
 
-		assertUnready(t, stateCh, amqp.ErrClosed.Error())
-
-		time.Sleep(time.Millisecond * 200)
+		time.Sleep(time.Millisecond * 50)
 		assertUnready(t, stateCh, "the error")
 
 		p.Close()
@@ -447,7 +443,7 @@ func TestReconnection(main *testing.T) {
 		closeCh := make(chan struct{})
 		conn := publisher.NewConnection(amqpConn, closeCh)
 
-		emptyUnreadyCh(stateCh)
+		assertNoStateChanged(t, stateCh)
 
 		connCh <- conn
 		assertReady(t, stateCh)
@@ -459,7 +455,7 @@ func TestReconnection(main *testing.T) {
 		time.Sleep(time.Millisecond * 50)
 		p.Close()
 		assertClosed(t, p)
-		assertUnready(t, stateCh, "permanently closed")
+		assertNoStateChanged(t, stateCh)
 
 		expected := `[DEBUG] publisher starting
 [DEBUG] publisher ready
@@ -589,8 +585,6 @@ func TestReconnection(main *testing.T) {
 		connCh <- publisher.NewConnection(amqpConn, nil)
 		assertReady(t, stateCh)
 
-		assertUnready(t, stateCh, amqp.ErrClosed.Error())
-
 		chCloseCh <- amqp.ErrClosed
 		assertUnready(t, stateCh, "init func errored")
 
@@ -612,8 +606,8 @@ func TestReconnection(main *testing.T) {
 	})
 }
 
-func TestUnreadyPublisher(main *testing.T) {
-	main.Run("NewPublisherUnready", func(t *testing.T) {
+func TestUnreadyReady(main *testing.T) {
+	main.Run("NewPublisherNoChangeState", func(t *testing.T) {
 		defer goleak.VerifyNone(t)
 		l := logger.NewTest()
 
@@ -628,30 +622,43 @@ func TestUnreadyPublisher(main *testing.T) {
 		require.NoError(t, err)
 		defer p.Close()
 
-		assertUnready(t, stateCh, amqp.ErrClosed.Error())
+		assertNoStateChanged(t, stateCh)
 		p.Close()
 		assertClosed(t, p)
 	})
 
 	main.Run("ClosedPublisherUnready", func(t *testing.T) {
 		defer goleak.VerifyNone(t)
-		l := logger.NewTest()
-
-		connCh := make(chan *publisher.Connection)
 		stateCh := make(chan publisher.State, 2)
 
-		p, err := publisher.New(
-			connCh,
-			publisher.WithLogger(l),
+		ctrl := gomock.NewController(t)
+		ch := mock_publisher.NewMockAMQPChannel(ctrl)
+		conn := mock_publisher.NewMockAMQPConnection(ctrl)
+
+		ch.
+			EXPECT().
+			NotifyClose(any()).
+			AnyTimes()
+		ch.
+			EXPECT().
+			NotifyFlow(any()).
+			AnyTimes()
+		ch.
+			EXPECT().
+			Close().
+			AnyTimes()
+
+		connCh, _, p := newPublisher(
 			publisher.WithNotify(stateCh),
+			publisher.WithInitFunc(initFuncStub(fmt.Errorf("the error"))),
 		)
-		require.NoError(t, err)
 		defer p.Close()
 
-		assertUnready(t, stateCh, amqp.ErrClosed.Error())
+		connCh <- publisher.NewConnection(conn, nil)
+		time.Sleep(time.Millisecond * 50)
 		p.Close()
 		assertClosed(t, p)
-		assertUnready(t, stateCh, "permanently closed")
+		assertUnready(t, stateCh, "the error")
 	})
 
 	main.Run("PublishWithNoResultChannel", func(t *testing.T) {
@@ -674,8 +681,6 @@ func TestUnreadyPublisher(main *testing.T) {
 			Publishing:   amqp.Publishing{},
 			ResultCh:     nil,
 		})
-
-		assertUnready(t, stateCh, amqp.ErrClosed.Error())
 
 		err = waitResult(resultCh, time.Millisecond*100)
 		require.EqualError(t, err, "publisher not ready")
@@ -709,8 +714,6 @@ func TestUnreadyPublisher(main *testing.T) {
 			Publishing:   amqp.Publishing{},
 			ResultCh:     make(chan error, 1),
 		})
-
-		assertUnready(t, stateCh, amqp.ErrClosed.Error())
 
 		err = waitResult(resultCh, time.Millisecond*100)
 		require.EqualError(t, err, "publisher not ready")
@@ -768,14 +771,11 @@ func TestUnreadyPublisher(main *testing.T) {
 			connCh <- publisher.NewConnection(amqpConn, nil)
 		}()
 
-		assertUnready(t, stateCh, amqp.ErrClosed.Error())
-
 		msgCtx, cancelFunc := context.WithCancel(context.Background())
 		go func() {
 			time.Sleep(time.Millisecond * 200)
 			cancelFunc()
 		}()
-
 		p.Go(publisher.Message{
 			Context:    msgCtx,
 			Publishing: amqp.Publishing{},
@@ -859,6 +859,8 @@ func TestReadyPublisher(main *testing.T) {
 
 		assertReady(t, stateCh)
 
+		fmt.Println(0)
+
 		resultCh := p.Go(publisher.Message{
 			Exchange:  "theExchange",
 			Key:       "theKey",
@@ -884,9 +886,11 @@ func TestReadyPublisher(main *testing.T) {
 			},
 		})
 
+		fmt.Println(1)
+
 		err := waitResult(resultCh, time.Millisecond*100)
 		require.NoError(t, err)
-
+		fmt.Println(2)
 		p.Close()
 		assertClosed(t, p)
 
@@ -1123,13 +1127,13 @@ func TestReadyPublisher(main *testing.T) {
 			connCh <- publisher.NewConnection(amqpConn, nil)
 		}()
 
-		assertUnready(t, stateCh, amqp.ErrClosed.Error())
-
 		before := time.Now().UnixNano()
 		resultCh := p.Go(publisher.Message{
 			Publishing: amqp.Publishing{},
 			ResultCh:   make(chan error, 1),
 		})
+
+		assertReady(t, stateCh)
 
 		err := waitResult(resultCh, time.Millisecond*1300)
 		require.NoError(t, err)
@@ -1142,7 +1146,6 @@ func TestReadyPublisher(main *testing.T) {
 [DEBUG] publisher stopped
 `
 		require.Equal(t, expected, l.Logs())
-
 		after := time.Now().UnixNano()
 		require.GreaterOrEqual(t, after-before, int64(900000000))
 		require.LessOrEqual(t, after-before, int64(1100000000))
@@ -1199,8 +1202,7 @@ func TestClosedPublisher(main *testing.T) {
 			ResultCh:   make(chan error, 1),
 		})
 
-		assertUnready(t, stateCh, amqp.ErrClosed.Error())
-		assertUnready(t, stateCh, "permanently closed")
+		assertNoStateChanged(t, stateCh)
 
 		err = waitResult(resultCh, time.Millisecond*100)
 		require.EqualError(t, err, `publisher stopped`)
@@ -1227,14 +1229,12 @@ func TestClose(main *testing.T) {
 		require.NoError(t, err)
 		defer p.Close()
 
-		assertUnready(t, stateCh, amqp.ErrClosed.Error())
-
 		p.Close()
 		p.Close()
 		assertClosed(t, p)
 	})
 
-	main.Run("CloseUnreadyByContext", func(t *testing.T) {
+	main.Run("CloseNoStateChangeByContext", func(t *testing.T) {
 		defer goleak.VerifyNone(t)
 		l := logger.NewTest()
 
@@ -1252,7 +1252,7 @@ func TestClose(main *testing.T) {
 		require.NoError(t, err)
 		defer p.Close()
 
-		assertUnready(t, stateCh, amqp.ErrClosed.Error())
+		assertNoStateChanged(t, stateCh)
 
 		cancelFunc()
 		assertClosed(t, p)
@@ -1720,8 +1720,6 @@ func TestFlowControl(main *testing.T) {
 		p.Go(publisher.Message{ResultCh: resultCh})
 		require.NoError(t, waitResult(resultCh, time.Millisecond*50))
 
-		assertUnready(t, stateCh, amqp.ErrClosed.Error())
-
 		chFlowCh <- false
 		assertUnready(t, stateCh, "publisher flow paused")
 
@@ -1802,8 +1800,6 @@ func TestFlowControl(main *testing.T) {
 		})
 		require.NoError(t, waitResult(resultCh, time.Millisecond*50))
 
-		assertUnready(t, stateCh, amqp.ErrClosed.Error())
-
 		chFlowCh <- false
 		assertUnready(t, stateCh, "publisher flow paused")
 
@@ -1882,8 +1878,6 @@ func TestFlowControl(main *testing.T) {
 
 		p.Go(publisher.Message{})
 
-		assertUnready(t, stateCh, amqp.ErrClosed.Error())
-
 		chFlowCh <- false
 		assertUnready(t, stateCh, "publisher flow paused")
 
@@ -1954,7 +1948,6 @@ func TestFlowControl(main *testing.T) {
 
 		chFlowCh <- false
 
-		assertUnready(t, stateCh, amqp.ErrClosed.Error())
 		assertUnready(t, stateCh, "publisher flow paused")
 
 		p.Close()
@@ -2010,8 +2003,6 @@ func TestFlowControl(main *testing.T) {
 		defer p.Close()
 
 		amqpConn := mock_publisher.NewMockAMQPConnection(ctrl)
-
-		assertUnready(t, stateCh, amqp.ErrClosed.Error())
 
 		connCh <- publisher.NewConnection(amqpConn, nil)
 		assertReady(t, stateCh)
@@ -2082,10 +2073,10 @@ func TestFlowControl(main *testing.T) {
 
 		chFlowCh <- false
 
-		assertUnready(t, stateCh, amqp.ErrClosed.Error())
 		assertUnready(t, stateCh, "publisher flow paused")
 
 		close(closeCh)
+		assertUnready(t, stateCh, amqp.ErrClosed.Error())
 		connCh <- publisher.NewConnection(amqpConn, nil)
 		assertReady(t, stateCh)
 
@@ -2129,7 +2120,7 @@ func TestPublisherConfirms(main *testing.T) {
 
 		connCh, l, p := newPublisher(
 			publisher.WithNotify(stateCh),
-			publisher.WithRestartSleep(time.Millisecond*400),
+			publisher.WithRestartSleep(time.Millisecond*50),
 			publisher.WithInitFunc(initFuncStub(ch)),
 			publisher.WithConfirmation(2),
 		)
@@ -2140,8 +2131,6 @@ func TestPublisherConfirms(main *testing.T) {
 
 		connCh <- publisher.NewConnection(amqpConn, nil)
 
-		assertUnready(t, stateCh, amqp.ErrClosed.Error())
-		time.Sleep(time.Millisecond * 10)
 		assertUnready(t, stateCh, "the error")
 		p.Close()
 		assertClosed(t, p)
@@ -2206,6 +2195,7 @@ func TestPublisherConfirms(main *testing.T) {
 
 		expected := `[DEBUG] publisher starting
 [DEBUG] publisher ready
+[DEBUG] handle confirmation ready
 [DEBUG] handle confirmation started
 [DEBUG] handle confirmation stopped
 [DEBUG] publisher stopped
@@ -2269,6 +2259,7 @@ func TestPublisherConfirms(main *testing.T) {
 
 		expected := `[DEBUG] publisher starting
 [DEBUG] publisher ready
+[DEBUG] handle confirmation ready
 [DEBUG] handle confirmation started
 [DEBUG] handle confirmation stopped
 [DEBUG] publisher stopped
@@ -2339,6 +2330,7 @@ func TestPublisherConfirms(main *testing.T) {
 
 		expected := `[DEBUG] publisher starting
 [DEBUG] publisher ready
+[DEBUG] handle confirmation ready
 [DEBUG] handle confirmation started
 [DEBUG] handle confirmation stopped
 [DEBUG] publisher unready
@@ -2391,7 +2383,7 @@ func TestPublisherConfirms(main *testing.T) {
 		connCh <- publisher.NewConnection(amqpConn, connCloseCh)
 		assertReady(t, stateCh)
 
-		resultCh := make(chan error, 4)
+		resultCh := make(chan error, 2)
 		p.Go(publisher.Message{ResultCh: resultCh})
 		p.Go(publisher.Message{ResultCh: resultCh})
 		p.Go(publisher.Message{ResultCh: resultCh})
@@ -2401,11 +2393,10 @@ func TestPublisherConfirms(main *testing.T) {
 		confirmationCh <- amqp.Confirmation{Ack: true}
 
 		time.Sleep(time.Millisecond * 100)
-		close(chCloseCh)
-		assertUnready(t, stateCh, amqp.ErrClosed.Error())
 
 		require.NoError(t, waitResult(resultCh, time.Millisecond*100))
 		require.NoError(t, waitResult(resultCh, time.Millisecond*100))
+		close(chCloseCh)
 		require.EqualError(t, waitResult(resultCh, time.Millisecond*100), amqp.ErrClosed.Error())
 		require.EqualError(t, waitResult(resultCh, time.Millisecond*100), amqp.ErrClosed.Error())
 		assertReady(t, stateCh)
@@ -2416,10 +2407,12 @@ func TestPublisherConfirms(main *testing.T) {
 
 		expected := `[DEBUG] publisher starting
 [DEBUG] publisher ready
+[DEBUG] handle confirmation ready
 [DEBUG] handle confirmation started
 [DEBUG] channel closed
 [DEBUG] handle confirmation stopped
 [DEBUG] publisher ready
+[DEBUG] handle confirmation ready
 [DEBUG] handle confirmation started
 [DEBUG] handle confirmation stopped
 [DEBUG] publisher stopped
@@ -2471,10 +2464,13 @@ func assertReady(t *testing.T, stateCh <-chan publisher.State) {
 	}
 }
 
-func emptyUnreadyCh(unreadyCh <-chan publisher.State) {
+func assertNoStateChanged(t *testing.T, stateCh <-chan publisher.State) {
+	timer := time.NewTimer(time.Millisecond * 100)
+	defer timer.Stop()
 	select {
-	case <-unreadyCh:
-	default:
+	case <-stateCh:
+		t.Fatal("state change is not expected")
+	case <-timer.C:
 	}
 }
 
@@ -2551,6 +2547,7 @@ func initFuncStub(chs ...interface{}) func(publisher.AMQPConnection) (publisher.
 	return func(_ publisher.AMQPConnection) (publisher.AMQPChannel, error) {
 		switch curr := chs[index].(type) {
 		case publisher.AMQPChannel:
+
 			index++
 			return curr, nil
 		case error:
