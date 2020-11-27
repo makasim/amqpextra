@@ -252,7 +252,7 @@ func TestReconnection(main *testing.T) {
 			EXPECT().
 			NotifyClose(any()).
 			DoAndReturn(notifyCloseStub()).
-			Times(1)
+			AnyTimes()
 		ch.
 			EXPECT().
 			NotifyFlow(any()).
@@ -607,25 +607,6 @@ func TestReconnection(main *testing.T) {
 }
 
 func TestUnreadyReady(main *testing.T) {
-	main.Run("NewPublisherNoChangeState", func(t *testing.T) {
-		defer goleak.VerifyNone(t)
-		l := logger.NewTest()
-
-		connCh := make(chan *publisher.Connection)
-		stateCh := make(chan publisher.State, 2)
-
-		p, err := publisher.New(
-			connCh,
-			publisher.WithLogger(l),
-			publisher.WithNotify(stateCh),
-		)
-		require.NoError(t, err)
-		defer p.Close()
-
-		assertNoStateChanged(t, stateCh)
-		p.Close()
-		assertClosed(t, p)
-	})
 
 	main.Run("ClosedPublisherUnready", func(t *testing.T) {
 		defer goleak.VerifyNone(t)
@@ -653,12 +634,11 @@ func TestUnreadyReady(main *testing.T) {
 			publisher.WithInitFunc(initFuncStub(fmt.Errorf("the error"))),
 		)
 		defer p.Close()
-
 		connCh <- publisher.NewConnection(conn, nil)
-		time.Sleep(time.Millisecond * 50)
+		time.Sleep(time.Millisecond * 10)
 		p.Close()
-		assertClosed(t, p)
 		assertUnready(t, stateCh, "the error")
+		assertClosed(t, p)
 	})
 
 	main.Run("PublishWithNoResultChannel", func(t *testing.T) {
@@ -699,7 +679,7 @@ func TestUnreadyReady(main *testing.T) {
 		l := logger.NewTest()
 
 		connCh := make(chan *publisher.Connection)
-		stateCh := make(chan publisher.State, 2)
+		stateCh := make(chan publisher.State, 1)
 
 		p, err := publisher.New(
 			connCh,
@@ -859,8 +839,6 @@ func TestReadyPublisher(main *testing.T) {
 
 		assertReady(t, stateCh)
 
-		fmt.Println(0)
-
 		resultCh := p.Go(publisher.Message{
 			Exchange:  "theExchange",
 			Key:       "theKey",
@@ -886,11 +864,8 @@ func TestReadyPublisher(main *testing.T) {
 			},
 		})
 
-		fmt.Println(1)
-
 		err := waitResult(resultCh, time.Millisecond*100)
 		require.NoError(t, err)
-		fmt.Println(2)
 		p.Close()
 		assertClosed(t, p)
 
@@ -2445,7 +2420,7 @@ func assertUnready(t *testing.T, stateCh <-chan publisher.State, errString strin
 
 		require.EqualError(t, state.Unready.Err, errString)
 	case <-timer.C:
-		t.Fatal("consumer must be unready")
+		t.Fatal("publisher must be unready")
 	}
 }
 
@@ -2460,7 +2435,7 @@ func assertReady(t *testing.T, stateCh <-chan publisher.State) {
 
 		require.NotNil(t, state.Ready, fmt.Sprintf("%+v", state))
 	case <-timer.C:
-		t.Fatal("consumer must be ready")
+		t.Fatal("publisher must be ready")
 	}
 }
 
