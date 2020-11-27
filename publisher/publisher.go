@@ -197,16 +197,13 @@ func (p *Publisher) Go(msg Message) <-chan error {
 	if cap(msg.ResultCh) == 0 {
 		panic("amqpextra: resultCh channel is unbuffered")
 	}
-
 	if msg.Context == nil {
 		msg.Context = context.Background()
 	}
-
 	var stateCh <-chan State
 	if msg.ErrOnUnready {
 		stateCh = p.internalStateCh
 	}
-
 	select {
 	case <-p.closeCh:
 		msg.ResultCh <- fmt.Errorf("publisher stopped")
@@ -218,21 +215,24 @@ loop:
 	for {
 		select {
 		case p.publishingCh <- msg:
+			return msg.ResultCh
+
 		case <-msg.Context.Done():
 			msg.ResultCh <- fmt.Errorf("message: %v", msg.Context.Err())
+			return msg.ResultCh
+
 		// noinspection GoNilness
 		case state := <-stateCh:
-			if state.Ready != nil {
+			if state.Unready != nil {
 				msg.ResultCh <- fmt.Errorf("publisher not ready")
-				break loop
+				return msg.ResultCh
 			}
-			continue
+			continue loop
 		case <-p.ctx.Done():
 			msg.ResultCh <- fmt.Errorf("publisher stopped")
+			return msg.ResultCh
 		}
 	}
-
-	return msg.ResultCh
 }
 
 func (p *Publisher) Close() {
@@ -266,7 +266,7 @@ func (p *Publisher) connectionState() {
 			err := p.channelState(conn.AMQPConnection(), conn.NotifyClose())
 			if err != nil {
 				p.logger.Printf("[DEBUG] publisher unready")
-				state = p.notifyUnready(err)
+				state = State{Unready: &Unready{err}}
 				continue
 			}
 
@@ -306,6 +306,9 @@ func (p *Publisher) channelState(conn AMQPConnection, connCloseCh <-chan struct{
 		}
 
 		err = p.publishState(ch, connCloseCh, resultChCh)
+		if err != nil {
+			p.notifyUnready(err)
+		}
 		close(confirmationCloseCh)
 		if err == errChannelClosed {
 			<-confirmationDoneCh
