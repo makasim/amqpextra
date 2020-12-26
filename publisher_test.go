@@ -3,6 +3,9 @@ package amqpextra_test
 import (
 	"log"
 
+	"context"
+	"time"
+
 	"github.com/makasim/amqpextra"
 	"github.com/makasim/amqpextra/publisher"
 	"github.com/streadway/amqp"
@@ -10,20 +13,18 @@ import (
 
 func ExampleDialer_Publisher() {
 	// open connection
-	dialer, err := amqpextra.NewDialer(amqpextra.WithURL("amqp://guest:guest@localhost:5672/%2f"))
-	if err != nil {
-		log.Fatal(err)
-	}
+	d, _ := amqpextra.NewDialer(amqpextra.WithURL("amqp://guest:guest@localhost:5672/%2f"))
 
 	// create publisher
-	p, err := dialer.Publisher()
-	if err != nil {
-		log.Fatal(err)
-	}
+	p, _ := d.Publisher()
+
+	ctx, cancelFunc := context.WithTimeout(context.Background(), time.Millisecond*100)
+	defer cancelFunc()
 
 	// publish a message
-	go p.Publish(publisher.Message{
-		Key: "test_queue",
+	p.Publish(publisher.Message{
+		Key:     "test_queue",
+		Context: ctx,
 		Publishing: amqp.Publishing{
 			Body: []byte(`{"foo": "fooVal"}`),
 		},
@@ -31,10 +32,9 @@ func ExampleDialer_Publisher() {
 
 	// close publisher
 	p.Close()
-	<-p.NotifyClosed()
 
 	// close connection
-	dialer.Close()
+	d.Close()
 
 	// Output:
 }
