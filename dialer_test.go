@@ -31,7 +31,6 @@ func ExampleDialer_ConnectionCh() {
 
 	connCh := dialer.ConnectionCh()
 	go func() {
-	L1:
 		for {
 			select {
 			case conn, ok := <-connCh:
@@ -40,27 +39,7 @@ func ExampleDialer_ConnectionCh() {
 					return
 				}
 
-				ch, err := conn.AMQPConnection().Channel()
-				if err != nil {
-					return
-				}
-
-				ticker := time.NewTicker(time.Second * 5)
-				for {
-					select {
-					case <-ticker.C:
-						// do some stuff
-						err := ch.Publish("", "a_queue", false, false, amqp.Publishing{
-							Body: []byte("I've got some news!"),
-						})
-						if err != nil {
-							log.Print(err)
-						}
-					case <-conn.NotifyLost():
-						// connection is lost. let`s get new one
-						continue L1
-					}
-				}
+				<-conn.NotifyLost()
 			}
 		}
 	}()
