@@ -1111,9 +1111,9 @@ func TestConsume(main *testing.T) {
 		assert.Equal(t, `[DEBUG] consumer starting
 [DEBUG] consumer ready
 [DEBUG] worker starting
-[TEST] got message
-[TEST] got message
-[TEST] got message
+[INFO] got message
+[INFO] got message
+[INFO] got message
 [DEBUG] worker stopped
 [DEBUG] consumer unready
 [DEBUG] consumer stopped
@@ -2049,7 +2049,7 @@ func any() gomock.Matcher {
 
 func handlerStub(l logger.Logger) consumer.Handler {
 	return consumer.HandlerFunc(func(ctx context.Context, msg amqp.Delivery) interface{} {
-		l.Printf("[TEST] got message")
+		l.Info("got message")
 		return nil
 	})
 }

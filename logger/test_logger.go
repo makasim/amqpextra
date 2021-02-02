@@ -14,6 +14,43 @@ type TestLogger struct {
 	output bool
 }
 
+func addLvlArg(lvl string, args ...interface{}) []interface{} {
+
+	return append([]interface{}{"[" + lvl + "] "}, args...)
+}
+
+func (l *TestLogger) Info(args ...interface{}) {
+	l.print(addLvlArg("INFO", args...)...)
+}
+
+func (l *TestLogger) Error(args ...interface{}) {
+	l.print(addLvlArg("ERROR", args...)...)
+}
+
+func (l *TestLogger) Errorf(format string, args ...interface{}) {
+	l.printf("[ERROR] "+format, args...)
+}
+
+func (l *TestLogger) Debug(args ...interface{}) {
+	l.print(addLvlArg("DEBUG", args...)...)
+}
+
+func (l *TestLogger) Debugf(format string, args ...interface{}) {
+	l.printf("[DEBUG] "+format, args...)
+}
+
+func (l *TestLogger) Warn(args ...interface{}) {
+	l.print(addLvlArg("WARN", args...)...)
+}
+
+func (l *TestLogger) Warnf(format string, args ...interface{}) {
+	l.printf("[WARN] "+format, args...)
+}
+
+func (l *TestLogger) Printf(format string, args ...interface{}) {
+	l.printf("[INFO] "+format, args...)
+}
+
 func NewTest() *TestLogger {
 	return &TestLogger{
 		buf:    bytes.NewBuffer(make([]byte, 0)),
@@ -22,14 +59,22 @@ func NewTest() *TestLogger {
 	}
 }
 
-func (l *TestLogger) Printf(format string, args ...interface{}) {
+func (l *TestLogger) printf(format string, args ...interface{}) {
+	l.mx.Lock()
+	defer l.mx.Unlock()
+	fmt.Fprintf(l.buf, format+"\n", args...)
+	if l.output {
+		log.Printf(format, args...)
+	}
+}
+
+func (l *TestLogger) print(args ...interface{}) {
 	l.mx.Lock()
 	defer l.mx.Unlock()
 
-	fmt.Fprintf(l.buf, format+"\n", args...)
-
+	fmt.Fprint(l.buf, append(args, "\n")...)
 	if l.output {
-		log.Printf(format, args...)
+		log.Print(args...)
 	}
 }
 

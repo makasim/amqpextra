@@ -10,7 +10,7 @@ import (
 func HasCorrelationID() consumer.Middleware {
 	return wrap(func(ctx context.Context, msg amqp.Delivery, next consumer.Handler) interface{} {
 		if msg.CorrelationId == "" {
-			log(ctx, "[WARN] no correlation id")
+			warn(ctx, "no correlation id")
 
 			return nack(ctx, msg)
 		}

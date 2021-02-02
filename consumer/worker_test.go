@@ -20,7 +20,7 @@ func TestDefaultWorkerProcessSomeMessages(t *testing.T) {
 	w := consumer.DefaultWorker{Logger: l}
 
 	h := consumer.HandlerFunc(func(_ context.Context, msg amqp.Delivery) interface{} {
-		l.Printf("[TEST] handler: %s", msg.Body)
+		l.Printf("handler: %s", msg.Body)
 		return nil
 	})
 
@@ -43,9 +43,9 @@ func TestDefaultWorkerProcessSomeMessages(t *testing.T) {
 	<-doneCh
 
 	require.Equal(t, `[DEBUG] worker starting
-[TEST] handler: first
-[TEST] handler: second
-[TEST] handler: third
+[INFO] handler: first
+[INFO] handler: second
+[INFO] handler: third
 [DEBUG] worker stopped
 `, l.Logs())
 }
@@ -58,7 +58,7 @@ func TestDefaultWorkerHandlerReturnNotNil(t *testing.T) {
 	w := consumer.DefaultWorker{Logger: l}
 
 	h := consumer.HandlerFunc(func(_ context.Context, msg amqp.Delivery) interface{} {
-		l.Printf("[TEST] handler: %s", msg.Body)
+		l.Printf("handler: %s", msg.Body)
 		return "someValue"
 	})
 
@@ -79,7 +79,7 @@ func TestDefaultWorkerHandlerReturnNotNil(t *testing.T) {
 	<-doneCh
 
 	require.Equal(t, `[DEBUG] worker starting
-[TEST] handler: first
+[INFO] handler: first
 [ERROR] handler return non nil result: "someValue"
 [DEBUG] worker stopped
 `, l.Logs())
@@ -94,7 +94,7 @@ func TestParallelWorkerProcessSomeMessages(t *testing.T) {
 	w.Logger = l
 
 	h := consumer.HandlerFunc(func(_ context.Context, msg amqp.Delivery) interface{} {
-		l.Printf("[TEST] handler: %s", msg.Body)
+		l.Printf("handler: %s", msg.Body)
 		return nil
 	})
 
@@ -117,9 +117,9 @@ func TestParallelWorkerProcessSomeMessages(t *testing.T) {
 	<-doneCh
 
 	require.Equal(t, `[DEBUG] worker starting
-[TEST] handler: 123
-[TEST] handler: 123
-[TEST] handler: 123
+[INFO] handler: 123
+[INFO] handler: 123
+[INFO] handler: 123
 [DEBUG] worker stopped
 `, l.Logs())
 }
@@ -133,7 +133,7 @@ func TestParallelWorkerHandlerReturnNotNil(t *testing.T) {
 	w.Logger = l
 
 	h := consumer.HandlerFunc(func(_ context.Context, msg amqp.Delivery) interface{} {
-		l.Printf("[TEST] handler: %s", msg.Body)
+		l.Printf("handler: %s", msg.Body)
 		return "someValue"
 	})
 
@@ -154,7 +154,7 @@ func TestParallelWorkerHandlerReturnNotNil(t *testing.T) {
 	<-doneCh
 
 	require.Equal(t, `[DEBUG] worker starting
-[TEST] handler: first
+[INFO] handler: first
 [ERROR] handler return non nil result: "someValue"
 [DEBUG] worker stopped
 `, l.Logs())

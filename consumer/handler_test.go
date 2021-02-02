@@ -44,7 +44,7 @@ func TestWrap(t *testing.T) {
 			assert.Equal(t, expectedCtx, ctx)
 			assert.Equal(t, expectedMsg, msg)
 
-			l.Printf("[TEST] handler")
+			l.Printf("handler")
 			return expectedResult
 		}),
 		func(next consumer.Handler) consumer.Handler {
@@ -52,10 +52,10 @@ func TestWrap(t *testing.T) {
 				assert.Equal(t, expectedCtx, ctx)
 				assert.Equal(t, expectedMsg, msg)
 
-				l.Printf("[TEST] handler1 before")
+				l.Printf("handler1 before")
 				result := next.Handle(ctx, msg)
 				assert.Equal(t, expectedResult, result)
-				l.Printf("[TEST] handler1 after")
+				l.Printf("handler1 after")
 				return result
 			})
 		},
@@ -64,10 +64,10 @@ func TestWrap(t *testing.T) {
 				assert.Equal(t, expectedCtx, ctx)
 				assert.Equal(t, expectedMsg, msg)
 
-				l.Printf("[TEST] handler2 before")
+				l.Printf("handler2 before")
 				result := next.Handle(ctx, msg)
 				assert.Equal(t, expectedResult, result)
-				l.Printf("[TEST] handler2 after")
+				l.Printf("handler2 after")
 				return result
 			})
 		},
@@ -75,10 +75,10 @@ func TestWrap(t *testing.T) {
 
 	result := handler.Handle(expectedCtx, expectedMsg)
 	assert.Equal(t, expectedResult, result)
-	require.Equal(t, `[TEST] handler1 before
-[TEST] handler2 before
-[TEST] handler
-[TEST] handler2 after
-[TEST] handler1 after
+	require.Equal(t, `[INFO] handler1 before
+[INFO] handler2 before
+[INFO] handler
+[INFO] handler2 after
+[INFO] handler1 after
 `, l.Logs())
 }

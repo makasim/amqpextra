@@ -26,7 +26,7 @@ func ExpireToTimeout(defaultTimeout time.Duration) func(next consumer.Handler) c
 
 		expiration, err := strconv.ParseInt(msg.Expiration, 10, 0)
 		if err != nil {
-			log(ctx, "[WARN] got invalid expiration: %s", msg.Expiration)
+			warnf(ctx, "got invalid expiration: %s", msg.Expiration)
 
 			if defaultTimeout.Nanoseconds() != 0 {
 				nextCtx, cancelFunc := context.WithTimeout(ctx, defaultTimeout)

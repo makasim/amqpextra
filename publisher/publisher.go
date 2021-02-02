@@ -246,9 +246,9 @@ func (p *Publisher) NotifyClosed() <-chan struct{} {
 func (p *Publisher) connectionState() {
 	defer p.cancelFunc()
 	defer close(p.closeCh)
-	defer p.logger.Printf("[DEBUG] publisher stopped")
+	defer p.logger.Debug("publisher stopped")
 
-	p.logger.Printf("[DEBUG] publisher starting")
+	p.logger.Debug("publisher starting")
 	state := State{Unready: &Unready{Err: amqp.ErrClosed}}
 
 	for {
@@ -266,7 +266,7 @@ func (p *Publisher) connectionState() {
 			}
 			err := p.channelState(conn.AMQPConnection(), conn.NotifyClose())
 			if err != nil {
-				p.logger.Printf("[DEBUG] publisher unready")
+				p.logger.Debug("publisher unready")
 				state = State{Unready: &Unready{err}}
 				continue
 			}
@@ -283,7 +283,7 @@ func (p *Publisher) channelState(conn AMQPConnection, connCloseCh <-chan struct{
 	for {
 		ch, err := p.initFunc(conn)
 		if err != nil {
-			p.logger.Printf("[ERROR] init func: %s", err)
+			p.logger.Errorf("init func: %s", err)
 			return p.waitRetry(err)
 		}
 
@@ -334,17 +334,17 @@ func (p *Publisher) handleConfirmations(
 	select {
 	case state := <-p.internalStateCh:
 		if state.Unready != nil {
-			p.logger.Printf("[ERROR] handle confirmation unexpected unready")
+			p.logger.Error("handle confirmation unexpected unready")
 			return
 		}
 
-		p.logger.Printf("[DEBUG] handle confirmation ready")
+		p.logger.Debug("handle confirmation ready")
 	case <-confirmationCloseCh:
 		return
 	}
 
-	p.logger.Printf("[DEBUG] handle confirmation started")
-	defer p.logger.Printf("[DEBUG] handle confirmation stopped")
+	p.logger.Debug("handle confirmation started")
+	defer p.logger.Debug("handle confirmation stopped")
 
 loop:
 	for {
@@ -382,7 +382,7 @@ func (p *Publisher) publishState(ch AMQPChannel, connCloseCh <-chan struct{}, re
 	chCloseCh := ch.NotifyClose(make(chan *amqp.Error, 1))
 	chFlowCh := ch.NotifyFlow(make(chan bool, 1))
 
-	p.logger.Printf("[DEBUG] publisher ready")
+	p.logger.Debug("publisher ready")
 	state := p.notifyReady()
 	for {
 		select {
@@ -391,7 +391,7 @@ func (p *Publisher) publishState(ch AMQPChannel, connCloseCh <-chan struct{}, re
 		case msg := <-p.publishingCh:
 			p.publish(ch, msg, resultChCh)
 		case <-chCloseCh:
-			p.logger.Printf("[DEBUG] channel closed")
+			p.logger.Debug("channel closed")
 			return errChannelClosed
 		case <-connCloseCh:
 			return amqp.ErrClosed
@@ -410,7 +410,7 @@ func (p *Publisher) publishState(ch AMQPChannel, connCloseCh <-chan struct{}, re
 }
 
 func (p *Publisher) pausedState(chFlowCh <-chan bool, connCloseCh <-chan struct{}, chCloseCh chan *amqp.Error) error {
-	p.logger.Printf("[WARN] publisher flow paused")
+	p.logger.Warn("publisher flow paused")
 	errFlowPaused := fmt.Errorf("publisher flow paused")
 	state := p.notifyUnready(errFlowPaused)
 	for {
@@ -419,11 +419,11 @@ func (p *Publisher) pausedState(chFlowCh <-chan bool, connCloseCh <-chan struct{
 			continue
 		case resume := <-chFlowCh:
 			if resume {
-				p.logger.Printf("[INFO] publisher flow resumed")
+				p.logger.Info("publisher flow resumed")
 				return nil
 			}
 		case <-chCloseCh:
-			p.logger.Printf("[DEBUG] channel closed")
+			p.logger.Debug("channel closed")
 			return errChannelClosed
 		case <-connCloseCh:
 			return amqp.ErrClosed
@@ -519,7 +519,7 @@ func (p *Publisher) notifyReady() State {
 func (p *Publisher) close(ch AMQPChannel) {
 	if ch != nil {
 		if err := ch.Close(); err != nil && !strings.Contains(err.Error(), "channel/connection is not open") {
-			p.logger.Printf("[WARN] publisher: channel close: %s", err)
+			p.logger.Warnf("publisher: channel close: %s", err)
 		}
 	}
 }

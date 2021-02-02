@@ -28,32 +28,32 @@ func AckNack() consumer.Middleware {
 			switch result {
 			case Ack:
 				if err := msg.Ack(false); err != nil {
-					l.Printf("[ERROR] message ack errored", err)
+					l.Error("message ack errored", err)
 
 					return nil
 				}
 
-				l.Printf("[DEBUG] message acked")
+				l.Debug("message acked")
 
 				return nil
 			case Nack:
 				if err := msg.Nack(false, false); err != nil {
-					l.Printf("[ERROR] message nack errored", err)
+					l.Error("message nack errored", err)
 
 					return nil
 				}
 
-				l.Printf("[DEBUG] message nacked")
+				l.Debug("message nacked")
 
 				return nil
 			case Requeue:
 				if err := msg.Nack(false, true); err != nil {
-					l.Printf("[ERROR] message nack requeue errored", err)
+					l.Error("message nack requeue errored", err)
 
 					return nil
 				}
 
-				l.Printf("[DEBUG] message requeue")
+				l.Debug("message requeue")
 
 				return nil
 			}

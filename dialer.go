@@ -295,12 +295,12 @@ func (c *Dialer) connectState() {
 	defer close(c.connCh)
 	defer close(c.closedCh)
 	defer c.cancelFunc()
-	defer c.logger.Printf("[DEBUG] connection closed")
+	defer c.logger.Debug("connection closed")
 
 	i := 0
 	l := len(c.amqpUrls)
 
-	c.logger.Printf("[DEBUG] connection unready")
+	c.logger.Debug("connection unready")
 	state := State{Unready: &Unready{Err: amqp.ErrClosed}}
 	for {
 		select {
@@ -316,7 +316,7 @@ func (c *Dialer) connectState() {
 		errorCh := make(chan error)
 
 		go func() {
-			c.logger.Printf("[DEBUG] dialing")
+			c.logger.Debug("dialing")
 			if conn, err := c.amqpDial(url, c.amqpConfig); err != nil {
 				errorCh <- err
 			} else {
@@ -338,14 +338,14 @@ func (c *Dialer) connectState() {
 				}
 
 				if err := c.connectedState(conn); err != nil {
-					c.logger.Printf("[DEBUG] connection unready: %s", err)
+					c.logger.Debugf("connection unready: %s", err)
 					state = c.notifyUnready(err)
 					break loop2
 				}
 
 				return
 			case err := <-errorCh:
-				c.logger.Printf("[DEBUG] connection unready: %v", err)
+				c.logger.Debugf("connection unready: %s", err)
 				if retryErr := c.waitRetry(err); retryErr != nil {
 					state = State{Unready: &Unready{Err: retryErr}}
 					break loop2
@@ -368,7 +368,7 @@ func (c *Dialer) connectedState(amqpConn AMQPConnection) error {
 	internalCloseCh := amqpConn.NotifyClose(make(chan *amqp.Error, 1))
 
 	conn := &Connection{amqpConn: amqpConn, lostCh: lostCh}
-	c.logger.Printf("[DEBUG] connection ready")
+	c.logger.Debug("connection ready")
 	state := c.notifyReady()
 	for {
 		select {
@@ -441,6 +441,6 @@ func (c *Dialer) closeConn(conn AMQPConnection) {
 	if err := conn.Close(); err == amqp.ErrClosed {
 		return
 	} else if err != nil {
-		c.logger.Printf("[ERROR] %s", err)
+		c.logger.Error(err)
 	}
 }

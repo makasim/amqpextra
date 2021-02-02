@@ -2,6 +2,7 @@ package middleware_test
 
 import (
 	"context"
+	"github.com/makasim/amqpextra/logger"
 	"testing"
 
 	"github.com/makasim/amqpextra/consumer"
@@ -58,7 +59,7 @@ func TestLoggerGetLoggerNotSet(t *testing.T) {
 }
 
 func TestLoggerGetLoggerSet(t *testing.T) {
-	l := &loggerStub{}
+	l := &logger.TestLogger{}
 
 	ctx := context.Background()
 	ctx = middleware.WithLogger(ctx, l)

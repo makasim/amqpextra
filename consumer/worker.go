@@ -17,9 +17,9 @@ type DefaultWorker struct {
 }
 
 func (dw *DefaultWorker) Serve(ctx context.Context, h Handler, msgCh <-chan amqp.Delivery) {
-	defer dw.Logger.Printf("[DEBUG] worker stopped")
+	defer dw.Logger.Debug("worker stopped")
 
-	dw.Logger.Printf("[DEBUG] worker starting")
+	dw.Logger.Debug("worker starting")
 	for {
 		select {
 		case msg, ok := <-msgCh:
@@ -28,7 +28,7 @@ func (dw *DefaultWorker) Serve(ctx context.Context, h Handler, msgCh <-chan amqp
 			}
 
 			if res := h.Handle(ctx, msg); res != nil {
-				dw.Logger.Printf("[ERROR] handler return non nil result: %#v", res)
+				dw.Logger.Errorf("handler return non nil result: %#v", res)
 			}
 		case <-ctx.Done():
 			return
@@ -53,9 +53,9 @@ func NewParallelWorker(num int) *ParallelWorker {
 }
 
 func (pw *ParallelWorker) Serve(ctx context.Context, h Handler, msgCh <-chan amqp.Delivery) {
-	defer pw.Logger.Printf("[DEBUG] worker stopped")
+	defer pw.Logger.Debug("worker stopped")
 
-	pw.Logger.Printf("[DEBUG] worker starting")
+	pw.Logger.Debug("worker starting")
 
 	wg := &sync.WaitGroup{}
 	for i := 0; i < pw.Num; i++ {
@@ -71,7 +71,7 @@ func (pw *ParallelWorker) Serve(ctx context.Context, h Handler, msgCh <-chan amq
 					}
 
 					if res := h.Handle(ctx, msg); res != nil {
-						pw.Logger.Printf("[ERROR] handler return non nil result: %#v", res)
+						pw.Logger.Errorf("handler return non nil result: %#v", res)
 					}
 				case <-ctx.Done():
 					return

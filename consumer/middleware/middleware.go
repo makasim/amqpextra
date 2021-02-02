@@ -18,15 +18,25 @@ func (k *contextKey) String() string {
 	return "amqpextra/middleware context value " + k.name
 }
 
-func log(ctx context.Context, format string, v ...interface{}) {
+func warnf(ctx context.Context, format string, v ...interface{}) {
 	if l, ok := GetLogger(ctx); ok {
-		l.Printf(format, v...)
+		l.Warnf(format, v...)
+	}
+}
+func warn(ctx context.Context, v ...interface{}) {
+	if l, ok := GetLogger(ctx); ok {
+		l.Warn(v...)
+	}
+}
+func errorf(ctx context.Context, format string, v ...interface{}) {
+	if l, ok := GetLogger(ctx); ok {
+		l.Errorf(format, v...)
 	}
 }
 
 func nack(ctx context.Context, msg amqp.Delivery) interface{} {
 	if err := msg.Nack(false, false); err != nil {
-		log(ctx, "[ERROR] msg nack: %s", err)
+		errorf(ctx, "msg nack: %s", err)
 	}
 
 	return nil

@@ -284,9 +284,9 @@ func (c *Consumer) Close() {
 func (c *Consumer) connectionState() {
 	defer c.cancelFunc()
 	defer close(c.closeCh)
-	defer c.logger.Printf("[DEBUG] consumer stopped")
+	defer c.logger.Debug("consumer stopped")
 
-	c.logger.Printf("[DEBUG] consumer starting")
+	c.logger.Debug("consumer starting")
 
 	state := State{Unready: &Unready{Err: amqp.ErrClosed}}
 	for {
@@ -307,12 +307,12 @@ func (c *Consumer) connectionState() {
 			}
 
 			if err := c.channelState(conn.AMQPConnection(), conn.NotifyClose()); err != nil {
-				c.logger.Printf("[DEBUG] consumer unready")
+				c.logger.Debug("consumer unready")
 				state = c.notifyUnready(err)
 				continue
 			}
 
-			c.logger.Printf("[DEBUG] consumer unready")
+			c.logger.Debug("consumer unready")
 			return
 		case <-c.ctx.Done():
 			return
@@ -324,7 +324,7 @@ func (c *Consumer) channelState(conn AMQPConnection, connCloseCh <-chan struct{}
 	for {
 		ch, err := c.initFunc(conn)
 		if err != nil {
-			c.logger.Printf("[ERROR] init func: %s", err)
+			c.logger.Errorf("init func: %s", err)
 			return c.waitRetry(err)
 		}
 
@@ -370,7 +370,7 @@ func (c *Consumer) consumeState(ch AMQPChannel, queue string, connCloseCh <-chan
 		c.args,
 	)
 	if err != nil {
-		c.logger.Printf("[ERROR] ch.Consume: %s", err)
+		c.logger.Errorf("ch.Consume: %s", err)
 		return c.waitRetry(err)
 	}
 
@@ -381,7 +381,7 @@ func (c *Consumer) consumeState(ch AMQPChannel, queue string, connCloseCh <-chan
 	workerCtx, workerCancelFunc := context.WithCancel(c.ctx)
 	defer workerCancelFunc()
 
-	c.logger.Printf("[DEBUG] consumer ready")
+	c.logger.Debug("consumer ready")
 
 	state := c.notifyReady(queue)
 
@@ -397,10 +397,10 @@ func (c *Consumer) consumeState(ch AMQPChannel, queue string, connCloseCh <-chan
 		case c.internalStateCh <- state:
 			continue
 		case <-cancelCh:
-			c.logger.Printf("[DEBUG] consumption canceled")
+			c.logger.Debug("consumption canceled")
 			result = fmt.Errorf("consumption canceled")
 		case <-chCloseCh:
-			c.logger.Printf("[DEBUG] channel closed")
+			c.logger.Debug("channel closed")
 			result = errChannelClosed
 		case <-connCloseCh:
 			result = amqp.ErrClosed
@@ -475,7 +475,7 @@ func (c *Consumer) notifyUnready(err error) State {
 func (c *Consumer) close(ch AMQPChannel) {
 	if ch != nil {
 		if err := ch.Close(); err != nil && !strings.Contains(err.Error(), "channel/connection is not open") {
-			c.logger.Printf("[WARN] channel close: %s", err)
+			c.logger.Warnf("channel close: %s", err)
 		}
 	}
 }
