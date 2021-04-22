@@ -26,7 +26,7 @@ func newRetryCounter(ctx context.Context, ch chan State) *retryCounter {
 	return r
 }
 
-// updateLoop updates the internal retry counter via notifications on its channel. It blocks until ctx is cancelled.
+// updateLoop updates the internal retry counter via notifications on its channel. It blocks until ctx is canceled.
 func (r *retryCounter) updateLoop(ctx context.Context)  {
 	for {
 		select {
