@@ -47,12 +47,12 @@ type Consumer struct {
 
 	worker Worker
 
-	retryPeriod time.Duration
-	initFunc    func(conn AMQPConnection) (AMQPChannel, error)
-	ctx         context.Context
-	cancelFunc  context.CancelFunc
-	logger      logger.Logger
-	closeCh     chan struct{}
+	nextRetryPeriod func(attemptNumber int) time.Duration
+	initFunc        func(conn AMQPConnection) (AMQPChannel, error)
+	ctx             context.Context
+	cancelFunc      context.CancelFunc
+	logger          logger.Logger
+	closeCh         chan struct{}
 
 	mu       sync.Mutex
 	stateChs []chan State
@@ -79,6 +79,8 @@ type Consumer struct {
 	noLocal   bool
 	noWait    bool
 	args      amqp.Table
+
+	retryCounter int
 }
 
 func New(
@@ -113,8 +115,10 @@ func New(
 		c.ctx, c.cancelFunc = context.WithCancel(context.Background())
 	}
 
-	if c.retryPeriod == 0 {
-		c.retryPeriod = time.Second * 5
+	if c.nextRetryPeriod == nil {
+		c.nextRetryPeriod = func(_ int) time.Duration {
+			return time.Second * 5
+		}
 	}
 
 	if c.logger == nil {
@@ -157,8 +161,14 @@ func WithContext(ctx context.Context) Option {
 }
 
 func WithRetryPeriod(dur time.Duration) Option {
+	return WithRetryPeriodFunc(func(_ int) time.Duration {
+		return dur
+	})
+}
+
+func WithRetryPeriodFunc(durFunc func(retryCount int) time.Duration) Option {
 	return func(c *Consumer) {
-		c.retryPeriod = dur
+		c.nextRetryPeriod = durFunc
 	}
 }
 
@@ -384,7 +394,8 @@ func (c *Consumer) consumeState(ch AMQPChannel, queue string, connCloseCh <-chan
 	c.logger.Printf("[DEBUG] consumer ready")
 
 	state := c.notifyReady(queue)
-
+	c.retryCounter = 0
+	
 	go func() {
 		defer close(workerDoneCh)
 		c.worker.Serve(workerCtx, c.handler, msgCh)
@@ -419,7 +430,7 @@ func (c *Consumer) consumeState(ch AMQPChannel, queue string, connCloseCh <-chan
 }
 
 func (c *Consumer) waitRetry(err error) error {
-	timer := time.NewTimer(c.retryPeriod)
+	timer := time.NewTimer(c.nextRetryPeriod(c.retryCounter))
 	defer func() {
 		timer.Stop()
 		select {
@@ -427,6 +438,9 @@ func (c *Consumer) waitRetry(err error) error {
 		default:
 		}
 	}()
+
+	c.retryCounter++
+
 	state := c.notifyUnready(err)
 	for {
 		select {
