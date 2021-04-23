@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/makasim/amqpextra/logger"
@@ -47,7 +48,7 @@ type Consumer struct {
 
 	worker Worker
 
-	nextRetryPeriod func(attemptNumber int) time.Duration
+	nextRetryPeriod func(attemptNumber int32) time.Duration
 	initFunc        func(conn AMQPConnection) (AMQPChannel, error)
 	ctx             context.Context
 	cancelFunc      context.CancelFunc
@@ -80,7 +81,7 @@ type Consumer struct {
 	noWait    bool
 	args      amqp.Table
 
-	retryCounter int
+	retryCounter int32
 }
 
 func New(
@@ -116,7 +117,7 @@ func New(
 	}
 
 	if c.nextRetryPeriod == nil {
-		c.nextRetryPeriod = func(_ int) time.Duration {
+		c.nextRetryPeriod = func(_ int32) time.Duration {
 			return time.Second * 5
 		}
 	}
@@ -161,12 +162,12 @@ func WithContext(ctx context.Context) Option {
 }
 
 func WithRetryPeriod(dur time.Duration) Option {
-	return WithRetryPeriodFunc(func(_ int) time.Duration {
+	return WithRetryPeriodFunc(func(_ int32) time.Duration {
 		return dur
 	})
 }
 
-func WithRetryPeriodFunc(durFunc func(retryCount int) time.Duration) Option {
+func WithRetryPeriodFunc(durFunc func(retryCount int32) time.Duration) Option {
 	return func(c *Consumer) {
 		c.nextRetryPeriod = durFunc
 	}
@@ -394,8 +395,8 @@ func (c *Consumer) consumeState(ch AMQPChannel, queue string, connCloseCh <-chan
 	c.logger.Printf("[DEBUG] consumer ready")
 
 	state := c.notifyReady(queue)
-	c.retryCounter = 0
-	
+	atomic.StoreInt32(&c.retryCounter, 0)
+
 	go func() {
 		defer close(workerDoneCh)
 		c.worker.Serve(workerCtx, c.handler, msgCh)
@@ -430,7 +431,7 @@ func (c *Consumer) consumeState(ch AMQPChannel, queue string, connCloseCh <-chan
 }
 
 func (c *Consumer) waitRetry(err error) error {
-	timer := time.NewTimer(c.nextRetryPeriod(c.retryCounter))
+	timer := time.NewTimer(c.nextRetryPeriod(atomic.LoadInt32(&c.retryCounter)))
 	defer func() {
 		timer.Stop()
 		select {
@@ -439,7 +440,7 @@ func (c *Consumer) waitRetry(err error) error {
 		}
 	}()
 	defer func() {
-		c.retryCounter++
+		atomic.AddInt32(&c.retryCounter, 1)
 	}()
 
 	state := c.notifyUnready(err)
