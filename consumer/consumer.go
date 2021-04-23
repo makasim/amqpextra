@@ -80,7 +80,7 @@ type Consumer struct {
 	noWait    bool
 	args      amqp.Table
 
-	retryCounter *retryCounter
+	retryCounter int
 }
 
 func New(
@@ -142,11 +142,6 @@ func New(
 			return conn.(*amqp.Connection).Channel()
 		}
 	}
-
-	ch := make(chan State, 2)
-	rc := newRetryCounter(c.ctx, ch)
-	c.retryCounter = rc
-	c.stateChs = append(c.stateChs, rc.ch)
 
 	go c.connectionState()
 
@@ -399,7 +394,8 @@ func (c *Consumer) consumeState(ch AMQPChannel, queue string, connCloseCh <-chan
 	c.logger.Printf("[DEBUG] consumer ready")
 
 	state := c.notifyReady(queue)
-
+	c.retryCounter = 0
+	
 	go func() {
 		defer close(workerDoneCh)
 		c.worker.Serve(workerCtx, c.handler, msgCh)
@@ -434,7 +430,7 @@ func (c *Consumer) consumeState(ch AMQPChannel, queue string, connCloseCh <-chan
 }
 
 func (c *Consumer) waitRetry(err error) error {
-	timer := time.NewTimer(c.nextRetryPeriod(c.retryCounter.read()))
+	timer := time.NewTimer(c.nextRetryPeriod(c.retryCounter))
 	defer func() {
 		timer.Stop()
 		select {
@@ -442,6 +438,10 @@ func (c *Consumer) waitRetry(err error) error {
 		default:
 		}
 	}()
+	defer func() {
+		c.retryCounter++
+	}()
+
 	state := c.notifyUnready(err)
 	for {
 		select {
