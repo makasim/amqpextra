@@ -438,9 +438,8 @@ func (c *Consumer) waitRetry(err error) error {
 		default:
 		}
 	}()
-	defer func() {
-		c.retryCounter++
-	}()
+
+	c.retryCounter++
 
 	state := c.notifyUnready(err)
 	for {
