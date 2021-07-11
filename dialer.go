@@ -3,6 +3,7 @@ package amqpextra
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
 	"sync"
 	"time"
@@ -161,6 +162,14 @@ func NewDialer(opts ...Option) (*Dialer, error) {
 func WithURL(urls ...string) Option {
 	return func(c *Dialer) {
 		c.amqpUrls = append(c.amqpUrls, urls...)
+	}
+}
+
+// WithTLS configure TLS.
+// tlsConfig TLS configuration to use
+func WithTLS(tlsConfig *tls.Config) Option {
+	return func(c *Dialer) {
+		c.amqpConfig.TLSClientConfig = tlsConfig
 	}
 }
 

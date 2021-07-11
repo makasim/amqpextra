@@ -1,6 +1,7 @@
 package amqpextra_test
 
 import (
+	"crypto/tls"
 	"errors"
 	"log"
 
@@ -97,6 +98,35 @@ func TestOptions(main *testing.T) {
 			amqpextra.WithURL("", "url"),
 		)
 		require.EqualError(t, err, "url(s) must be not empty")
+	})
+
+	main.Run("NoTLSConfig", func(t *testing.T) {
+		defer goleak.VerifyNone(t)
+
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		dialer, err := amqpextra.NewDialer(
+			amqpextra.WithURL("url"),
+		)
+		require.Equal(t, nil, err)
+
+		dialer.Close()
+	})
+
+	main.Run("WithTLSConfig", func(t *testing.T) {
+		defer goleak.VerifyNone(t)
+
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		dialer, err := amqpextra.NewDialer(
+			amqpextra.WithURL("url"),
+			amqpextra.WithTLS(&tls.Config{}),
+		)
+		assert.Equal(t, nil, err)
+
+		dialer.Close()
 	})
 }
 
