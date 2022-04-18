@@ -34,7 +34,7 @@ install:
   - (cd / && go get -u github.com/rakyll/gotest)
 
 before_script:
-  - if [ "$LINTER" = true ]; then curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $GOPATH/bin v1.23.1; fi
+  - if [ "$LINTER" = true ]; then curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $GOPATH/bin v1.45.2; fi
 
 script:
   - if [ "$LINTER" = true ]; then golangci-lint version && make lint; fi
