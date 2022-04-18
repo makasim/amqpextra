@@ -6,23 +6,23 @@ language: go
 matrix:
   include:
     # linter
-    - go: 1.13.x
+    - go: 1.18.x
       sudo: false
       env: LINTER=true GOFLAGS=-mod=vendor GO111MODULE=auto
    
     # unit tests
-    - go: 1.13.x
+    - go: 1.18.x
       sudo: false
       env: UNIT_TESTS=true NOMOCKGEN=1 GOFLAGS=-mod=vendor GO111MODULE=auto GOTEST=gotest
-    - go: 1.14.x
+    - go: 1.18.x
       sudo: false
       env: UNIT_TESTS=true NOMOCKGEN=1 GOFLAGS=-mod=vendor GO111MODULE=auto GOTEST=gotest
-    - go: 1.15.x
+    - go: 1.18.x
       sudo: false
       env: UNIT_TESTS=true NOMOCKGEN=1 GOFLAGS=-mod=vendor GO111MODULE=auto GOTEST=gotest
     
     # e2e tests
-    - go: 1.15.x
+    - go: 1.18.x
       sudo: required
       services: docker
       env: E2E_TESTS=true GOFLAGS=-mod=vendor GO111MODULE=auto
