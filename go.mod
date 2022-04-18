@@ -7,4 +7,5 @@ require (
 	github.com/rabbitmq/amqp091-go v1.3.4
 	github.com/stretchr/testify v1.4.0
 	go.uber.org/goleak v1.0.0
+	gopkg.in/yaml.v2 v2.4.0 // indirect
 )
