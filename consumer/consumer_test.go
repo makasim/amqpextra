@@ -15,7 +15,7 @@ import (
 	"github.com/makasim/amqpextra/consumer"
 	"github.com/makasim/amqpextra/consumer/mock_consumer"
 	"github.com/makasim/amqpextra/logger"
-	"github.com/streadway/amqp"
+	amqp "github.com/rabbitmq/amqp091-go"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/goleak"

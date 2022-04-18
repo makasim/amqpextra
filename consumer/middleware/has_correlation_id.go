@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"github.com/makasim/amqpextra/consumer"
-	"github.com/streadway/amqp"
+	amqp "github.com/rabbitmq/amqp091-go"
 )
 
 func HasCorrelationID() consumer.Middleware {

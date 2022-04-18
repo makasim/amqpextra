@@ -6,7 +6,7 @@ import (
 	"log"
 
 	"github.com/makasim/amqpextra"
-	"github.com/streadway/amqp"
+	amqp "github.com/rabbitmq/amqp091-go"
 )
 
 func TempQueue(

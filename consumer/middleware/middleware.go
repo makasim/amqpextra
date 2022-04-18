@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"github.com/makasim/amqpextra/consumer"
-	"github.com/streadway/amqp"
+	amqp "github.com/rabbitmq/amqp091-go"
 )
 
 // contextKey is a value for use with context.WithValue. It's used as

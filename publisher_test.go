@@ -8,7 +8,7 @@ import (
 
 	"github.com/makasim/amqpextra"
 	"github.com/makasim/amqpextra/publisher"
-	"github.com/streadway/amqp"
+	amqp "github.com/rabbitmq/amqp091-go"
 )
 
 func ExampleDialer_Publisher() {

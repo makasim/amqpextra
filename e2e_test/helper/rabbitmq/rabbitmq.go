@@ -3,12 +3,12 @@ package rabbitmq
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"net/http/httputil"
 	"time"
 
-	"github.com/streadway/amqp"
+	amqp "github.com/rabbitmq/amqp091-go"
 )
 
 func CloseConn(userProvidedName string) bool {
@@ -29,7 +29,7 @@ func CloseConn(userProvidedName string) bool {
 			req, err := http.NewRequest(
 				"DELETE",
 				fmt.Sprintf("http://guest:guest@rabbitmq:15672/api/connections/%s", conn["name"].(string)),
-				nil,
+				http.NoBody,
 			)
 			if err != nil {
 				panic(err)
@@ -79,7 +79,7 @@ func IsOpened(userProvidedName string) bool {
 }
 
 func OpenedConns() string {
-	req, err := http.NewRequest("GET", "http://guest:guest@rabbitmq:15672/api/connections", nil)
+	req, err := http.NewRequest("GET", "http://guest:guest@rabbitmq:15672/api/connections", http.NoBody)
 	if err != nil {
 		panic(err)
 	}
@@ -96,7 +96,7 @@ func OpenedConns() string {
 		panic(fmt.Sprintf("get connections request failed:\n\n%s", string(b)))
 	}
 
-	b, err := ioutil.ReadAll(resp.Body)
+	b, err := io.ReadAll(resp.Body)
 	if err != nil {
 		panic(err)
 	}

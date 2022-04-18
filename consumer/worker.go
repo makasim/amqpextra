@@ -5,7 +5,7 @@ import (
 	"sync"
 
 	"github.com/makasim/amqpextra/logger"
-	"github.com/streadway/amqp"
+	amqp "github.com/rabbitmq/amqp091-go"
 )
 
 type Worker interface {

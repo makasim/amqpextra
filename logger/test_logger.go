@@ -3,7 +3,7 @@ package logger
 import (
 	"bytes"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"log"
 	"sync"
 )
@@ -44,7 +44,7 @@ func (l *TestLogger) Logs() string {
 	l.mx.RLock()
 	defer l.mx.RUnlock()
 
-	b, _ := ioutil.ReadAll(l.buf)
+	b, _ := io.ReadAll(l.buf)
 
 	return string(b)
 }

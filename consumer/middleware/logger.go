@@ -5,7 +5,7 @@ import (
 
 	"github.com/makasim/amqpextra/consumer"
 	"github.com/makasim/amqpextra/logger"
-	"github.com/streadway/amqp"
+	amqp "github.com/rabbitmq/amqp091-go"
 )
 
 var loggerKey = &contextKey{"logger"}

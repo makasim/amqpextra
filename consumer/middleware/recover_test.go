@@ -6,7 +6,7 @@ import (
 
 	"github.com/makasim/amqpextra/consumer"
 	"github.com/makasim/amqpextra/consumer/middleware"
-	"github.com/streadway/amqp"
+	amqp "github.com/rabbitmq/amqp091-go"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

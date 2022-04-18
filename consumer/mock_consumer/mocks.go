@@ -8,7 +8,7 @@ import (
 	reflect "reflect"
 
 	gomock "github.com/golang/mock/gomock"
-	amqp "github.com/streadway/amqp"
+	amqp091 "github.com/rabbitmq/amqp091-go"
 )
 
 // MockAMQPConnection is a mock of AMQPConnection interface.
@@ -72,10 +72,10 @@ func (mr *MockAMQPChannelMockRecorder) Close() *gomock.Call {
 }
 
 // Consume mocks base method.
-func (m *MockAMQPChannel) Consume(arg0, arg1 string, arg2, arg3, arg4, arg5 bool, arg6 amqp.Table) (<-chan amqp.Delivery, error) {
+func (m *MockAMQPChannel) Consume(arg0, arg1 string, arg2, arg3, arg4, arg5 bool, arg6 amqp091.Table) (<-chan amqp091.Delivery, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Consume", arg0, arg1, arg2, arg3, arg4, arg5, arg6)
-	ret0, _ := ret[0].(<-chan amqp.Delivery)
+	ret0, _ := ret[0].(<-chan amqp091.Delivery)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -101,10 +101,10 @@ func (mr *MockAMQPChannelMockRecorder) NotifyCancel(arg0 interface{}) *gomock.Ca
 }
 
 // NotifyClose mocks base method.
-func (m *MockAMQPChannel) NotifyClose(arg0 chan *amqp.Error) chan *amqp.Error {
+func (m *MockAMQPChannel) NotifyClose(arg0 chan *amqp091.Error) chan *amqp091.Error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "NotifyClose", arg0)
-	ret0, _ := ret[0].(chan *amqp.Error)
+	ret0, _ := ret[0].(chan *amqp091.Error)
 	return ret0
 }
 
@@ -129,7 +129,7 @@ func (mr *MockAMQPChannelMockRecorder) Qos(arg0, arg1, arg2 interface{}) *gomock
 }
 
 // QueueBind mocks base method.
-func (m *MockAMQPChannel) QueueBind(arg0, arg1, arg2 string, arg3 bool, arg4 amqp.Table) error {
+func (m *MockAMQPChannel) QueueBind(arg0, arg1, arg2 string, arg3 bool, arg4 amqp091.Table) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "QueueBind", arg0, arg1, arg2, arg3, arg4)
 	ret0, _ := ret[0].(error)
@@ -143,10 +143,10 @@ func (mr *MockAMQPChannelMockRecorder) QueueBind(arg0, arg1, arg2, arg3, arg4 in
 }
 
 // QueueDeclare mocks base method.
-func (m *MockAMQPChannel) QueueDeclare(arg0 string, arg1, arg2, arg3, arg4 bool, arg5 amqp.Table) (amqp.Queue, error) {
+func (m *MockAMQPChannel) QueueDeclare(arg0 string, arg1, arg2, arg3, arg4 bool, arg5 amqp091.Table) (amqp091.Queue, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "QueueDeclare", arg0, arg1, arg2, arg3, arg4, arg5)
-	ret0, _ := ret[0].(amqp.Queue)
+	ret0, _ := ret[0].(amqp091.Queue)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }

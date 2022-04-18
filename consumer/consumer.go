@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/makasim/amqpextra/logger"
-	"github.com/streadway/amqp"
+	amqp "github.com/rabbitmq/amqp091-go"
 )
 
 var errChannelClosed = fmt.Errorf("channel closed")
@@ -395,7 +395,7 @@ func (c *Consumer) consumeState(ch AMQPChannel, queue string, connCloseCh <-chan
 
 	state := c.notifyReady(queue)
 	c.retryCounter = 0
-	
+
 	go func() {
 		defer close(workerDoneCh)
 		c.worker.Serve(workerCtx, c.handler, msgCh)

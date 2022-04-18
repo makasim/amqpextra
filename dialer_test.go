@@ -17,7 +17,7 @@ import (
 	"github.com/makasim/amqpextra"
 	"github.com/makasim/amqpextra/logger"
 	"github.com/makasim/amqpextra/mock_amqpextra"
-	"github.com/streadway/amqp"
+	amqp "github.com/rabbitmq/amqp091-go"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/goleak"
@@ -122,7 +122,7 @@ func TestOptions(main *testing.T) {
 
 		dialer, err := amqpextra.NewDialer(
 			amqpextra.WithURL("url"),
-			amqpextra.WithTLS(&tls.Config{}),
+			amqpextra.WithTLS(&tls.Config{MinVersion: tls.VersionTLS13}),
 		)
 		assert.Equal(t, nil, err)
 

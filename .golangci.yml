@@ -1,7 +1,7 @@
 linters-settings:
   govet:
     check-shadowing: true
-  golint:
+  revive: 
     min-confidence: 0.8
   gocyclo:
     min-complexity: 20
@@ -30,7 +30,7 @@ linters:
   disable-all: true
   enable:
     - megacheck
-    - golint
+    - revive
     - govet
     - unconvert
     - megacheck
@@ -47,9 +47,9 @@ linters:
     - varcheck
     - stylecheck
     - gochecknoinits
-    - scopelint
+    - exportloopref
     - gocritic
-    - golint
+    - revive
     - nakedret
     - gosimple
     - prealloc
