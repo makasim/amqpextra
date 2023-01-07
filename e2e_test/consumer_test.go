@@ -1,18 +1,15 @@
 package e2e_test
 
 import (
+	"context"
+	"crypto/rand"
 	"fmt"
 	"math/big"
 	"testing"
+	"time"
 
 	amqp "github.com/rabbitmq/amqp091-go"
 	"go.uber.org/goleak"
-
-	"time"
-
-	"context"
-
-	"crypto/rand"
 
 	"github.com/makasim/amqpextra"
 	"github.com/makasim/amqpextra/consumer"
@@ -158,7 +155,7 @@ func TestConsumerWithExchange(t *testing.T) {
 
 	assertConsumerReady(t, stateCh)
 
-	err = ch.Publish(exchangeName,
+	err = ch.PublishWithContext(context.Background(), exchangeName,
 		"",
 		false,
 		false,

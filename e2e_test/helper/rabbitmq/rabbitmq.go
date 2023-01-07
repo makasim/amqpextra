@@ -1,6 +1,7 @@
 package rabbitmq
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -127,7 +128,7 @@ func Publish(conn *amqp.Connection, body, queue string) {
 		panic(err)
 	}
 
-	err = ch.Publish("", queue, false, false, amqp.Publishing{
+	err = ch.PublishWithContext(context.Background(), "", queue, false, false, amqp.Publishing{
 		Body: []byte(body),
 	})
 	if err != nil {
