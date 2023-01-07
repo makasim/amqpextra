@@ -28,7 +28,7 @@ type State struct {
 }
 
 type AMQPChannel interface {
-	Publish(exchange, key string, mandatory, immediate bool, msg amqp.Publishing) error
+	PublishWithContext(ctx context.Context, exchange, key string, mandatory, immediate bool, msg amqp.Publishing) error
 	NotifyClose(receiver chan *amqp.Error) chan *amqp.Error
 	NotifyFlow(c chan bool) chan bool
 	Close() error
@@ -440,7 +440,8 @@ func (p *Publisher) publish(ch AMQPChannel, msg Message, resultChCh chan chan er
 	default:
 	}
 
-	result := ch.Publish(
+	result := ch.PublishWithContext(
+		msg.Context,
 		msg.Exchange,
 		msg.Key,
 		msg.Mandatory,

@@ -5,6 +5,7 @@
 package mock_publisher
 
 import (
+	context "context"
 	reflect "reflect"
 
 	gomock "github.com/golang/mock/gomock"
@@ -127,16 +128,16 @@ func (mr *MockAMQPChannelMockRecorder) NotifyPublish(arg0 interface{}) *gomock.C
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NotifyPublish", reflect.TypeOf((*MockAMQPChannel)(nil).NotifyPublish), arg0)
 }
 
-// Publish mocks base method.
-func (m *MockAMQPChannel) Publish(arg0, arg1 string, arg2, arg3 bool, arg4 amqp091.Publishing) error {
+// PublishWithContext mocks base method.
+func (m *MockAMQPChannel) PublishWithContext(arg0 context.Context, arg1, arg2 string, arg3, arg4 bool, arg5 amqp091.Publishing) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Publish", arg0, arg1, arg2, arg3, arg4)
+	ret := m.ctrl.Call(m, "PublishWithContext", arg0, arg1, arg2, arg3, arg4, arg5)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
-// Publish indicates an expected call of Publish.
-func (mr *MockAMQPChannelMockRecorder) Publish(arg0, arg1, arg2, arg3, arg4 interface{}) *gomock.Call {
+// PublishWithContext indicates an expected call of PublishWithContext.
+func (mr *MockAMQPChannelMockRecorder) PublishWithContext(arg0, arg1, arg2, arg3, arg4, arg5 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Publish", reflect.TypeOf((*MockAMQPChannel)(nil).Publish), arg0, arg1, arg2, arg3, arg4)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PublishWithContext", reflect.TypeOf((*MockAMQPChannel)(nil).PublishWithContext), arg0, arg1, arg2, arg3, arg4, arg5)
 }
