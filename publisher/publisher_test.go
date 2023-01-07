@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"testing"
 	"time"
 
@@ -20,17 +21,19 @@ import (
 
 func TestNotify(main *testing.T) {
 	main.Run("PanicIfStateChUnbuffered", func(t *testing.T) {
+		log.Println(111)
 		defer goleak.VerifyNone(t)
 
 		stateCh := make(chan publisher.State)
 
+		_, _, p := newPublisher()
+		defer p.Close()
+
 		require.PanicsWithValue(t, "state chan is unbuffered", func() {
-			_, _, p := newPublisher()
-			defer p.Close()
 			p.Notify(stateCh)
 		})
 	})
-
+	log.Println(2)
 	main.Run("UnreadyWhileInit", func(t *testing.T) {
 		defer goleak.VerifyNone(t)
 
@@ -792,8 +795,8 @@ func TestReadyPublisher(main *testing.T) {
 			Times(1)
 		ch.
 			EXPECT().
-			Publish(any(), any(), any(), any(), any()).
-			DoAndReturn(func(exchange, key string, mandatory, immediate bool, msg amqp.Publishing) error {
+			PublishWithContext(any(), any(), any(), any(), any(), any()).
+			DoAndReturn(func(_ context.Context, exchange, key string, mandatory, immediate bool, msg amqp.Publishing) error {
 				require.Equal(t, "theExchange", exchange)
 				require.Equal(t, "theKey", key)
 				require.True(t, mandatory)
@@ -895,7 +898,7 @@ func TestReadyPublisher(main *testing.T) {
 			Times(1)
 		ch.
 			EXPECT().
-			Publish(any(), any(), any(), any(), any()).
+			PublishWithContext(any(), any(), any(), any(), any(), any()).
 			Return(fmt.Errorf("publish errored")).
 			Times(1)
 		ch.
@@ -954,7 +957,7 @@ func TestReadyPublisher(main *testing.T) {
 			Times(1)
 		ch.
 			EXPECT().
-			Publish(any(), any(), any(), any(), any()).
+			PublishWithContext(any(), any(), any(), any(), any(), any()).
 			Return(fmt.Errorf("publish errored")).
 			Times(1)
 		ch.
@@ -1014,7 +1017,7 @@ func TestReadyPublisher(main *testing.T) {
 			Times(1)
 		ch.
 			EXPECT().
-			Publish(any(), any(), any(), any(), any()).
+			PublishWithContext(any(), any(), any(), any(), any(), any()).
 			Return(nil).
 			MaxTimes(1)
 		ch.
@@ -1079,7 +1082,7 @@ func TestReadyPublisher(main *testing.T) {
 			Times(1)
 		ch.
 			EXPECT().
-			Publish(any(), any(), any(), any(), any()).
+			PublishWithContext(any(), any(), any(), any(), any(), any()).
 			Return(nil).
 			Times(1)
 		ch.
@@ -1404,8 +1407,8 @@ func TestConcurrency(main *testing.T) {
 			Times(1)
 		ch.
 			EXPECT().
-			Publish(any(), any(), any(), any(), any()).
-			DoAndReturn(func(exchange, key string, mandatory, immediate bool, msg amqp.Publishing) error {
+			PublishWithContext(any(), any(), any(), any(), any(), any()).
+			DoAndReturn(func(_ context.Context, exchange, key string, mandatory, immediate bool, msg amqp.Publishing) error {
 				time.Sleep(time.Millisecond * 10)
 				return nil
 			}).
@@ -1469,8 +1472,8 @@ func TestConcurrency(main *testing.T) {
 			Times(1)
 		ch.
 			EXPECT().
-			Publish(any(), any(), any(), any(), any()).
-			DoAndReturn(func(exchange, key string, mandatory, immediate bool, msg amqp.Publishing) error {
+			PublishWithContext(any(), any(), any(), any(), any(), any()).
+			DoAndReturn(func(_ context.Context, exchange, key string, mandatory, immediate bool, msg amqp.Publishing) error {
 				time.Sleep(time.Millisecond * 10)
 				return nil
 			}).
@@ -1498,8 +1501,8 @@ func TestConcurrency(main *testing.T) {
 			Times(1)
 		newCh.
 			EXPECT().
-			Publish(any(), any(), any(), any(), any()).
-			DoAndReturn(func(exchange, key string, mandatory, immediate bool, msg amqp.Publishing) error {
+			PublishWithContext(any(), any(), any(), any(), any(), any()).
+			DoAndReturn(func(_ context.Context, exchange, key string, mandatory, immediate bool, msg amqp.Publishing) error {
 				time.Sleep(time.Millisecond * 10)
 				return nil
 			}).
@@ -1572,8 +1575,8 @@ func TestConcurrency(main *testing.T) {
 			Times(1)
 		ch.
 			EXPECT().
-			Publish(any(), any(), any(), any(), any()).
-			DoAndReturn(func(exchange, key string, mandatory, immediate bool, msg amqp.Publishing) error {
+			PublishWithContext(any(), any(), any(), any(), any(), any()).
+			DoAndReturn(func(_ context.Context, exchange, key string, mandatory, immediate bool, msg amqp.Publishing) error {
 				time.Sleep(time.Millisecond * 10)
 				return nil
 			}).
@@ -1593,8 +1596,8 @@ func TestConcurrency(main *testing.T) {
 			Times(1)
 		newCh.
 			EXPECT().
-			Publish(any(), any(), any(), any(), any()).
-			DoAndReturn(func(exchange, key string, mandatory, immediate bool, msg amqp.Publishing) error {
+			PublishWithContext(any(), any(), any(), any(), any(), any()).
+			DoAndReturn(func(_ context.Context, exchange, key string, mandatory, immediate bool, msg amqp.Publishing) error {
 				time.Sleep(time.Millisecond * 10)
 				return nil
 			}).
@@ -1671,7 +1674,7 @@ func TestFlowControl(main *testing.T) {
 			Times(1)
 		ch.
 			EXPECT().
-			Publish(any(), any(), any(), any(), any()).
+			PublishWithContext(any(), any(), any(), any(), any(), any()).
 			Return(nil).
 			Times(3)
 		ch.
@@ -1746,7 +1749,7 @@ func TestFlowControl(main *testing.T) {
 			Times(1)
 		ch.
 			EXPECT().
-			Publish(any(), any(), any(), any(), any()).
+			PublishWithContext(any(), any(), any(), any(), any(), any()).
 			Return(nil).
 			Times(2)
 		ch.
@@ -1830,7 +1833,7 @@ func TestFlowControl(main *testing.T) {
 			Times(1)
 		ch.
 			EXPECT().
-			Publish(any(), any(), any(), any(), any()).
+			PublishWithContext(any(), any(), any(), any(), any(), any()).
 			Return(nil).
 			Times(3)
 		ch.
@@ -2131,7 +2134,7 @@ func TestPublisherConfirms(main *testing.T) {
 			DoAndReturn(confirmationChStub(confirmationCh)).
 			Times(1)
 		ch.EXPECT().
-			Publish(any(), any(), any(), any(), any()).
+			PublishWithContext(any(), any(), any(), any(), any(), any()).
 			Return(nil).
 			Times(2)
 		ch.EXPECT().
@@ -2193,7 +2196,7 @@ func TestPublisherConfirms(main *testing.T) {
 			DoAndReturn(confirmationChStub(confirmationCh)).
 			Times(1)
 		ch.EXPECT().
-			Publish(any(), any(), any(), any(), any()).
+			PublishWithContext(any(), any(), any(), any(), any(), any()).
 			Return(nil).
 			Times(2)
 		ch.EXPECT().
@@ -2257,7 +2260,7 @@ func TestPublisherConfirms(main *testing.T) {
 			DoAndReturn(confirmationChStub(confirmationCh)).
 			Times(1)
 		ch.EXPECT().
-			Publish(any(), any(), any(), any(), any()).
+			PublishWithContext(any(), any(), any(), any(), any(), any()).
 			Return(nil).
 			Times(4)
 		ch.EXPECT().
@@ -2332,7 +2335,7 @@ func TestPublisherConfirms(main *testing.T) {
 			DoAndReturn(confirmationChStub(confirmationCh, secondConfirmationCh)).
 			Times(2)
 		ch.EXPECT().
-			Publish(any(), any(), any(), any(), any()).
+			PublishWithContext(any(), any(), any(), any(), any(), any()).
 			Return(nil).
 			Times(4)
 		ch.EXPECT().
