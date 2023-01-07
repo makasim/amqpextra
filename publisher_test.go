@@ -1,9 +1,8 @@
 package amqpextra_test
 
 import (
-	"log"
-
 	"context"
+	"log"
 	"time"
 
 	"github.com/makasim/amqpextra"
