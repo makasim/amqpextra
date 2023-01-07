@@ -1,15 +1,11 @@
 package consumer_test
 
 import (
-	"testing"
-
-	"time"
-
 	"context"
-
 	"fmt"
-
 	"sync"
+	"testing"
+	"time"
 
 	"github.com/golang/mock/gomock"
 	"github.com/makasim/amqpextra/consumer"
@@ -130,6 +126,105 @@ func TestNotify(main *testing.T) {
 		connCh <- consumer.NewConnection(conn, nil)
 		assertUnready(t, newStateCh, amqp.ErrClosed.Error())
 		assertReady(t, newStateCh, "theQueue")
+
+		c.Close()
+		assertClosed(t, c)
+
+		assert.Equal(t, `[DEBUG] consumer starting
+[DEBUG] consumer ready
+[DEBUG] worker starting
+[DEBUG] worker stopped
+[DEBUG] consumer unready
+[DEBUG] consumer stopped
+`, l.Logs())
+	})
+
+	main.Run("NotifyReadyDetails", func(t *testing.T) {
+		defer goleak.VerifyNone(t)
+
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		l := logger.NewTest()
+		h := handlerStub(l)
+		ch := mock_consumer.NewMockAMQPChannel(ctrl)
+
+		ch.EXPECT().
+			Consume(any(), any(), any(), any(), any(), any(), any()).
+			Times(1)
+		ch.EXPECT().QueueDeclare(`theQueue`, true, true, true, true, amqp.Table{"foo": "fooVal"}).
+			Return(amqp.Queue{Name: "theQueue"}, nil).
+			Times(1)
+		ch.EXPECT().NotifyCancel(any()).
+			AnyTimes()
+		ch.EXPECT().Qos(any(), any(), any()).
+			Times(1)
+		ch.EXPECT().
+			NotifyClose(any()).
+			AnyTimes()
+		ch.EXPECT().Close().AnyTimes()
+
+		connCh := make(chan *consumer.Connection, 1)
+		stateCh := make(chan consumer.State, 2)
+
+		conn := mock_consumer.NewMockAMQPConnection(ctrl)
+
+		c, err := consumer.New(
+			connCh,
+			consumer.WithDeclareQueue("theQueue", true, true, true, true, amqp.Table{
+				"foo": "fooVal",
+			}),
+			consumer.WithConsumeArgs("theConsumer", true, true, true, true, amqp.Table{
+				"bar": "barVal",
+			}),
+			consumer.WithQos(123, false),
+			consumer.WithInitFunc(initFuncStub(ch)),
+			consumer.WithHandler(h),
+			consumer.WithLogger(l),
+		)
+		require.NoError(t, err)
+
+		defer c.Close()
+
+		newStateCh := c.Notify(stateCh)
+		connCh <- consumer.NewConnection(conn, nil)
+		assertUnready(t, newStateCh, amqp.ErrClosed.Error())
+
+		timer := time.NewTimer(time.Millisecond * 100)
+		defer timer.Stop()
+
+		select {
+		case state, ok := <-stateCh:
+			require.True(t, ok)
+			require.Nil(t, state.Unready, fmt.Sprintf("%+v", state))
+
+			require.Equal(t, &consumer.Ready{
+				Queue: `theQueue`,
+
+				PrefetchCount: 123,
+
+				DeclareQueue:      true,
+				DeclareDurable:    true,
+				DeclareAutoDelete: true,
+				DeclareExclusive:  true,
+				DeclareNoWait:     true,
+				DeclareArgs: amqp.Table{
+					"foo": "fooVal",
+				},
+				
+				Consumer:  "theConsumer",
+				AutoAck:   true,
+				Exclusive: true,
+				NoLocal:   true,
+				NoWait:    true,
+				Args: amqp.Table{
+					"bar": "barVal",
+				},
+			}, state.Ready)
+
+		case <-timer.C:
+			t.Fatal("consumer must be ready")
+		}
 
 		c.Close()
 		assertClosed(t, c)
