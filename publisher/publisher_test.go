@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
 	"testing"
 	"time"
 
@@ -21,7 +20,6 @@ import (
 
 func TestNotify(main *testing.T) {
 	main.Run("PanicIfStateChUnbuffered", func(t *testing.T) {
-		log.Println(111)
 		defer goleak.VerifyNone(t)
 
 		stateCh := make(chan publisher.State)
@@ -33,7 +31,7 @@ func TestNotify(main *testing.T) {
 			p.Notify(stateCh)
 		})
 	})
-	log.Println(2)
+
 	main.Run("UnreadyWhileInit", func(t *testing.T) {
 		defer goleak.VerifyNone(t)
 
