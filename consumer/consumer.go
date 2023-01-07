@@ -20,6 +20,22 @@ type State struct {
 
 type Ready struct {
 	Queue string
+
+	PrefetchCount int
+
+	DeclareQueue      bool
+	DeclareDurable    bool
+	DeclareAutoDelete bool
+	DeclareExclusive  bool
+	DeclareNoWait     bool
+	DeclareArgs       amqp.Table
+
+	Consumer  string
+	AutoAck   bool
+	Exclusive bool
+	NoLocal   bool
+	NoWait    bool
+	Args      amqp.Table
 }
 
 type Unready struct {
@@ -456,7 +472,25 @@ func (c *Consumer) waitRetry(err error) error {
 
 func (c *Consumer) notifyReady(queue string) State {
 	state := State{
-		Ready: &Ready{Queue: queue},
+		Ready: &Ready{
+			Queue: queue,
+
+			PrefetchCount: c.prefetchCount,
+
+			DeclareQueue:      c.queueDeclare,
+			DeclareDurable:    c.declareDurable,
+			DeclareAutoDelete: c.declareAutoDelete,
+			DeclareExclusive:  c.declareExclusive,
+			DeclareNoWait:     c.declareNoWait,
+			DeclareArgs:       c.declareArgs,
+
+			Consumer:  c.consumer,
+			AutoAck:   c.autoAck,
+			Exclusive: c.exclusive,
+			NoLocal:   c.noLocal,
+			NoWait:    c.noWait,
+			Args:      c.args,
+		},
 	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
