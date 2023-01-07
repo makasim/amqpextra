@@ -84,7 +84,11 @@ func New(dialerOptions []amqpextra.Option, consumerOptions []consumer.Option, po
 	}
 	p.d = d
 
-	conn, err := d.Connection(context.TODO())
+	// todo: make it configurable
+	initCtx, initCtxCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer initCtxCancel()
+
+	conn, err := d.Connection(initCtx)
 	if err != nil {
 		return nil, fmt.Errorf("dialer: connection: %s", err)
 	}
@@ -109,7 +113,10 @@ loop:
 				cReady = state.Ready
 				break loop
 			}
-			// todo: add timeout
+		case <-initCtx.Done():
+			p.d.Close()
+			c.Close()
+			return nil, fmt.Errorf("consumer: wait ready: %s", initCtx.Err())
 		}
 	}
 
@@ -158,20 +165,12 @@ func (p *Pool) Shutdown(ctx context.Context) error {
 
 func (p *Pool) connectState(cReady *consumer.Ready) {
 	connCh := p.d.ConnectionCh()
+	for conn := range connCh {
+		p.connectedState(conn, cReady)
+	}
 
-	for {
-		select {
-		case conn, ok := <-connCh:
-			if !ok {
-				for _, c := range p.cs {
-					c.Close()
-				}
-
-				return
-			}
-
-			p.connectedState(conn, cReady)
-		}
+	for _, c := range p.cs {
+		c.Close()
 	}
 }
 
@@ -259,15 +258,15 @@ func DefaultDeciderFunc() func(queueSize, poolSize, preFetch int) int {
 		newPoolSize := poolSize
 
 		if queueSize < (poolSize*preFetch - int(float64(poolSize*preFetch)*0.2)) {
-			emptyCounter += 1
+			emptyCounter++
 		}
 
 		if queueSize > (poolSize*preFetch + int(float64(poolSize*preFetch)*0.2)) {
-			emptyCounter = 0
-			newPoolSize += 1
+			emptyCounter = 1
+			newPoolSize++
 		} else if emptyCounter > 5 {
 			emptyCounter = 0
-			newPoolSize -= 1
+			newPoolSize--
 		}
 
 		return newPoolSize
