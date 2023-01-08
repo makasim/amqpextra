@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/makasim/amqpextra"
-	amqpextraconsumer "github.com/makasim/amqpextra/consumer"
+	"github.com/makasim/amqpextra/consumer"
 	amqpextralogger "github.com/makasim/amqpextra/logger"
 )
 
@@ -14,12 +14,6 @@ type Option func(p *Pool)
 
 type logger interface {
 	Printf(format string, v ...interface{})
-}
-
-type consumer interface {
-	Close()
-	NotifyClosed() <-chan struct{}
-	Notify(chan amqpextraconsumer.State) <-chan amqpextraconsumer.State
 }
 
 func WithDecider(deciderFunc func(queueSize, poolSize, preFetch int) int) Option {
@@ -42,7 +36,7 @@ func WithMaxSize(size int) Option {
 
 func WithLogger(l logger) Option {
 	return func(p *Pool) {
-		p.l = l
+		p.logger = l
 	}
 }
 
@@ -54,20 +48,21 @@ func WithInitCtx(ctx context.Context) Option {
 
 type Pool struct {
 	dialerOptions   []amqpextra.Option
-	consumerOptions []amqpextraconsumer.Option
+	consumerOptions []consumer.Option
 
 	deciderFunc func(queueSize, poolSize, preFetch int) int
 	minSize     int
 	maxSize     int
 	initCtx     context.Context
 
-	l       logger
-	d       *amqpextra.Dialer
-	cs      []consumer
-	closeCh chan struct{}
+	logger       logger
+	decideDialer *amqpextra.Dialer
+	consumers    []*consumer.Consumer
+	dialers      []*amqpextra.Dialer
+	closeCh      chan struct{}
 }
 
-func New(dialerOptions []amqpextra.Option, consumerOptions []amqpextraconsumer.Option, poolOptions []Option) (*Pool, error) {
+func New(dialerOptions []amqpextra.Option, consumerOptions []consumer.Option, poolOptions []Option) (*Pool, error) {
 	p := &Pool{
 		dialerOptions:   dialerOptions,
 		consumerOptions: consumerOptions,
@@ -93,8 +88,8 @@ func New(dialerOptions []amqpextra.Option, consumerOptions []amqpextraconsumer.O
 	if p.deciderFunc == nil {
 		p.deciderFunc = DefaultDeciderFunc()
 	}
-	if p.l == nil {
-		p.l = amqpextralogger.Discard
+	if p.logger == nil {
+		p.logger = amqpextralogger.Discard
 	}
 	if p.initCtx == nil {
 		var initCtxCancel context.CancelFunc
@@ -102,13 +97,13 @@ func New(dialerOptions []amqpextra.Option, consumerOptions []amqpextraconsumer.O
 		defer initCtxCancel()
 	}
 
-	d, err := amqpextra.NewDialer(p.dialerOptions...)
+	decideDialer, err := amqpextra.NewDialer(p.dialerOptions...)
 	if err != nil {
 		return nil, fmt.Errorf("dialer: new: %s", err)
 	}
-	p.d = d
+	p.decideDialer = decideDialer
 
-	conn, err := d.Connection(p.initCtx)
+	conn, err := decideDialer.Connection(p.initCtx)
 	if err != nil {
 		return nil, fmt.Errorf("dialer: connection: %s", err)
 	}
@@ -118,13 +113,13 @@ func New(dialerOptions []amqpextra.Option, consumerOptions []amqpextraconsumer.O
 	}
 	defer ch.Close()
 
-	c, err := startConsumer(p.dialerOptions, p.consumerOptions)
+	d, c, err := startConsumer(p.dialerOptions, p.consumerOptions)
 	if err != nil {
 		return nil, fmt.Errorf("consumer: new: %s", err)
 	}
 
-	cStateCh := c.Notify(make(chan amqpextraconsumer.State, 1))
-	var cReady *amqpextraconsumer.Ready
+	cStateCh := c.Notify(make(chan consumer.State, 1))
+	var cReady *consumer.Ready
 loop:
 	for {
 		select {
@@ -134,7 +129,7 @@ loop:
 				break loop
 			}
 		case <-p.initCtx.Done():
-			p.d.Close()
+			p.decideDialer.Close()
 			c.Close()
 			return nil, fmt.Errorf("consumer: wait ready: %s", p.initCtx.Err())
 		}
@@ -156,7 +151,8 @@ loop:
 		return nil, fmt.Errorf("channel: queue declare: %s", err)
 	}
 
-	p.cs = append(p.cs, c)
+	p.consumers = append(p.consumers, c)
+	p.dialers = append(p.dialers, d)
 
 	go p.connectState(cReady)
 
@@ -164,53 +160,62 @@ loop:
 }
 
 func (p *Pool) Close() {
-	p.d.Close()
+	p.decideDialer.Close()
 }
 
 func (p *Pool) NotifyClosed() <-chan struct{} {
 	return p.closeCh
 }
 
-func (p *Pool) connectState(cReady *amqpextraconsumer.Ready) {
+func (p *Pool) connectState(cReady *consumer.Ready) {
 	defer close(p.closeCh)
 
-	connCh := p.d.ConnectionCh()
+	connCh := p.decideDialer.ConnectionCh()
 	for conn := range connCh {
 		p.connectedState(conn, cReady)
 	}
 
-	for _, c := range p.cs {
+	for _, c := range p.consumers {
 		c.Close()
 	}
 
-	for _, c := range p.cs {
+	for _, c := range p.consumers {
 		<-c.NotifyClosed()
+	}
+
+	for _, d := range p.dialers {
+		d.Close()
+	}
+
+	for _, d := range p.dialers {
+		<-d.NotifyClosed()
 	}
 }
 
-func (p *Pool) connectedState(conn *amqpextra.Connection, cReady *amqpextraconsumer.Ready) {
+func (p *Pool) connectedState(conn *amqpextra.Connection, cReady *consumer.Ready) {
 	t := time.NewTicker(time.Second)
 	defer t.Stop()
 
 	ch, err := conn.AMQPConnection().Channel()
 	if err != nil {
-		p.l.Printf("[ERROR] new channel failed", err)
+		p.logger.Printf("[ERROR] new channel failed", err)
 		return
 	}
 
 	for {
 		select {
 		case <-t.C:
-			if len(p.cs) < p.minSize {
-				diff := p.minSize - len(p.cs)
+			if len(p.consumers) < p.minSize {
+				diff := p.minSize - len(p.consumers)
 				for i := 0; i < diff; i++ {
-					c, err := startConsumer(p.dialerOptions, p.consumerOptions)
+					d, c, err := startConsumer(p.dialerOptions, p.consumerOptions)
 					if err != nil {
-						p.l.Printf("[ERROR] start consumer failed", err)
+						p.logger.Printf("[ERROR] start consumer failed", err)
 						continue
 					}
 
-					p.cs = append(p.cs, c)
+					p.consumers = append(p.consumers, c)
+					p.dialers = append(p.dialers, d)
 				}
 			}
 
@@ -223,11 +228,11 @@ func (p *Pool) connectedState(conn *amqpextra.Connection, cReady *amqpextraconsu
 				cReady.DeclareArgs,
 			)
 			if err != nil {
-				p.l.Printf("[ERROR] queue declare failed", err)
+				p.logger.Printf("[ERROR] queue declare failed", err)
 				continue
 			}
 
-			poolSize := len(p.cs)
+			poolSize := len(p.consumers)
 			queueSize := q.Messages
 
 			newPoolSize := p.deciderFunc(queueSize, poolSize, cReady.PrefetchCount)
@@ -236,31 +241,32 @@ func (p *Pool) connectedState(conn *amqpextra.Connection, cReady *amqpextraconsu
 
 			if diff > 0 && poolSize < p.maxSize {
 				for i := 0; i < diff; i++ {
-					c, err := startConsumer(p.dialerOptions, p.consumerOptions)
+					d, c, err := startConsumer(p.dialerOptions, p.consumerOptions)
 					if err != nil {
-						p.l.Printf("[ERROR] start consumer failed", err)
+						p.logger.Printf("[ERROR] start consumer failed", err)
 						continue
 					}
 
-					p.cs = append(p.cs, c)
+					p.consumers = append(p.consumers, c)
+					p.dialers = append(p.dialers, d)
 
-					if len(p.cs) >= p.maxSize {
+					if len(p.consumers) >= p.maxSize {
 						break
 					}
 				}
-				p.l.Printf(fmt.Sprintf("[INFO] increase pool by %d; queue: %d; new len: %d", diff, queueSize, len(p.cs)))
+				p.logger.Printf(fmt.Sprintf("[INFO] increase pool by %d; queue: %d; new len: %d", diff, queueSize, len(p.consumers)))
 			} else if diff < 0 && poolSize > p.minSize {
 				for i := 0; i < -diff; i++ {
 					// todo: wait for close
-					p.cs[len(p.cs)-1].Close()
-					p.cs = p.cs[:len(p.cs)-1]
+					p.consumers[len(p.consumers)-1].Close()
+					p.consumers = p.consumers[:len(p.consumers)-1]
 
-					if len(p.cs) <= p.minSize {
+					if len(p.consumers) <= p.minSize {
 						break
 					}
 				}
 
-				p.l.Printf(fmt.Sprintf("[INFO] decrease pool by %d; new len: %d", -diff, len(p.cs)))
+				p.logger.Printf(fmt.Sprintf("[INFO] decrease pool by %d; new len: %d", -diff, len(p.consumers)))
 			}
 		case <-conn.NotifyLost():
 			return
@@ -299,16 +305,16 @@ func DefaultDeciderFunc() func(queueSize, poolSize, preFetch int) int {
 	}
 }
 
-func startConsumer(dialerOptions []amqpextra.Option, consumerOptions []amqpextraconsumer.Option) (consumer, error) {
+func startConsumer(dialerOptions []amqpextra.Option, consumerOptions []consumer.Option) (*amqpextra.Dialer, *consumer.Consumer, error) {
 	d, err := amqpextra.NewDialer(dialerOptions...)
 	if err != nil {
-		return nil, fmt.Errorf("dialer: new: %s", err)
+		return nil, nil, fmt.Errorf("dialer: new: %s", err)
 	}
 
 	c, err := d.Consumer(consumerOptions...)
 	if err != nil {
-		return nil, fmt.Errorf("consumer: new: %s", err)
+		return nil, nil, fmt.Errorf("consumer: new: %s", err)
 	}
 
-	return c, nil
+	return d, c, nil
 }
