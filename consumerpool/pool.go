@@ -274,8 +274,6 @@ func DefaultDeciderFunc() func(queueSize, poolSize, preFetch int) int {
 	var prevQueueSize int
 
 	return func(queueSize, poolSize, preFetch int) int {
-		newPoolSize := poolSize
-
 		if queueSize == 0 {
 			emptyCounter++
 		} else {
@@ -288,17 +286,17 @@ func DefaultDeciderFunc() func(queueSize, poolSize, preFetch int) int {
 			growCounter = 0
 		}
 
-		if growCounter > 3 || queueSize > (poolSize*preFetch) {
-			newPoolSize++
-			growCounter = 0
-		} else if emptyCounter > 20 {
-			emptyCounter -= 3
-			newPoolSize--
-		}
-
 		prevQueueSize = queueSize
 
-		return newPoolSize
+		if growCounter > 3 || queueSize > (poolSize*preFetch) {
+			growCounter = 0
+			return poolSize + 1
+		} else if emptyCounter > 20 {
+			emptyCounter -= 3
+			return poolSize - 1
+		}
+
+		return poolSize
 	}
 }
 
