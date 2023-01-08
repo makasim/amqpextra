@@ -42,8 +42,8 @@ func TestConsumePool(t *testing.T) {
 			consumer.WithHandler(consumer.HandlerFunc(func(ctx context.Context, msg amqp.Delivery) interface{} {
 				atomic.AddInt64(&consumedCounter, 1)
 				time.Sleep(time.Millisecond * 100)
-				if err := msg.Ack(false); err != nil {
-					log.Fatal(err)
+				if ackErr := msg.Ack(false); ackErr != nil {
+					log.Fatal(ackErr)
 				}
 
 				return nil
