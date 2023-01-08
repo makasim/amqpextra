@@ -248,7 +248,7 @@ func (p *Pool) connectedState(conn *amqpextra.Connection, cReady *amqpextraconsu
 						break
 					}
 				}
-				p.l.Printf(fmt.Sprintf("[INFO] increase pool size by %d, new len: %d", diff, len(p.cs)))
+				p.l.Printf(fmt.Sprintf("[INFO] increase pool by %d; queue: %d; new len: %d", diff, queueSize, len(p.cs)))
 			} else if diff < 0 && poolSize > p.minSize {
 				for i := 0; i < -diff; i++ {
 					// todo: wait for close
@@ -260,7 +260,7 @@ func (p *Pool) connectedState(conn *amqpextra.Connection, cReady *amqpextraconsu
 					}
 				}
 
-				p.l.Printf(fmt.Sprintf("[INFO] decrease pool size by %d, new len: %d", -diff, len(p.cs)))
+				p.l.Printf(fmt.Sprintf("[INFO] decrease pool by %d; new len: %d", -diff, len(p.cs)))
 			}
 		case <-conn.NotifyLost():
 			return
@@ -291,7 +291,7 @@ func DefaultDeciderFunc() func(queueSize, poolSize, preFetch int) int {
 		if growCounter > 3 || queueSize > (poolSize*preFetch) {
 			return poolSize + 1
 		} else if emptyCounter > 20 {
-			emptyCounter -= 3
+			emptyCounter -= 5
 			return poolSize - 1
 		}
 
