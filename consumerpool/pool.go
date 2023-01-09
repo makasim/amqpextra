@@ -46,19 +46,31 @@ func WithInitCtx(ctx context.Context) Option {
 	}
 }
 
+func WithConsumersPerConn(num int) Option {
+	return func(p *Pool) {
+		p.consumersPerConn = num
+	}
+}
+
+type poolItem struct {
+	dialer    *amqpextra.Dialer
+	consumers []*consumer.Consumer
+}
+
 type Pool struct {
 	dialerOptions   []amqpextra.Option
 	consumerOptions []consumer.Option
 
-	deciderFunc func(queueSize, poolSize, preFetch int) int
-	minSize     int
-	maxSize     int
-	initCtx     context.Context
+	deciderFunc      func(queueSize, poolSize, preFetch int) int
+	minSize          int
+	maxSize          int
+	consumersPerConn int
+	consumerTotal    int
+	initCtx          context.Context
 
 	logger       logger
 	decideDialer *amqpextra.Dialer
-	consumers    []*consumer.Consumer
-	dialers      []*amqpextra.Dialer
+	items        []*poolItem
 	closeCh      chan struct{}
 }
 
@@ -85,6 +97,14 @@ func New(dialerOptions []amqpextra.Option, consumerOptions []consumer.Option, po
 	if p.minSize > p.maxSize {
 		return nil, fmt.Errorf("minSize must be less or equal to maxSize")
 	}
+
+	if p.consumersPerConn == 0 {
+		p.consumersPerConn = 1
+	}
+	if p.consumersPerConn <= 0 {
+		return nil, fmt.Errorf("consumersPerConn must be greater than 0")
+	}
+
 	if p.deciderFunc == nil {
 		p.deciderFunc = DefaultDeciderFunc()
 	}
@@ -113,7 +133,12 @@ func New(dialerOptions []amqpextra.Option, consumerOptions []consumer.Option, po
 	}
 	defer ch.Close()
 
-	d, c, err := startConsumer(p.dialerOptions, p.consumerOptions)
+	d, err := amqpextra.NewDialer(p.dialerOptions...)
+	if err != nil {
+		return nil, fmt.Errorf("dialer: new: %s", err)
+	}
+
+	c, err := d.Consumer(p.consumerOptions...)
 	if err != nil {
 		return nil, fmt.Errorf("consumer: new: %s", err)
 	}
@@ -151,10 +176,17 @@ loop:
 		return nil, fmt.Errorf("channel: queue declare: %s", err)
 	}
 
-	p.consumers = append(p.consumers, c)
-	p.dialers = append(p.dialers, d)
+	p.items = append(p.items, &poolItem{
+		dialer:    d,
+		consumers: []*consumer.Consumer{c},
+	})
+	p.consumerTotal++
 
-	go p.connectState(cReady)
+	if p.consumerTotal < p.minSize {
+		p.startConsumersN(p.minSize - p.consumerTotal)
+	}
+
+	go p.decideConnectState(cReady)
 
 	return p, nil
 }
@@ -167,32 +199,36 @@ func (p *Pool) NotifyClosed() <-chan struct{} {
 	return p.closeCh
 }
 
-func (p *Pool) connectState(cReady *consumer.Ready) {
+func (p *Pool) decideConnectState(cReady *consumer.Ready) {
 	defer close(p.closeCh)
 
 	connCh := p.decideDialer.ConnectionCh()
 	for conn := range connCh {
-		p.connectedState(conn, cReady)
+		p.decideConnectedState(conn, cReady)
 	}
 
-	for _, c := range p.consumers {
-		c.Close()
+	for _, item := range p.items {
+		for _, c := range item.consumers {
+			c.Close()
+		}
 	}
 
-	for _, c := range p.consumers {
-		<-c.NotifyClosed()
+	for _, item := range p.items {
+		for _, c := range item.consumers {
+			<-c.NotifyClosed()
+		}
 	}
 
-	for _, d := range p.dialers {
-		d.Close()
+	for _, item := range p.items {
+		item.dialer.Close()
 	}
 
-	for _, d := range p.dialers {
-		<-d.NotifyClosed()
+	for _, item := range p.items {
+		<-item.dialer.NotifyClosed()
 	}
 }
 
-func (p *Pool) connectedState(conn *amqpextra.Connection, cReady *consumer.Ready) {
+func (p *Pool) decideConnectedState(conn *amqpextra.Connection, cReady *consumer.Ready) {
 	t := time.NewTicker(time.Second)
 	defer t.Stop()
 
@@ -205,20 +241,6 @@ func (p *Pool) connectedState(conn *amqpextra.Connection, cReady *consumer.Ready
 	for {
 		select {
 		case <-t.C:
-			if len(p.consumers) < p.minSize {
-				diff := p.minSize - len(p.consumers)
-				for i := 0; i < diff; i++ {
-					d, c, err := startConsumer(p.dialerOptions, p.consumerOptions)
-					if err != nil {
-						p.logger.Printf("[ERROR] start consumer failed", err)
-						continue
-					}
-
-					p.consumers = append(p.consumers, c)
-					p.dialers = append(p.dialers, d)
-				}
-			}
-
 			q, err := ch.QueueDeclare(
 				cReady.Queue,
 				cReady.DeclareDurable,
@@ -231,42 +253,19 @@ func (p *Pool) connectedState(conn *amqpextra.Connection, cReady *consumer.Ready
 				p.logger.Printf("[ERROR] queue declare failed", err)
 				continue
 			}
-
-			poolSize := len(p.consumers)
 			queueSize := q.Messages
 
-			newPoolSize := p.deciderFunc(queueSize, poolSize, cReady.PrefetchCount)
+			newPoolSize := p.deciderFunc(queueSize, p.consumerTotal, cReady.PrefetchCount)
 
-			diff := newPoolSize - poolSize
-
-			if diff > 0 && poolSize < p.maxSize {
-				for i := 0; i < diff; i++ {
-					d, c, err := startConsumer(p.dialerOptions, p.consumerOptions)
-					if err != nil {
-						p.logger.Printf("[ERROR] start consumer failed", err)
-						continue
-					}
-
-					p.consumers = append(p.consumers, c)
-					p.dialers = append(p.dialers, d)
-
-					if len(p.consumers) >= p.maxSize {
-						break
-					}
+			diff := newPoolSize - p.consumerTotal
+			if diff > 0 {
+				if startedN := p.startConsumersN(diff); startedN > 0 {
+					p.logger.Printf(fmt.Sprintf("[INFO] increased pool by %d; queue: %d; new len: %d", startedN, queueSize, len(p.items)))
 				}
-				p.logger.Printf(fmt.Sprintf("[INFO] increase pool by %d; queue: %d; new len: %d", diff, queueSize, len(p.consumers)))
-			} else if diff < 0 && poolSize > p.minSize {
-				for i := 0; i < -diff; i++ {
-					// todo: wait for close
-					p.consumers[len(p.consumers)-1].Close()
-					p.consumers = p.consumers[:len(p.consumers)-1]
-
-					if len(p.consumers) <= p.minSize {
-						break
-					}
+			} else if diff < 0 {
+				if stoppedN := p.stopConsumersN(-diff); stoppedN > 0 {
+					p.logger.Printf(fmt.Sprintf("[INFO] decreased pool by %d; new len: %d", stoppedN, len(p.items)))
 				}
-
-				p.logger.Printf(fmt.Sprintf("[INFO] decrease pool by %d; new len: %d", -diff, len(p.consumers)))
 			}
 		case <-conn.NotifyLost():
 			return
@@ -305,16 +304,80 @@ func DefaultDeciderFunc() func(queueSize, poolSize, preFetch int) int {
 	}
 }
 
-func startConsumer(dialerOptions []amqpextra.Option, consumerOptions []consumer.Option) (*amqpextra.Dialer, *consumer.Consumer, error) {
-	d, err := amqpextra.NewDialer(dialerOptions...)
-	if err != nil {
-		return nil, nil, fmt.Errorf("dialer: new: %s", err)
+func (p *Pool) startConsumersN(n int) int {
+	if n <= 0 {
+		return 0
 	}
 
-	c, err := d.Consumer(consumerOptions...)
-	if err != nil {
-		return nil, nil, fmt.Errorf("consumer: new: %s", err)
+	if (p.consumerTotal + n) >= p.maxSize {
+		n = p.maxSize - p.consumerTotal
 	}
 
-	return d, c, nil
+	lastItem := p.items[len(p.items)-1]
+
+	var startedN int
+	for i := 0; i < n; i++ {
+		if len(lastItem.consumers) >= p.consumersPerConn {
+			d, err := amqpextra.NewDialer(p.dialerOptions...)
+			if err != nil {
+				p.logger.Printf("[ERROR] new dialer failed", err)
+				continue
+			}
+
+			lastItem = &poolItem{
+				dialer: d,
+			}
+			p.items = append(p.items, lastItem)
+		}
+
+		c, err := lastItem.dialer.Consumer(p.consumerOptions...)
+		if err != nil {
+			p.logger.Printf("[ERROR] start consumer failed", err)
+			continue
+		}
+
+		lastItem.consumers = append(lastItem.consumers, c)
+		p.consumerTotal++
+		startedN++
+	}
+
+	return startedN
+}
+
+func (p *Pool) stopConsumersN(n int) int {
+	if n <= 0 {
+		return 0
+	}
+
+	if (p.consumerTotal - n) <= p.minSize {
+		n = p.consumerTotal - p.minSize
+	}
+
+	lastItem := p.items[len(p.items)-1]
+
+	var stoppedN int
+	for i := 0; i < n; i++ {
+		// todo: wait for close
+		lastItem.consumers[len(lastItem.consumers)-1].Close()
+		<-lastItem.consumers[len(lastItem.consumers)-1].NotifyClosed()
+
+		lastItem.consumers = lastItem.consumers[:len(lastItem.consumers)-1]
+		p.consumerTotal--
+		stoppedN++
+
+		if len(lastItem.consumers) == 0 {
+			lastItem.dialer.Close()
+			<-lastItem.dialer.NotifyClosed()
+
+			p.items = p.items[:len(p.items)-1]
+
+			if len(p.items) == 0 {
+				return stoppedN
+			}
+
+			lastItem = p.items[len(p.items)-1]
+		}
+	}
+
+	return stoppedN
 }
