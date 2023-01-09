@@ -84,37 +84,8 @@ func New(dialerOptions []amqpextra.Option, consumerOptions []consumer.Option, po
 		closeCh: make(chan struct{}),
 	}
 
-	for _, opt := range poolOptions {
-		opt(p)
-	}
-
-	if p.minSize <= 0 {
-		return nil, fmt.Errorf("minSize must be greater than 0")
-	}
-	if p.maxSize == 0 {
-		return nil, fmt.Errorf("maxSize must be greater than 0")
-	}
-	if p.minSize > p.maxSize {
-		return nil, fmt.Errorf("minSize must be less or equal to maxSize")
-	}
-
-	if p.consumersPerConn == 0 {
-		p.consumersPerConn = 1
-	}
-	if p.consumersPerConn <= 0 {
-		return nil, fmt.Errorf("consumersPerConn must be greater than 0")
-	}
-
-	if p.deciderFunc == nil {
-		p.deciderFunc = DefaultDeciderFunc()
-	}
-	if p.logger == nil {
-		p.logger = amqpextralogger.Discard
-	}
-	if p.initCtx == nil {
-		var initCtxCancel context.CancelFunc
-		p.initCtx, initCtxCancel = context.WithTimeout(context.Background(), time.Second*5)
-		defer initCtxCancel()
+	if err := p.prepare(poolOptions); err != nil {
+		return nil, fmt.Errorf("prepare: %s", err)
 	}
 
 	decideDialer, err := amqpextra.NewDialer(p.dialerOptions...)
@@ -182,10 +153,6 @@ loop:
 	})
 	p.consumerTotal++
 
-	if p.consumerTotal < p.minSize {
-		p.startConsumersN(p.minSize - p.consumerTotal)
-	}
-
 	go p.decideConnectState(cReady)
 
 	return p, nil
@@ -239,6 +206,10 @@ func (p *Pool) decideConnectedState(conn *amqpextra.Connection, cReady *consumer
 	}
 
 	for {
+		if p.consumerTotal < p.minSize {
+			p.startConsumersN(p.minSize - p.consumerTotal)
+		}
+
 		select {
 		case <-t.C:
 			q, err := ch.QueueDeclare(
@@ -380,4 +351,41 @@ func (p *Pool) stopConsumersN(n int) int {
 	}
 
 	return stoppedN
+}
+
+func (p *Pool) prepare(options []Option) error {
+	for _, opt := range options {
+		opt(p)
+	}
+
+	if p.minSize <= 0 {
+		return fmt.Errorf("minSize must be greater than 0")
+	}
+	if p.maxSize == 0 {
+		return fmt.Errorf("maxSize must be greater than 0")
+	}
+	if p.minSize > p.maxSize {
+		return fmt.Errorf("minSize must be less or equal to maxSize")
+	}
+
+	if p.consumersPerConn == 0 {
+		p.consumersPerConn = 1
+	}
+	if p.consumersPerConn <= 0 {
+		return fmt.Errorf("consumersPerConn must be greater than 0")
+	}
+
+	if p.deciderFunc == nil {
+		p.deciderFunc = DefaultDeciderFunc()
+	}
+	if p.logger == nil {
+		p.logger = amqpextralogger.Discard
+	}
+	if p.initCtx == nil {
+		var initCtxCancel context.CancelFunc
+		p.initCtx, initCtxCancel = context.WithTimeout(context.Background(), time.Second*5)
+		defer initCtxCancel()
+	}
+
+	return nil
 }
