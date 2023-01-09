@@ -31,6 +31,9 @@ func TestConsumePool(t *testing.T) {
 		rabbitmq.Publish(amqpConn, `Hello!`, q)
 	}
 
+	initCtx, initCtxCancel := context.WithTimeout(context.Background(), time.Second*10)
+	defer initCtxCancel()
+
 	cp, err := consumerpool.New(
 		[]amqpextra.Option{
 			amqpextra.WithURL("amqp://guest:guest@rabbitmq:5672/amqpextra"),
@@ -43,7 +46,7 @@ func TestConsumePool(t *testing.T) {
 				atomic.AddInt64(&consumedCounter, 1)
 				time.Sleep(time.Millisecond * 100)
 				if ackErr := msg.Ack(false); ackErr != nil {
-					log.Fatal(ackErr)
+					log.Fatalf("consumer: ack: %s", ackErr)
 				}
 
 				return nil
@@ -52,12 +55,13 @@ func TestConsumePool(t *testing.T) {
 		[]consumerpool.Option{
 			consumerpool.WithMinSize(1),
 			consumerpool.WithMaxSize(10),
+			consumerpool.WithInitCtx(initCtx),
 		},
 	)
 	require.NoError(t, err)
 	defer cp.Close()
 
-	time.Sleep(time.Second * 6)
+	time.Sleep(time.Second * 7)
 	cp.Close()
 	<-cp.NotifyClosed()
 
