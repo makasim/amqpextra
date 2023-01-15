@@ -23,7 +23,8 @@ Provides:
 * Auto reconnect.
 * Context aware.
 * Configured by WithXXX options.
-* Can process messages in parallel.
+* Consumer can process messages in parallel.
+* Consumers in-process auto-scaling and backpressure.
 * Adds message context.
 * Detects queue deletion and reconnect.
 * Notifies ready\unready\closed states.
