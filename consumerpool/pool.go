@@ -88,6 +88,12 @@ func New(dialerOptions []amqpextra.Option, consumerOptions []consumer.Option, po
 		return nil, fmt.Errorf("prepare: %s", err)
 	}
 
+	if p.initCtx == nil {
+		var initCtxCancel context.CancelFunc
+		p.initCtx, initCtxCancel = context.WithTimeout(context.Background(), time.Second*5)
+		defer initCtxCancel()
+	}
+
 	decideDialer, err := amqpextra.NewDialer(p.dialerOptions...)
 	if err != nil {
 		return nil, fmt.Errorf("dialer: new: %s", err)
@@ -380,11 +386,6 @@ func (p *Pool) prepare(options []Option) error {
 	}
 	if p.logger == nil {
 		p.logger = amqpextralogger.Discard
-	}
-	if p.initCtx == nil {
-		var initCtxCancel context.CancelFunc
-		p.initCtx, initCtxCancel = context.WithTimeout(context.Background(), time.Second*5)
-		defer initCtxCancel()
 	}
 
 	return nil
