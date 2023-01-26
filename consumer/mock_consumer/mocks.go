@@ -57,6 +57,20 @@ func (m *MockAMQPChannel) EXPECT() *MockAMQPChannelMockRecorder {
 	return m.recorder
 }
 
+// Cancel mocks base method.
+func (m *MockAMQPChannel) Cancel(arg0 string, arg1 bool) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Cancel", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Cancel indicates an expected call of Cancel.
+func (mr *MockAMQPChannelMockRecorder) Cancel(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Cancel", reflect.TypeOf((*MockAMQPChannel)(nil).Cancel), arg0, arg1)
+}
+
 // Close mocks base method.
 func (m *MockAMQPChannel) Close() error {
 	m.ctrl.T.Helper()

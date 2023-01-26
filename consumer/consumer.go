@@ -3,8 +3,11 @@ package consumer
 import (
 	"context"
 	"fmt"
+	"os"
+	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/makasim/amqpextra/logger"
@@ -52,6 +55,7 @@ type AMQPChannel interface {
 	NotifyCancel(c chan string) chan string
 	QueueDeclare(name string, durable, autoDelete, exclusive, noWait bool, args amqp.Table) (amqp.Queue, error)
 	QueueBind(name, key, exchange string, noWait bool, args amqp.Table) error
+	Cancel(consumer string, noWait bool) error
 	Close() error
 }
 
@@ -147,6 +151,10 @@ func New(
 
 	if c.handler == nil {
 		return nil, fmt.Errorf("handler must be not nil")
+	}
+
+	if c.consumer == `` {
+		c.consumer = uniqueConsumerTag()
 	}
 
 	if c.queue == "" && c.exchange == "" && !c.queueDeclare {
@@ -522,8 +530,33 @@ func (c *Consumer) notifyUnready(err error) State {
 
 func (c *Consumer) close(ch AMQPChannel) {
 	if ch != nil {
+		if err := ch.Cancel(c.consumer, false); err != nil {
+			c.logger.Printf("[WARN] channel cancel: %s", err)
+		}
 		if err := ch.Close(); err != nil && !strings.Contains(err.Error(), "channel/connection is not open") {
 			c.logger.Printf("[WARN] channel close: %s", err)
 		}
 	}
+}
+
+// COPY AND PASTE from amqp091 library
+
+var consumerSeq uint64
+
+const consumerTagLengthMax = 0xFF // see writeShortstr
+
+func uniqueConsumerTag() string {
+	return commandNameBasedUniqueConsumerTag(os.Args[0])
+}
+
+func commandNameBasedUniqueConsumerTag(commandName string) string {
+	tagPrefix := "ctag-"
+	tagInfix := commandName
+	tagSuffix := "-" + strconv.FormatUint(atomic.AddUint64(&consumerSeq, 1), 10)
+
+	if len(tagPrefix)+len(tagInfix)+len(tagSuffix) > consumerTagLengthMax {
+		tagInfix = "streadway/amqp"
+	}
+
+	return tagPrefix + tagInfix + tagSuffix
 }
