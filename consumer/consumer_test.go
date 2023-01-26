@@ -2222,6 +2222,6 @@ func (m *consumerTagMatcher) Matches(x interface{}) bool {
 	return assert.IsType(m.t, `string`, x) && assert.NotEmpty(m.t, x)
 }
 
-func (_ *consumerTagMatcher) String() string {
+func (*consumerTagMatcher) String() string {
 	return `consumer tag must be a non-empty string`
 }
