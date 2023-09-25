@@ -2,9 +2,7 @@ package middleware
 
 import (
 	"context"
-
 	"strconv"
-
 	"time"
 
 	"github.com/makasim/amqpextra/consumer"

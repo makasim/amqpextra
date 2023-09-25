@@ -2,8 +2,10 @@ package logger
 
 import "log"
 
-var Discard = Func(func(format string, v ...interface{}) {})
-var Std = Func(log.Printf)
+var (
+	Discard = Func(func(format string, v ...interface{}) {})
+	Std     = Func(log.Printf)
+)
 
 type Logger interface {
 	Printf(format string, v ...interface{})

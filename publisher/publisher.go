@@ -13,8 +13,7 @@ import (
 
 var errChannelClosed = fmt.Errorf("channel closed")
 
-type AMQPConnection interface {
-}
+type AMQPConnection interface{}
 
 type Unready struct {
 	Err error

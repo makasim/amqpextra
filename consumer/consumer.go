@@ -45,8 +45,7 @@ type Unready struct {
 	Err error
 }
 
-type AMQPConnection interface {
-}
+type AMQPConnection interface{}
 
 type AMQPChannel interface {
 	Consume(queue, consumer string, autoAck, exclusive, noLocal, noWait bool, args amqp.Table) (<-chan amqp.Delivery, error)

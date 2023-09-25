@@ -2,7 +2,6 @@ package declare
 
 import (
 	"context"
-
 	"log"
 
 	"github.com/makasim/amqpextra"

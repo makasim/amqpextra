@@ -2,7 +2,6 @@ package amqpextra_test
 
 import (
 	"context"
-
 	"log"
 
 	"github.com/makasim/amqpextra"

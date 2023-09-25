@@ -2,9 +2,8 @@ package middleware_test
 
 import (
 	"context"
-	"testing"
-
 	"strconv"
+	"testing"
 	"time"
 
 	"github.com/makasim/amqpextra/consumer"
@@ -51,7 +50,7 @@ func TestExpireToTimeoutNoExpirationNoDefault(t *testing.T) {
 	parentCtx := context.Background()
 
 	handler := middleware.ExpireToTimeout(0)(consumer.HandlerFunc(func(ctx context.Context, msg amqp.Delivery) interface{} {
-		require.Same(t, parentCtx, ctx)
+		require.Equal(t, parentCtx, ctx)
 
 		return nil
 	}))
@@ -93,7 +92,7 @@ func TestExpireToTimeoutExpirationInvalidAndNoDefault(t *testing.T) {
 	parentCtx := context.Background()
 
 	handler := middleware.ExpireToTimeout(0)(consumer.HandlerFunc(func(ctx context.Context, msg amqp.Delivery) interface{} {
-		require.Same(t, parentCtx, ctx)
+		require.Equal(t, parentCtx, ctx)
 
 		return nil
 	}))

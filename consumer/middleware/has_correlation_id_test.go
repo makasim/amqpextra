@@ -2,9 +2,8 @@ package middleware_test
 
 import (
 	"context"
-	"testing"
-
 	"fmt"
+	"testing"
 
 	"github.com/makasim/amqpextra/consumer/middleware"
 	amqp "github.com/rabbitmq/amqp091-go"

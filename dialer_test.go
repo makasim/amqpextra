@@ -1,17 +1,13 @@
 package amqpextra_test
 
 import (
+	"context"
 	"crypto/tls"
 	"errors"
-	"log"
-
-	"time"
-
-	"testing"
-
 	"fmt"
-
-	"context"
+	"log"
+	"testing"
+	"time"
 
 	"github.com/golang/mock/gomock"
 	"github.com/makasim/amqpextra"
@@ -174,7 +170,7 @@ func TestConnectState(main *testing.T) {
 
 		conn := mock_amqpextra.NewMockAMQPConnection(ctrl)
 		conn.EXPECT().Close().Return(nil)
-		conn.EXPECT().NotifyClose(any()).Return(closeCh)
+		conn.EXPECT().NotifyClose(gomock.Any()).Return(closeCh)
 
 		dialer, err := amqpextra.NewDialer(
 			amqpextra.WithURL("amqp://rabbitmq.host"),
@@ -211,7 +207,7 @@ func TestConnectState(main *testing.T) {
 
 		conn := mock_amqpextra.NewMockAMQPConnection(ctrl)
 		conn.EXPECT().Close().Return(nil)
-		conn.EXPECT().NotifyClose(any()).Return(closeCh)
+		conn.EXPECT().NotifyClose(gomock.Any()).Return(closeCh)
 
 		ctx, cancelFunc := context.WithCancel(context.Background())
 		defer cancelFunc()
@@ -250,7 +246,7 @@ func TestConnectState(main *testing.T) {
 		stateCh := make(chan amqpextra.State, 2)
 		amqpConn := mock_amqpextra.NewMockAMQPConnection(ctrl)
 		amqpConn.EXPECT().Close().Return(nil)
-		amqpConn.EXPECT().NotifyClose(any()).Return(closeCh)
+		amqpConn.EXPECT().NotifyClose(gomock.Any()).Return(closeCh)
 
 		dialer, err := amqpextra.NewDialer(
 			amqpextra.WithURL("amqp://rabbitmq.host"),
@@ -385,7 +381,7 @@ func TestConnectState(main *testing.T) {
 		stateCh := make(chan amqpextra.State, 2)
 		amqpConn := mock_amqpextra.NewMockAMQPConnection(ctrl)
 		amqpConn.EXPECT().Close().Return(nil)
-		amqpConn.EXPECT().NotifyClose(any()).Return(closeCh)
+		amqpConn.EXPECT().NotifyClose(gomock.Any()).Return(closeCh)
 
 		dialer, err := amqpextra.NewDialer(
 			amqpextra.WithURL("amqp://rabbitmq.host"),
@@ -563,7 +559,7 @@ func TestNotify(main *testing.T) {
 		stateCh := make(chan amqpextra.State, 2)
 
 		conn := mock_amqpextra.NewMockAMQPConnection(ctrl)
-		conn.EXPECT().NotifyClose(any()).AnyTimes()
+		conn.EXPECT().NotifyClose(gomock.Any()).AnyTimes()
 		conn.EXPECT().Close().AnyTimes()
 
 		d, err := amqpextra.NewDialer(
@@ -601,7 +597,7 @@ func TestNotify(main *testing.T) {
 		stateCh := make(chan amqpextra.State, 1)
 
 		conn := mock_amqpextra.NewMockAMQPConnection(ctrl)
-		conn.EXPECT().NotifyClose(any()).AnyTimes()
+		conn.EXPECT().NotifyClose(gomock.Any()).AnyTimes()
 		conn.EXPECT().Close().AnyTimes()
 
 		d, err := amqpextra.NewDialer(
@@ -638,7 +634,7 @@ func TestNotify(main *testing.T) {
 
 		l := logger.NewTest()
 		conn := mock_amqpextra.NewMockAMQPConnection(ctrl)
-		conn.EXPECT().NotifyClose(any()).AnyTimes()
+		conn.EXPECT().NotifyClose(gomock.Any()).AnyTimes()
 		conn.EXPECT().Close().AnyTimes()
 
 		d, err := amqpextra.NewDialer(
@@ -677,7 +673,7 @@ func TestConnectedState(main *testing.T) {
 		stateCh := make(chan amqpextra.State, 2)
 		amqpConn := mock_amqpextra.NewMockAMQPConnection(ctrl)
 		amqpConn.EXPECT().Close().Return(nil)
-		amqpConn.EXPECT().NotifyClose(any()).Return(closeCh)
+		amqpConn.EXPECT().NotifyClose(gomock.Any()).Return(closeCh)
 
 		dialer, err := amqpextra.NewDialer(
 			amqpextra.WithURL("amqp://rabbitmq.host"),
@@ -712,12 +708,12 @@ func TestConnectedState(main *testing.T) {
 		stateCh := make(chan amqpextra.State, 2)
 		closeCh0 := make(chan *amqp.Error, 1)
 		amqpConn0 := mock_amqpextra.NewMockAMQPConnection(ctrl)
-		amqpConn0.EXPECT().NotifyClose(any()).Return(closeCh0)
+		amqpConn0.EXPECT().NotifyClose(gomock.Any()).Return(closeCh0)
 		amqpConn0.EXPECT().Close().Return(nil)
 
 		closeCh1 := make(chan *amqp.Error, 1)
 		amqpConn1 := mock_amqpextra.NewMockAMQPConnection(ctrl)
-		amqpConn1.EXPECT().NotifyClose(any()).Return(closeCh1)
+		amqpConn1.EXPECT().NotifyClose(gomock.Any()).Return(closeCh1)
 		amqpConn1.EXPECT().Close().Return(nil)
 
 		dialer, err := amqpextra.NewDialer(
@@ -763,13 +759,13 @@ func TestConnectedState(main *testing.T) {
 		stateCh := make(chan amqpextra.State, 1)
 		closeCh0 := make(chan *amqp.Error, 1)
 		amqpConn0 := mock_amqpextra.NewMockAMQPConnection(ctrl)
-		amqpConn0.EXPECT().NotifyClose(any()).Return(closeCh0)
+		amqpConn0.EXPECT().NotifyClose(gomock.Any()).Return(closeCh0)
 		amqpConn0.EXPECT().Close().Return(nil)
 
 		closeCh1 := make(chan *amqp.Error, 1)
 
 		amqpConn1 := mock_amqpextra.NewMockAMQPConnection(ctrl)
-		amqpConn1.EXPECT().NotifyClose(any()).Return(closeCh1)
+		amqpConn1.EXPECT().NotifyClose(gomock.Any()).Return(closeCh1)
 		amqpConn1.EXPECT().Close().Return(nil)
 
 		dialer, err := amqpextra.NewDialer(
@@ -820,7 +816,7 @@ func TestConnectedState(main *testing.T) {
 		stateCh := make(chan amqpextra.State, 2)
 		closeCh0 := make(chan *amqp.Error, 1)
 		amqpConn := mock_amqpextra.NewMockAMQPConnection(ctrl)
-		amqpConn.EXPECT().NotifyClose(any()).Return(closeCh0)
+		amqpConn.EXPECT().NotifyClose(gomock.Any()).Return(closeCh0)
 		amqpConn.EXPECT().Close().Return(amqp.ErrClosed)
 
 		dialer, err := amqpextra.NewDialer(
@@ -854,7 +850,7 @@ func TestConnectedState(main *testing.T) {
 
 		stateCh := make(chan amqpextra.State, 2)
 		amqpConn := mock_amqpextra.NewMockAMQPConnection(ctrl)
-		amqpConn.EXPECT().NotifyClose(any()).Return(closeCh0)
+		amqpConn.EXPECT().NotifyClose(gomock.Any()).Return(closeCh0)
 		amqpConn.EXPECT().Close().Return(fmt.Errorf("connection closed errored"))
 
 		dialer, err := amqpextra.NewDialer(
@@ -961,10 +957,6 @@ func assertConnLost(t *testing.T, conn *amqpextra.Connection) {
 	case <-timer.C:
 		t.Fatal("wait connection lost timeout")
 	}
-}
-
-func any() gomock.Matcher {
-	return gomock.Any()
 }
 
 func amqpDialStub(conns ...interface{}) func(url string, config amqp.Config) (amqpextra.AMQPConnection, error) {

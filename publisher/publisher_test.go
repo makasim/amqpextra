@@ -77,8 +77,8 @@ func TestNotify(main *testing.T) {
 		amqpConn := mock_publisher.NewMockAMQPConnection(ctrl)
 		ch := mock_publisher.NewMockAMQPChannel(ctrl)
 
-		ch.EXPECT().NotifyClose(any()).Times(1)
-		ch.EXPECT().NotifyFlow(any()).Times(1)
+		ch.EXPECT().NotifyClose(gomock.Any()).Times(1)
+		ch.EXPECT().NotifyFlow(gomock.Any()).Times(1)
 		ch.EXPECT().Close().AnyTimes()
 
 		conn, l, p := newPublisher(
@@ -163,11 +163,11 @@ func TestNotify(main *testing.T) {
 
 		ch.
 			EXPECT().
-			NotifyClose(any()).
+			NotifyClose(gomock.Any()).
 			AnyTimes()
 		ch.
 			EXPECT().
-			NotifyFlow(any()).
+			NotifyFlow(gomock.Any()).
 			DoAndReturn(func(ch chan bool) chan bool {
 				chFlowCh = ch
 				return ch
@@ -218,11 +218,11 @@ func TestNotify(main *testing.T) {
 
 		ch.
 			EXPECT().
-			NotifyClose(any()).
+			NotifyClose(gomock.Any()).
 			AnyTimes()
 		ch.
 			EXPECT().
-			NotifyFlow(any()).
+			NotifyFlow(gomock.Any()).
 			AnyTimes()
 		ch.
 			EXPECT().
@@ -251,12 +251,12 @@ func TestReconnection(main *testing.T) {
 		ch := mock_publisher.NewMockAMQPChannel(ctrl)
 		ch.
 			EXPECT().
-			NotifyClose(any()).
+			NotifyClose(gomock.Any()).
 			DoAndReturn(notifyCloseStub()).
 			AnyTimes()
 		ch.
 			EXPECT().
-			NotifyFlow(any()).
+			NotifyFlow(gomock.Any()).
 			DoAndReturn(notifyFlowStub()).
 			Times(1)
 		ch.
@@ -346,12 +346,12 @@ func TestReconnection(main *testing.T) {
 		ch := mock_publisher.NewMockAMQPChannel(ctrl)
 		ch.
 			EXPECT().
-			NotifyClose(any()).
+			NotifyClose(gomock.Any()).
 			DoAndReturn(notifyCloseStub()).
 			Times(1)
 		ch.
 			EXPECT().
-			NotifyFlow(any()).
+			NotifyFlow(gomock.Any()).
 			DoAndReturn(notifyFlowStub()).
 			Times(1)
 		ch.
@@ -366,12 +366,12 @@ func TestReconnection(main *testing.T) {
 		newCh := mock_publisher.NewMockAMQPChannel(ctrl)
 		newCh.
 			EXPECT().
-			NotifyClose(any()).
+			NotifyClose(gomock.Any()).
 			DoAndReturn(notifyCloseStub()).
 			Times(1)
 		newCh.
 			EXPECT().
-			NotifyFlow(any()).
+			NotifyFlow(gomock.Any()).
 			DoAndReturn(notifyFlowStub()).
 			Times(1)
 		newCh.
@@ -421,12 +421,12 @@ func TestReconnection(main *testing.T) {
 		ch := mock_publisher.NewMockAMQPChannel(ctrl)
 		ch.
 			EXPECT().
-			NotifyClose(any()).
+			NotifyClose(gomock.Any()).
 			DoAndReturn(notifyCloseStub()).
 			Times(1)
 		ch.
 			EXPECT().
-			NotifyFlow(any()).
+			NotifyFlow(gomock.Any()).
 			DoAndReturn(notifyFlowStub()).
 			Times(1)
 		ch.
@@ -478,7 +478,7 @@ func TestReconnection(main *testing.T) {
 		ch := mock_publisher.NewMockAMQPChannel(ctrl)
 		ch.
 			EXPECT().
-			NotifyClose(any()).
+			NotifyClose(gomock.Any()).
 			DoAndReturn(func(receiver chan *amqp.Error) chan *amqp.Error {
 				chCloseCh = receiver
 				return receiver
@@ -486,19 +486,19 @@ func TestReconnection(main *testing.T) {
 			Times(1)
 		ch.
 			EXPECT().
-			NotifyFlow(any()).
+			NotifyFlow(gomock.Any()).
 			DoAndReturn(notifyFlowStub()).
 			Times(1)
 
 		newCh := mock_publisher.NewMockAMQPChannel(ctrl)
 		newCh.
 			EXPECT().
-			NotifyClose(any()).
+			NotifyClose(gomock.Any()).
 			DoAndReturn(notifyCloseStub()).
 			Times(1)
 		newCh.
 			EXPECT().
-			NotifyFlow(any()).
+			NotifyFlow(gomock.Any()).
 			DoAndReturn(notifyFlowStub()).
 			Times(1)
 		newCh.
@@ -546,12 +546,12 @@ func TestReconnection(main *testing.T) {
 		ch := mock_publisher.NewMockAMQPChannel(ctrl)
 		ch.
 			EXPECT().
-			NotifyClose(any()).
+			NotifyClose(gomock.Any()).
 			DoAndReturn(chCloseChStub(chCloseCh)).
 			Times(1)
 		ch.
 			EXPECT().
-			NotifyFlow(any()).
+			NotifyFlow(gomock.Any()).
 			DoAndReturn(notifyFlowStub()).
 			Times(1)
 
@@ -560,12 +560,12 @@ func TestReconnection(main *testing.T) {
 		newCh := mock_publisher.NewMockAMQPChannel(ctrl)
 		newCh.
 			EXPECT().
-			NotifyClose(any()).
+			NotifyClose(gomock.Any()).
 			DoAndReturn(notifyCloseStub()).
 			Times(1)
 		newCh.
 			EXPECT().
-			NotifyFlow(any()).
+			NotifyFlow(gomock.Any()).
 			DoAndReturn(notifyFlowStub()).
 			Times(1)
 		newCh.
@@ -608,7 +608,6 @@ func TestReconnection(main *testing.T) {
 }
 
 func TestUnreadyReady(main *testing.T) {
-
 	main.Run("ClosedPublisherUnready", func(t *testing.T) {
 		defer goleak.VerifyNone(t)
 		stateCh := make(chan publisher.State, 2)
@@ -619,11 +618,11 @@ func TestUnreadyReady(main *testing.T) {
 
 		ch.
 			EXPECT().
-			NotifyClose(any()).
+			NotifyClose(gomock.Any()).
 			AnyTimes()
 		ch.
 			EXPECT().
-			NotifyFlow(any()).
+			NotifyFlow(gomock.Any()).
 			AnyTimes()
 		ch.
 			EXPECT().
@@ -783,17 +782,17 @@ func TestReadyPublisher(main *testing.T) {
 		ch := mock_publisher.NewMockAMQPChannel(ctrl)
 		ch.
 			EXPECT().
-			NotifyClose(any()).
+			NotifyClose(gomock.Any()).
 			DoAndReturn(notifyCloseStub()).
 			Times(1)
 		ch.
 			EXPECT().
-			NotifyFlow(any()).
+			NotifyFlow(gomock.Any()).
 			DoAndReturn(notifyFlowStub()).
 			Times(1)
 		ch.
 			EXPECT().
-			PublishWithContext(any(), any(), any(), any(), any(), any()).
+			PublishWithContext(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 			DoAndReturn(func(_ context.Context, exchange, key string, mandatory, immediate bool, msg amqp.Publishing) error {
 				require.Equal(t, "theExchange", exchange)
 				require.Equal(t, "theKey", key)
@@ -886,17 +885,17 @@ func TestReadyPublisher(main *testing.T) {
 		ch := mock_publisher.NewMockAMQPChannel(ctrl)
 		ch.
 			EXPECT().
-			NotifyClose(any()).
+			NotifyClose(gomock.Any()).
 			DoAndReturn(notifyCloseStub()).
 			Times(1)
 		ch.
 			EXPECT().
-			NotifyFlow(any()).
+			NotifyFlow(gomock.Any()).
 			DoAndReturn(notifyFlowStub()).
 			Times(1)
 		ch.
 			EXPECT().
-			PublishWithContext(any(), any(), any(), any(), any(), any()).
+			PublishWithContext(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 			Return(fmt.Errorf("publish errored")).
 			Times(1)
 		ch.
@@ -945,17 +944,17 @@ func TestReadyPublisher(main *testing.T) {
 		ch := mock_publisher.NewMockAMQPChannel(ctrl)
 		ch.
 			EXPECT().
-			NotifyClose(any()).
+			NotifyClose(gomock.Any()).
 			DoAndReturn(notifyCloseStub()).
 			Times(1)
 		ch.
 			EXPECT().
-			NotifyFlow(any()).
+			NotifyFlow(gomock.Any()).
 			DoAndReturn(notifyFlowStub()).
 			Times(1)
 		ch.
 			EXPECT().
-			PublishWithContext(any(), any(), any(), any(), any(), any()).
+			PublishWithContext(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 			Return(fmt.Errorf("publish errored")).
 			Times(1)
 		ch.
@@ -1005,17 +1004,17 @@ func TestReadyPublisher(main *testing.T) {
 		ch := mock_publisher.NewMockAMQPChannel(ctrl)
 		ch.
 			EXPECT().
-			NotifyClose(any()).
+			NotifyClose(gomock.Any()).
 			DoAndReturn(notifyCloseStub()).
 			MaxTimes(1)
 		ch.
 			EXPECT().
-			NotifyFlow(any()).
+			NotifyFlow(gomock.Any()).
 			DoAndReturn(notifyFlowStub()).
 			Times(1)
 		ch.
 			EXPECT().
-			PublishWithContext(any(), any(), any(), any(), any(), any()).
+			PublishWithContext(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 			Return(nil).
 			MaxTimes(1)
 		ch.
@@ -1070,17 +1069,17 @@ func TestReadyPublisher(main *testing.T) {
 		ch := mock_publisher.NewMockAMQPChannel(ctrl)
 		ch.
 			EXPECT().
-			NotifyClose(any()).
+			NotifyClose(gomock.Any()).
 			DoAndReturn(notifyCloseStub()).
 			Times(1)
 		ch.
 			EXPECT().
-			NotifyFlow(any()).
+			NotifyFlow(gomock.Any()).
 			DoAndReturn(notifyFlowStub()).
 			Times(1)
 		ch.
 			EXPECT().
-			PublishWithContext(any(), any(), any(), any(), any(), any()).
+			PublishWithContext(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 			Return(nil).
 			Times(1)
 		ch.
@@ -1248,12 +1247,12 @@ func TestClose(main *testing.T) {
 		ch := mock_publisher.NewMockAMQPChannel(ctrl)
 		ch.
 			EXPECT().
-			NotifyClose(any()).
+			NotifyClose(gomock.Any()).
 			DoAndReturn(notifyCloseStub()).
 			Times(1)
 		ch.
 			EXPECT().
-			NotifyFlow(any()).
+			NotifyFlow(gomock.Any()).
 			DoAndReturn(notifyFlowStub()).
 			Times(1)
 		ch.
@@ -1298,12 +1297,12 @@ func TestClose(main *testing.T) {
 		ch := mock_publisher.NewMockAMQPChannel(ctrl)
 		ch.
 			EXPECT().
-			NotifyClose(any()).
+			NotifyClose(gomock.Any()).
 			DoAndReturn(notifyCloseStub()).
 			Times(1)
 		ch.
 			EXPECT().
-			NotifyFlow(any()).
+			NotifyFlow(gomock.Any()).
 			DoAndReturn(notifyFlowStub()).
 			Times(1)
 		ch.
@@ -1346,12 +1345,12 @@ func TestClose(main *testing.T) {
 		ch := mock_publisher.NewMockAMQPChannel(ctrl)
 		ch.
 			EXPECT().
-			NotifyClose(any()).
+			NotifyClose(gomock.Any()).
 			DoAndReturn(notifyCloseStub()).
 			Times(1)
 		ch.
 			EXPECT().
-			NotifyFlow(any()).
+			NotifyFlow(gomock.Any()).
 			DoAndReturn(notifyFlowStub()).
 			Times(1)
 		ch.
@@ -1395,17 +1394,17 @@ func TestConcurrency(main *testing.T) {
 		ch := mock_publisher.NewMockAMQPChannel(ctrl)
 		ch.
 			EXPECT().
-			NotifyClose(any()).
+			NotifyClose(gomock.Any()).
 			DoAndReturn(notifyCloseStub()).
 			Times(1)
 		ch.
 			EXPECT().
-			NotifyFlow(any()).
+			NotifyFlow(gomock.Any()).
 			DoAndReturn(notifyFlowStub()).
 			Times(1)
 		ch.
 			EXPECT().
-			PublishWithContext(any(), any(), any(), any(), any(), any()).
+			PublishWithContext(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 			DoAndReturn(func(_ context.Context, exchange, key string, mandatory, immediate bool, msg amqp.Publishing) error {
 				time.Sleep(time.Millisecond * 10)
 				return nil
@@ -1460,17 +1459,17 @@ func TestConcurrency(main *testing.T) {
 		ch := mock_publisher.NewMockAMQPChannel(ctrl)
 		ch.
 			EXPECT().
-			NotifyClose(any()).
+			NotifyClose(gomock.Any()).
 			DoAndReturn(notifyCloseStub()).
 			Times(1)
 		ch.
 			EXPECT().
-			NotifyFlow(any()).
+			NotifyFlow(gomock.Any()).
 			DoAndReturn(notifyFlowStub()).
 			Times(1)
 		ch.
 			EXPECT().
-			PublishWithContext(any(), any(), any(), any(), any(), any()).
+			PublishWithContext(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 			DoAndReturn(func(_ context.Context, exchange, key string, mandatory, immediate bool, msg amqp.Publishing) error {
 				time.Sleep(time.Millisecond * 10)
 				return nil
@@ -1489,17 +1488,17 @@ func TestConcurrency(main *testing.T) {
 		newCh := mock_publisher.NewMockAMQPChannel(ctrl)
 		newCh.
 			EXPECT().
-			NotifyClose(any()).
+			NotifyClose(gomock.Any()).
 			DoAndReturn(notifyCloseStub()).
 			Times(1)
 		newCh.
 			EXPECT().
-			NotifyFlow(any()).
+			NotifyFlow(gomock.Any()).
 			DoAndReturn(notifyFlowStub()).
 			Times(1)
 		newCh.
 			EXPECT().
-			PublishWithContext(any(), any(), any(), any(), any(), any()).
+			PublishWithContext(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 			DoAndReturn(func(_ context.Context, exchange, key string, mandatory, immediate bool, msg amqp.Publishing) error {
 				time.Sleep(time.Millisecond * 10)
 				return nil
@@ -1563,17 +1562,17 @@ func TestConcurrency(main *testing.T) {
 		ch := mock_publisher.NewMockAMQPChannel(ctrl)
 		ch.
 			EXPECT().
-			NotifyClose(any()).
+			NotifyClose(gomock.Any()).
 			DoAndReturn(chCloseChStub(chCloseCh)).
 			Times(1)
 		ch.
 			EXPECT().
-			NotifyFlow(any()).
+			NotifyFlow(gomock.Any()).
 			DoAndReturn(notifyFlowStub()).
 			Times(1)
 		ch.
 			EXPECT().
-			PublishWithContext(any(), any(), any(), any(), any(), any()).
+			PublishWithContext(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 			DoAndReturn(func(_ context.Context, exchange, key string, mandatory, immediate bool, msg amqp.Publishing) error {
 				time.Sleep(time.Millisecond * 10)
 				return nil
@@ -1584,17 +1583,17 @@ func TestConcurrency(main *testing.T) {
 		newCh := mock_publisher.NewMockAMQPChannel(ctrl)
 		newCh.
 			EXPECT().
-			NotifyClose(any()).
+			NotifyClose(gomock.Any()).
 			DoAndReturn(notifyCloseStub()).
 			Times(1)
 		newCh.
 			EXPECT().
-			NotifyFlow(any()).
+			NotifyFlow(gomock.Any()).
 			DoAndReturn(notifyFlowStub()).
 			Times(1)
 		newCh.
 			EXPECT().
-			PublishWithContext(any(), any(), any(), any(), any(), any()).
+			PublishWithContext(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 			DoAndReturn(func(_ context.Context, exchange, key string, mandatory, immediate bool, msg amqp.Publishing) error {
 				time.Sleep(time.Millisecond * 10)
 				return nil
@@ -1659,12 +1658,12 @@ func TestFlowControl(main *testing.T) {
 		ch := mock_publisher.NewMockAMQPChannel(ctrl)
 		ch.
 			EXPECT().
-			NotifyClose(any()).
+			NotifyClose(gomock.Any()).
 			DoAndReturn(notifyCloseStub()).
 			Times(1)
 		ch.
 			EXPECT().
-			NotifyFlow(any()).
+			NotifyFlow(gomock.Any()).
 			DoAndReturn(func(ch chan bool) chan bool {
 				chFlowCh = ch
 				return ch
@@ -1672,7 +1671,7 @@ func TestFlowControl(main *testing.T) {
 			Times(1)
 		ch.
 			EXPECT().
-			PublishWithContext(any(), any(), any(), any(), any(), any()).
+			PublishWithContext(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 			Return(nil).
 			Times(3)
 		ch.
@@ -1734,12 +1733,12 @@ func TestFlowControl(main *testing.T) {
 		ch := mock_publisher.NewMockAMQPChannel(ctrl)
 		ch.
 			EXPECT().
-			NotifyClose(any()).
+			NotifyClose(gomock.Any()).
 			DoAndReturn(notifyCloseStub()).
 			Times(1)
 		ch.
 			EXPECT().
-			NotifyFlow(any()).
+			NotifyFlow(gomock.Any()).
 			DoAndReturn(func(ch chan bool) chan bool {
 				chFlowCh = ch
 				return ch
@@ -1747,7 +1746,7 @@ func TestFlowControl(main *testing.T) {
 			Times(1)
 		ch.
 			EXPECT().
-			PublishWithContext(any(), any(), any(), any(), any(), any()).
+			PublishWithContext(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 			Return(nil).
 			Times(2)
 		ch.
@@ -1818,12 +1817,12 @@ func TestFlowControl(main *testing.T) {
 		ch := mock_publisher.NewMockAMQPChannel(ctrl)
 		ch.
 			EXPECT().
-			NotifyClose(any()).
+			NotifyClose(gomock.Any()).
 			DoAndReturn(notifyCloseStub()).
 			Times(1)
 		ch.
 			EXPECT().
-			NotifyFlow(any()).
+			NotifyFlow(gomock.Any()).
 			DoAndReturn(func(ch chan bool) chan bool {
 				chFlowCh = ch
 				return ch
@@ -1831,7 +1830,7 @@ func TestFlowControl(main *testing.T) {
 			Times(1)
 		ch.
 			EXPECT().
-			PublishWithContext(any(), any(), any(), any(), any(), any()).
+			PublishWithContext(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 			Return(nil).
 			Times(3)
 		ch.
@@ -1897,12 +1896,12 @@ func TestFlowControl(main *testing.T) {
 		ch := mock_publisher.NewMockAMQPChannel(ctrl)
 		ch.
 			EXPECT().
-			NotifyClose(any()).
+			NotifyClose(gomock.Any()).
 			DoAndReturn(notifyCloseStub()).
 			Times(1)
 		ch.
 			EXPECT().
-			NotifyFlow(any()).
+			NotifyFlow(gomock.Any()).
 			Return(chFlowCh).
 			Times(1)
 		ch.
@@ -1951,7 +1950,7 @@ func TestFlowControl(main *testing.T) {
 		ch := mock_publisher.NewMockAMQPChannel(ctrl)
 		ch.
 			EXPECT().
-			NotifyClose(any()).
+			NotifyClose(gomock.Any()).
 			DoAndReturn(func(receiver chan *amqp.Error) chan *amqp.Error {
 				chCloseCh = receiver
 				return receiver
@@ -1959,7 +1958,7 @@ func TestFlowControl(main *testing.T) {
 			Times(2)
 		ch.
 			EXPECT().
-			NotifyFlow(any()).
+			NotifyFlow(gomock.Any()).
 			DoAndReturn(func(ch chan bool) chan bool {
 				chFlowCh = ch
 				return ch
@@ -2016,12 +2015,12 @@ func TestFlowControl(main *testing.T) {
 		ch := mock_publisher.NewMockAMQPChannel(ctrl)
 		ch.
 			EXPECT().
-			NotifyClose(any()).
+			NotifyClose(gomock.Any()).
 			DoAndReturn(notifyCloseStub()).
 			Times(2)
 		ch.
 			EXPECT().
-			NotifyFlow(any()).
+			NotifyFlow(gomock.Any()).
 			DoAndReturn(func(ch chan bool) chan bool {
 				chFlowCh = ch
 				return ch
@@ -2128,18 +2127,18 @@ func TestPublisherConfirms(main *testing.T) {
 		ch := mock_publisher.NewMockAMQPChannel(ctrl)
 
 		ch.EXPECT().
-			NotifyPublish(any()).
+			NotifyPublish(gomock.Any()).
 			DoAndReturn(confirmationChStub(confirmationCh)).
 			Times(1)
 		ch.EXPECT().
-			PublishWithContext(any(), any(), any(), any(), any(), any()).
+			PublishWithContext(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 			Return(nil).
 			Times(2)
 		ch.EXPECT().
-			NotifyClose(any()).
+			NotifyClose(gomock.Any()).
 			AnyTimes()
 
-		ch.EXPECT().NotifyFlow(any()).AnyTimes()
+		ch.EXPECT().NotifyFlow(gomock.Any()).AnyTimes()
 		ch.EXPECT().Confirm(false).Return(nil)
 		ch.EXPECT().Close().AnyTimes()
 
@@ -2190,18 +2189,18 @@ func TestPublisherConfirms(main *testing.T) {
 		ch := mock_publisher.NewMockAMQPChannel(ctrl)
 
 		ch.EXPECT().
-			NotifyPublish(any()).
+			NotifyPublish(gomock.Any()).
 			DoAndReturn(confirmationChStub(confirmationCh)).
 			Times(1)
 		ch.EXPECT().
-			PublishWithContext(any(), any(), any(), any(), any(), any()).
+			PublishWithContext(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 			Return(nil).
 			Times(2)
 		ch.EXPECT().
-			NotifyClose(any()).
+			NotifyClose(gomock.Any()).
 			AnyTimes()
 
-		ch.EXPECT().NotifyFlow(any()).AnyTimes()
+		ch.EXPECT().NotifyFlow(gomock.Any()).AnyTimes()
 		ch.EXPECT().Confirm(false).Return(nil)
 		ch.EXPECT().Close().AnyTimes()
 
@@ -2254,18 +2253,18 @@ func TestPublisherConfirms(main *testing.T) {
 		ch := mock_publisher.NewMockAMQPChannel(ctrl)
 
 		ch.EXPECT().
-			NotifyPublish(any()).
+			NotifyPublish(gomock.Any()).
 			DoAndReturn(confirmationChStub(confirmationCh)).
 			Times(1)
 		ch.EXPECT().
-			PublishWithContext(any(), any(), any(), any(), any(), any()).
+			PublishWithContext(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 			Return(nil).
 			Times(4)
 		ch.EXPECT().
-			NotifyClose(any()).
+			NotifyClose(gomock.Any()).
 			AnyTimes()
 
-		ch.EXPECT().NotifyFlow(any()).AnyTimes()
+		ch.EXPECT().NotifyFlow(gomock.Any()).AnyTimes()
 		ch.EXPECT().Confirm(false).Return(nil)
 		ch.EXPECT().Close().AnyTimes()
 
@@ -2329,19 +2328,19 @@ func TestPublisherConfirms(main *testing.T) {
 		secondChCloseCh := make(chan *amqp.Error, 1)
 
 		ch.EXPECT().
-			NotifyPublish(any()).
+			NotifyPublish(gomock.Any()).
 			DoAndReturn(confirmationChStub(confirmationCh, secondConfirmationCh)).
 			Times(2)
 		ch.EXPECT().
-			PublishWithContext(any(), any(), any(), any(), any(), any()).
+			PublishWithContext(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 			Return(nil).
 			Times(4)
 		ch.EXPECT().
-			NotifyClose(any()).
+			NotifyClose(gomock.Any()).
 			DoAndReturn(chCloseChStub(chCloseCh, secondChCloseCh)).
 			AnyTimes()
 
-		ch.EXPECT().NotifyFlow(any()).AnyTimes()
+		ch.EXPECT().NotifyFlow(gomock.Any()).AnyTimes()
 		ch.EXPECT().Confirm(false).Return(nil).AnyTimes()
 		ch.EXPECT().Close().AnyTimes()
 
@@ -2448,10 +2447,6 @@ func assertNoStateChanged(t *testing.T, stateCh <-chan publisher.State) {
 		t.Fatal("state change is not expected")
 	case <-timer.C:
 	}
-}
-
-func any() gomock.Matcher {
-	return gomock.Any()
 }
 
 func newPublisher(opts ...publisher.Option) (connCh chan *publisher.Connection, l *logger.TestLogger, p *publisher.Publisher) {
