@@ -5,10 +5,9 @@ import (
 	"context"
 	"crypto/tls"
 	"errors"
+	"fmt"
 	"sync"
 	"time"
-
-	"fmt"
 
 	"github.com/makasim/amqpextra/consumer"
 	"github.com/makasim/amqpextra/logger"

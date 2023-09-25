@@ -1,15 +1,13 @@
 package e2e_test
 
 import (
+	"crypto/rand"
 	"fmt"
 	"math/big"
 	"testing"
-
-	amqp "github.com/rabbitmq/amqp091-go"
-
 	"time"
 
-	"crypto/rand"
+	amqp "github.com/rabbitmq/amqp091-go"
 
 	"github.com/makasim/amqpextra"
 	"github.com/makasim/amqpextra/e2e_test/helper/rabbitmq"

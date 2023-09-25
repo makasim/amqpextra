@@ -5,10 +5,9 @@ import (
 	"fmt"
 	"math/big"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
-
-	"time"
 
 	"github.com/makasim/amqpextra"
 	"github.com/makasim/amqpextra/e2e_test/helper/rabbitmq"

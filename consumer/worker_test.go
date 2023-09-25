@@ -1,9 +1,8 @@
 package consumer_test
 
 import (
-	"testing"
-
 	"context"
+	"testing"
 
 	"github.com/makasim/amqpextra/consumer"
 	"github.com/makasim/amqpextra/logger"

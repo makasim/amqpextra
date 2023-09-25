@@ -8,9 +8,11 @@ import (
 	amqp "github.com/rabbitmq/amqp091-go"
 )
 
-const Ack = "ack"
-const Nack = "nack_requeue"
-const Requeue = "requeue"
+const (
+	Ack     = "ack"
+	Nack    = "nack_requeue"
+	Requeue = "requeue"
+)
 
 func AckNack() consumer.Middleware {
 	return func(next consumer.Handler) consumer.Handler {
