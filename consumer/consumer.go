@@ -259,6 +259,21 @@ func WithDeclareQueue(name string, durable, autoDelete, exclusive, noWait bool, 
 	}
 }
 
+func WithDeclareTopicQueue(name, exchange, routingKey string, durable, autoDelete, exclusive, noWait bool, args amqp.Table) Option {
+	return func(c *Consumer) {
+		c.resetSource()
+		c.queue = name
+		c.queueDeclare = true
+		c.exchange = exchange
+		c.routingKey = routingKey
+		c.declareDurable = durable
+		c.declareAutoDelete = autoDelete
+		c.declareExclusive = exclusive
+		c.declareNoWait = noWait
+		c.declareArgs = args
+	}
+}
+
 func WithHandler(h Handler) Option {
 	return func(c *Consumer) {
 		c.handler = h
