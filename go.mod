@@ -1,4 +1,4 @@
-module github.com/QuantF0rce/amqpextra
+module github.com/makasim/amqpextra
 
 go 1.13
 
